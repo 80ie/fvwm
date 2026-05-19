@@ -1,0 +1,1 @@
+{"vars":[{"name":"static","line":1,"kind":12},{"line":1,"kind":12,"name":"char"},{"name":"SunLogo","line":1,"kind":12}],"version":5}

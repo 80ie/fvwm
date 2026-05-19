@@ -1,0 +1,13 @@
+# fvwm-crystal thumbnail cache (regenerated on demand)
+.thumbs
+**/.thumbs/
+
+# Auto-generated XDG application menu
+.XDGMenu
+.FvwmForm-XDGMenu-Config
+
+# Per-session restart/state files written by fvwm
+.fs-restart-*
+
+# Interactive FvwmConsole command history
+.FvwmConsole-History

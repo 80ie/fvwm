@@ -1,0 +1,1 @@
+{"version":5,"vars":[{"kind":12,"line":1,"name":"static"},{"name":"char","kind":12,"line":1},{"name":"cdemt2_xpm","line":1,"kind":12}]}
