@@ -1,27 +1,21 @@
 ## vim: sts=0:noet:syntax=fvwm:foldmethod=marker
 
-#~~~                                 ~~~#
-#~~~~~~~    ENVIRONMENT VARS     ~~~~~~~#
-#~~~                                 ~~~#
-#      ~~~~ Default Terminal ~~~~~
 
-#~~~                                 ~~~#
-#~~~~~~~        FOLDERS          ~~~~~~~#
-#~~~                                 ~~~#
-##~~  FVWM User Dir  ~~~~
+# GENERAL SETTINGS                                              {{{1
+#		Environment                                                 {{{2
 SetEnv FVWM_USERDIR "/home/deer/.fvwm"
-##~~  Thumbnails dir ~~~~
 SetEnv FVWM_THUMBS "$[FVWM_USERDIR]/images/thumbs"
-##~~ Minicons folder ~~~~
 SetEnv FVWM_ICON "$[FVWM_USERDIR]/images/icons"
 
 SetEnv EDGE_SCROLL 0
 
-##~~    ModulePath   ~~~~
+#                                                               }}}2
+# InfoStore                                                     {{{2
+
 ModulePath +:${HOME}/.fvwm/lib:$[FVWM_MODULEDIR]
 
 InfoStoreAdd terminal /usr/bin/kitty
-InfoStoreAdd filemanager /usr/bin/pcmanfm-qt
+InfoStoreAdd filemanager /usr/bin/dolphin
 InfoStoreAdd calculator /usr/bin/speedcrunch
 
 InfoStoreAdd bg $[FVWM_USERDIR]/images/background/bg.png
@@ -43,30 +37,10 @@ InfoStoreAdd toplayer 6
 InfoStoreAdd abovetoplayer 11
 DefaultLayers $[infostore.bottomlayer] $[infostore.putlayer] $[infostore.toplayer]
 
-#
-#         /##
-#       #/ ###                                               #
-#      ##   ###                                      #      ###
-#      ##                                           ##       #
-#      ##                                           ##
-#      ###### ##   ####    ###  /###     /###     ######## ###       /###   ###  /###      /###
-#      #####   ##    ###  / ###/ #### / / ###  / ########   ###     / ###  / ###/ #### /  / #### /
-#      ##      ##     ###/   ##   ###/ /   ###/     ##       ##    /   ###/   ##   ###/  ##  ###/
-#      ##      ##      ##    ##    ## ##            ##       ##   ##    ##    ##    ##  ####
-#      ##      ##      ##    ##    ## ##            ##       ##   ##    ##    ##    ##    ###
-#      ##      ##      ##    ##    ## ##            ##       ##   ##    ##    ##    ##      ###
-#      ##      ##      ##    ##    ## ##            ##       ##   ##    ##    ##    ##        ###
-#      ##      ##      /#    ##    ## ###     /     ##       ##   ##    ##    ##    ##   /###  ##
-#      ##       ######/ ##   ###   ### ######/      ##       ### / ######     ###   ### / #### /
-#       ##       #####   ##   ###   ### #####        ##       ##/   ####       ###   ###   ###/
-#
-#
-#
-#
-#
-#
-# Fvwm can use custom functions for various tasks.
-# The syntax for defining a function named FunctionName is:
+BugOpts ExplainWindowPlacement On, EWMHIconicStateWorkaround
+
+#                                                               }}}2
+# FUNCTIONS                                                     {{{1
 #
 #   DestroyFunc FunctionName
 #   AddToFunc FunctionName
@@ -75,22 +49,36 @@ DefaultLayers $[infostore.bottomlayer] $[infostore.putlayer] $[infostore.toplaye
 #   + D [Action to do on a Mouse Double Click]
 #   + H [Action to do on a Mouse Hold]
 #   + M [Action to do on a Mouse Motion]
-###########
 
-# Start Function
+
+# Start Function                                                {{{2
 #
 # The start function is run right after fvwm is done reading
 # the config file. This function run after each restart
 # so using Test (Init) or Test (Restart) can further control
 # actions that are run during the first time run (Init) or
 # actions that are run after a restart.
+#
+# --- StartIfNew: launch $* only if it isn't already running
+# Call as:  StartIfNew <procname> [args...]
+#   $0 = process name to check for      $* = full command to launch
+# Exec passes the whole line to /bin/sh -c, so shell operators work here.
+# The predicate must exit 0 when the program IS running (we then skip the
+# launch via ||) and non-zero when it is NOT (so `exec $*` fires).
+DestroyFunc StartIfNew
+AddToFunc   StartIfNew
+# TODO(deer): write the running-check predicate below, using $0.
+#   + I Exec <PREDICATE $0> || exec $*
+# See trade-offs in the chat (pgrep -x vs -f vs plain; 15-char comm limit).
++ I Exec false || exec $*
+
 DestroyFunc StartFunction
 AddToFunc   StartFunction
 + I Test (Init) Exec exec dbus-update-activation-environment --all
 + I Test (Init) Exec exec gnome-keyring-daemon --start --components=secrets
-+ I Test (Init) Exec exec xcompmgr -o  -Cc
++ I Test (Init, EnvMatch DISPLAY :0) Exec exec xcompmgr -o  -Cc
 + I TestRc (NoMatch) Exec exec hsetroot -center $[infostore.bg]
-+ I Test (Init) Exec exec devilspie
++ I Test (Init, EnvMatch DISPLAY :0) Exec exec devilspie
 + I Schedule 150 Exec exec hsetroot -center $[infostore.bg]
 #+ I Test (Init) Exec exec magick $[infostore.bg] -resize
 + I Module FvwmEvent EventSounds
@@ -104,7 +92,6 @@ AddToFunc   StartFunction
 + I Module FvwmPerl
 #+ I Module FvwmAnimate
 #+ I Module FvwmButtons FvwmTaskBar
-+ I TogglePagerPersist
 + I Test (Init) Exec exec lxqt-panel
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
@@ -124,10 +111,11 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec solaar -w hide 
 + I Test (Init) Exec exec sxhkd
 + I Test (Init) Schedule 1000 Exec exec qlipper
-+ I Test (Init) Schedule 1000 Exec exec ~/.local/opt/activitywatch/start.sh
+#+ I Test (Init) Schedule 1000 Exec exec ~/.local/opt/activitywatch/start.sh
 + I BugOpts QtDragnDropWorkaround True
 + I Schedule 100 Module Thumbnail
 + I Schedule Periodic 300000 1222 5minutes
++ I Test (EnvMatch DISPLAY :1) Read vnc-overrides
 
 
 #DestroyFunc SessionInitFunction
@@ -149,7 +137,7 @@ AddToFunc   StartFunction
 ###  Every 5min.
 #+ I Schedule Periodic 300000 1222 5minutes
 
-BugOpts ExplainWindowPlacement On, EWMHIconicStateWorkaround
+#                                                               }}}2
 
 
 ##                                                              }}}3
@@ -179,68 +167,6 @@ DestroyFunc RaiseMove
 AddToFunc RaiseMove
 + I Raise
 + M $0
-
-DestroyFunc HideUnhidePager
-AddToFunc HideUnhidePager
-+ I All (FvwmPager, !State 12) Layer 0 1
-+ I All (FvwmPager, !State 12) AnimatedMove w0 +-100w ewmhiwa
-#+ I All (FvwmPager, !State 12) CursorBarrier destroy
-+ I All (FvwmPager, State 12) Layer 0 10
-+ I All (FvwmPager, State 12) GrabFocus
-+ I All (FvwmPager, State 12) AnimatedMove w0 +-$[infostore.border_width]p ewmhiwa
-#+ I All (FvwmPager, State 12) WarpToWindow 50 50
-#+ I All (FvwmPager, State 12) Pick CursorBarrier coords $[w.x]p $[w.y]p \
-#    $[math.+.$[w.x],$[w.width]]p $[math.+.$[w.y],$[w.height]]p
-+ I All (FvwmPager) State 12
-
-DestroyFunc PagerNavigate
-AddToFunc PagerNavigate
-+ I All (FvwmPager, !State 12) Layer 0 10
-+ I All (FvwmPager, !State 12) AnimatedMove w0 +-$[infostore.border_width]p ewmhiwa
-+ I All (FvwmPager, !State 12) State 12
-+ I GotoPage $0 0p
-+ I Schedule Cancel 9901
-+ I Schedule 2000 9901 LowerPagerPersist
-
-
-DestroyFunc HidePagerOnly
-AddToFunc HidePagerOnly
-+ I All (FvwmPager, State 12, !State 13) Layer 0 1
-+ I All (FvwmPager, State 12, !State 13) AnimatedMove w0 +-100w ewmhiwa
-+ I All (FvwmPager, State 12, !State 13) State 12 False
-
-
-# Ctrl+Super+grave: persistently toggle pager down at normal layer (State 13)
-DestroyFunc TogglePagerPersist
-AddToFunc TogglePagerPersist
-+ I All (FvwmPager, State 13) Schedule Cancel 9902
-+ I All (FvwmPager, State 13) Layer 0 $[infostore.belowbottomlayer]
-+ I All (FvwmPager, State 13) AnimatedMove w0 +-100w ewmhiwa
-+ I All (FvwmPager, State 13) State 12 False
-+ I All (FvwmPager, !State 13) Schedule Cancel 9901
-+ I All (FvwmPager, !State 13) Layer 0 $[infostore.putlayer]
-+ I All (FvwmPager, !State 13) AnimatedMove w0 +-$[infostore.border_width]p ewmhiwa
-+ I All (FvwmPager) State 13
-
-# Lower persistent pager back to normal layer after navigation
-DestroyFunc LowerPagerPersist
-AddToFunc LowerPagerPersist
-+ I All (FvwmPager, State 13) Layer 0 $[infostore.putlayer]
-
-
-# Win+F: toggle fullscreen — covers full screen (ewmhiwa ignores panel struts),
-# raises above panel, strips decorations. State 14 = currently in our fullscreen.
-# FVWM only animates Move, not Resize, so no animation is possible here.
-DestroyFunc FullscreenToggle
-AddToFunc FullscreenToggle
-+ I ThisWindow (!State 14) WindowStyle !Title, BorderWidth 0
-+ I ThisWindow (!State 14) Maximize fullscreen 100 100+$[infostore.title_height]p ewmhiwa
-+ I ThisWindow (!State 14) Layer 0 $[infostore.toplayer]
-+ I ThisWindow (State 14) Layer 0 $[infostore.putlayer]
-+ I ThisWindow (State 14) Maximize fullscreen 100 100+$[infostore.title_height]p ewmhiwa
-+ I ThisWindow (State 14) WindowStyle Title, BorderWidth $[infostore.border_width]
-+ I ThisWindow State 14
-
 
 # Function: ViewManPage $0
 #
@@ -272,16 +198,7 @@ AddToFunc   SetBG
 + I Exec exec ln -fs $[FVWM_DATADIR]/default-config/images/background/$0 \
     $[FVWM_USERDIR]/.BGdefault
 
-# Function: ToggleTitle
-#
-# This function will toggle if fvwm shows the TitleBar.
-DestroyFunc ToggleTitle
-AddToFunc   ToggleTitle
-+ I ThisWindow (State 1) WindowStyle Title
-+ I TestRc (Match) State 1 False
-+ I TestRc (Match) Break
-+ I WindowStyle !Title
-+ I State 1 True
+
 
 # DestroyFunc WhiskerMenu
 # AddToFunc WhiskerMenu
@@ -346,8 +263,6 @@ AddToFunc TileBottomRight
 ##                                                              }}}3
 ##   │ ├IconifyWindow                                           {{{3
 
-
-##  Functions to iconify/deiconify the current window.
 DestroyFunc IconifyWindow
 AddToFunc IconifyWindow
 + I UnsetEnv THUMB
@@ -378,7 +293,7 @@ AddToFunc DeIconifyWindow
 + I ThisWindow FlipFocus NoWarp
 + I ThisWindow Raise
 + I ThisWindow (FvwmButtons) WarpToWindow 30 30
-
+#                                                               }}}3
 DestroyFunc EWMHActivateWindowFunc
 AddToFunc EWMHActivateWindowFunc
 + I ThisWindow (Iconic) DeIconifyWindow
@@ -474,6 +389,71 @@ AddToFunc LazyResize
 + I WarpToWindow 100 100
 + M Resize Direction automatic
 
+
+# Function: ToggleTitle
+#
+# This function will toggle if fvwm shows the TitleBar.
+DestroyFunc ToggleTitle
+AddToFunc   ToggleTitle
++ I ThisWindow (State 1) WindowStyle Title
++ I TestRc (Match) State 1 False
++ I TestRc (Match) Break
++ I WindowStyle !Title
++ I State 1 True
+
+# Win+F: toggle fullscreen — covers full screen (ewmhiwa ignores panel struts),
+# raises above panel, strips decorations. State 14 = currently in our fullscreen.
+DestroyFunc FullscreenToggle
+AddToFunc FullscreenToggle
++ I ThisWindow (!State 14) WindowStyle !Title, BorderWidth 0
++ I ThisWindow (!State 14) Maximize fullscreen 100 100+$[infostore.title_height]p ewmhiwa
++ I ThisWindow (!State 14) Layer 0 $[infostore.toplayer]
++ I ThisWindow (State 14) Layer 0 $[infostore.putlayer]
++ I ThisWindow (State 14) Maximize fullscreen 100 100+$[infostore.title_height]p ewmhiwa
++ I ThisWindow (State 14) WindowStyle Title, BorderWidth $[infostore.border_width]
++ I ThisWindow State 14
+
+
+
+#
+## PAGER / EDGESCROLL
+##
+#
+DestroyFunc PagerNavigate
+AddToFunc PagerNavigate
++ I All (FvwmPager, !State 12) Layer 0 $[infostore.toplayer]
++ I All (FvwmPager, !State 12) AnimatedMove w0 +-$[infostore.border_width]p ewmhiwa
++ I All (FvwmPager, !State 12) State 12
++ I GotoPage $0 0p
++ I Schedule Cancel 9901
++ I Schedule 2000 9901 LowerPagerPersist
+
+
+DestroyFunc HidePagerOnly
+AddToFunc HidePagerOnly
++ I All (FvwmPager, State 12, !State 13) Layer 0 1
++ I All (FvwmPager, State 12, !State 13) AnimatedMove w0 +-100w ewmhiwa
++ I All (FvwmPager, State 12, !State 13) State 12 False
+
+
+# Ctrl+Super+grave: persistently toggle pager down at normal layer (State 13)
+DestroyFunc TogglePagerPersist
+AddToFunc TogglePagerPersist
++ I All (FvwmPager, State 13) Schedule Cancel 9902
++ I All (FvwmPager, State 13) Layer 0 $[infostore.belowbottomlayer]
++ I All (FvwmPager, State 13) AnimatedMove w0 +-100w ewmhiwa
++ I All (FvwmPager, State 13) State 12 False
++ I All (FvwmPager, !State 13) Schedule Cancel 9901
++ I All (FvwmPager, !State 13) Layer 0 $[infostore.putlayer]
++ I All (FvwmPager, !State 13) AnimatedMove w0 +-$[infostore.border_width]p ewmhiwa
++ I All (FvwmPager) State 13
+
+# Lower persistent pager back to normal layer after navigation
+DestroyFunc LowerPagerPersist
+AddToFunc LowerPagerPersist
++ I All (FvwmPager, State 13) Layer 0 $[infostore.bottomlayer]
+
+
 DestroyFunc ToggleEdgeScroll
 AddToFunc ToggleEdgeScroll
 + I Test (EnvMatch EDGE_SCROLL on) EdgeResistance -1
@@ -549,7 +529,7 @@ MoveThreshold 3
 Style * SloppyFocus, MouseFocusClickRaises, ClickToFocus
 
 # Default Font
-DefaultFont "xft:P052-BoldItalic:Bold:Italic:size=10:antialias=True:minspace=True"
+DefaultFont "xft:P052:Bold:Italic:size=10:antialias=True:minspace=True"
 
 # Window Placement
 Style * MinOverlapPlacement
@@ -584,7 +564,7 @@ Style * Colorset 1, HilightColorset 2
 Style * BorderColorset 3, HilightBorderColorset 4
 
 Style * SnapAttraction 10 Windows ScreenWindows
-Style * Font "xft:C059-Bold:Italic:size=10:antialias=True"
+Style * Font "xft:P052:size=10:antialias=True"
 #Style * Font "xft:MythosChina:size=24:antialias=True"
 
 ##### Thumbnails
@@ -637,10 +617,16 @@ Style FvwmIconMan WindowListSkip
 
 Style Qmmp Sticky, !Borders, !Title, Layer $[infostore.toplayer]
 
-Style conhost.exe WindowListSkip #, InitialMapCommand IconifyWindow
+Style conhost.exe WindowListSkip # InitialMapCommand IconifyWindow
 Style "*Wine desktop" !Title, !Borders
+Style "TouchDesigner*" !Title, !Borders
+Style "Snippets" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
+Style "Component Editor" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
+#Style *.exe !Title, !Borders
 
-Style "Snippets" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle<
+Style comfyui-desktop-2 !Title, !Borders
+Style looking-glass-client !Title, !Borders
+
 #
 #
 #                           ###
@@ -926,15 +912,15 @@ Silent Key S WFST S4 ThisWindow IconifyWindow
 Silent Key D A 4 ShowDesktop "prev RestoreDesktop"
 
 # FVWM controls
-#Silent Key Tab A 4 HideUnhidePager
-Silent Key Tab A 4  PagerNavigate +1p
-Silent Key Tab A S4 PagerNavigate -1p
 Silent Key F1 A M Menu MenuFvwmRoot
 Silent Key Escape A 4 Restart
 
 # desktops/pages
-Silent Key Left A 4 NavLeft
-Silent Key Right A 4 NavRight
+Silent Key Tab A 4  PagerNavigate +1p
+Silent Key Right A 4 PagerNavigate +1p
+Silent Key Tab A S4 PagerNavigate -1p
+Silent Key Left A 4 PagerNavigate -1p
+
 Silent Key grave A 4 ToggleEdgeScroll
 Silent Key grave A 4C TogglePagerPersist
 Silent Key F A 4 FullscreenToggle
@@ -1007,16 +993,16 @@ Key KP_Begin WTSF 1 TileFull
 #     +---+---+---+---+---+---+---+---+---+
 #
 #
-Silent Key 1 A 4 GotoPage 1 0
-Silent Key 2 A 4 GotoPage 2 0
-Silent Key 3 A 4 GotoPage 3 0
-Silent Key 4 A 4 GotoPage 4 0
-Silent Key 5 A 4 GotoPage 5 0
-Silent Key 6 A 4 GotoPage 6 0
-Silent Key 7 A 4 GotoPage 7 0
-Silent Key 8 A 4 GotoPage 8 0
-Silent Key 9 A 4 GotoPage 9 0
-Silent Key 0 A 4 GotoPage 0 0
+Silent Key 1 A 4 GotoPage 0 0
+Silent Key 2 A 4 GotoPage 1 0
+Silent Key 3 A 4 GotoPage 2 0
+Silent Key 4 A 4 GotoPage 3 0
+Silent Key 5 A 4 GotoPage 4 0
+Silent Key 6 A 4 GotoPage 5 0
+Silent Key 7 A 4 GotoPage 6 0
+Silent Key 8 A 4 GotoPage 7 0
+Silent Key 9 A 4 GotoPage 8 0
+Silent Key 0 A 4 GotoPage 9 0
 
 
 #
