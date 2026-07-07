@@ -1,16 +1,15 @@
 ## vim: sts=0:noet:syntax=fvwm:foldmethod=marker
 
-
-# GENERAL SETTINGS                                              {{{1
-#		Environment                                                 {{{2
+##  General                                                  {{{1
+##   ├ Environment                                           {{{2
 SetEnv FVWM_USERDIR "/home/deer/.fvwm"
 SetEnv FVWM_THUMBS "$[FVWM_USERDIR]/images/thumbs"
 SetEnv FVWM_ICON "$[FVWM_USERDIR]/images/icons"
 
 SetEnv EDGE_SCROLL 0
 
-#                                                               }}}2
-# InfoStore                                                     {{{2
+##                                                           }}}2
+##   ├ InfoStore                                             {{{2
 
 ModulePath +:${HOME}/.fvwm/lib:$[FVWM_MODULEDIR]
 
@@ -39,19 +38,9 @@ DefaultLayers $[infostore.bottomlayer] $[infostore.putlayer] $[infostore.toplaye
 
 BugOpts ExplainWindowPlacement On, EWMHIconicStateWorkaround
 
-#                                                               }}}2
-# FUNCTIONS                                                     {{{1
-#
-#   DestroyFunc FunctionName
-#   AddToFunc FunctionName
-#   + I [Action to do Immediately]
-#   + C [Action to do on a Mouse Click]
-#   + D [Action to do on a Mouse Double Click]
-#   + H [Action to do on a Mouse Hold]
-#   + M [Action to do on a Mouse Motion]
-
-
-# Start Function                                                {{{2
+##                                                            }}}2
+##  Functions                                                {{{1
+##   ├ Start Function                                        {{{2
 #
 # The start function is run right after fvwm is done reading
 # the config file. This function run after each restart
@@ -59,19 +48,6 @@ BugOpts ExplainWindowPlacement On, EWMHIconicStateWorkaround
 # actions that are run during the first time run (Init) or
 # actions that are run after a restart.
 #
-# --- StartIfNew: launch $* only if it isn't already running
-# Call as:  StartIfNew <procname> [args...]
-#   $0 = process name to check for      $* = full command to launch
-# Exec passes the whole line to /bin/sh -c, so shell operators work here.
-# The predicate must exit 0 when the program IS running (we then skip the
-# launch via ||) and non-zero when it is NOT (so `exec $*` fires).
-DestroyFunc StartIfNew
-AddToFunc   StartIfNew
-# TODO(deer): write the running-check predicate below, using $0.
-#   + I Exec <PREDICATE $0> || exec $*
-# See trade-offs in the chat (pgrep -x vs -f vs plain; 15-char comm limit).
-+ I Exec false || exec $*
-
 DestroyFunc StartFunction
 AddToFunc   StartFunction
 + I Test (Init) Exec exec dbus-update-activation-environment --all
@@ -117,7 +93,6 @@ AddToFunc   StartFunction
 + I Schedule Periodic 300000 1222 5minutes
 + I Test (EnvMatch DISPLAY :1) Read vnc-overrides
 
-
 #DestroyFunc SessionInitFunction
 #AddToFunc   SessionInitFunction
 #+ I Test (Init, f $[FVWM_USERDIR]/.BGdefault) \
@@ -137,51 +112,22 @@ AddToFunc   StartFunction
 ###  Every 5min.
 #+ I Schedule Periodic 300000 1222 5minutes
 
-#                                                               }}}2
-
-
-##                                                              }}}3
-##   │ └5minutes                                                {{{3
-
 DestroyFunc 5minutes
 AddToFunc 5minutes
 + I Schedule 10000 KillModule Thumbnail
 + I Schedule 12000 Module Thumbnail
 
-#CursorBarrier 1p 0p 1p 0p
 
-# Mouse Bindings Functions
-DestroyFunc RaiseMoveX
-AddToFunc RaiseMoveX
-+ I Raise
-+ M $0
-+ D $1
-
-DestroyFunc MoveClickX
-AddToFunc MoveClickX
-+ M $0
-+ C $1
-+ D $2
-
-DestroyFunc RaiseMove
-AddToFunc RaiseMove
-+ I Raise
-+ M $0
-
-# Function: ViewManPage $0
-#
-# This function loads the man page $0 in an terminal
-# and is used with the help menu.
+##   ├ ViewManPage                                           {{{2
 DestroyFunc ViewManPage
 AddToFunc   ViewManPage
 + I Exec exec xterm -g 80x40 \
   -n "Manual Page - $0" -T "Manual Page - $0" -e man "$0"
 
-DestroyFunc IfDoubleClick
-AddToFunc IfDoubleClick D $[*]
-
-# Function: SetBG $0
-#
+##                                                           }}}2
+##   ├ Desktop                                               {{{2
+##   │ ├ SetBG                                               {{{3
+##
 # SetBG is used with the background menu to set the background
 # image and configure it to be loaded the next time fvwm is run.
 # Note, fvwm-root can't use .jpeg or resize images. Use something
@@ -197,112 +143,8 @@ AddToFunc   SetBG
 + I Exec exec fvwm-root $[FVWM_DATADIR]/default-config/images/background/$0
 + I Exec exec ln -fs $[FVWM_DATADIR]/default-config/images/background/$0 \
     $[FVWM_USERDIR]/.BGdefault
-
-
-
-# DestroyFunc WhiskerMenu
-# AddToFunc WhiskerMenu
-# + I Exec exec xfce4-popup-whiskermenu
-# + I ThisWindow ("Whisker Menu") Move v-0p v+863p
-
-
-DestroyFunc WindowListFunc
-AddToFunc WindowListFunc
-+ I Iconify off
-+ I FlipFocus
-+ I ChangeFocus
-+ I Raise
-AddToFunc SwitchToWindow
-+ I WindowListFunc
-DestroyMenuStyle WindowList
-MenuStyle WindowList SelectOnRelease Alt_L
-Silent Key Tab A M WindowList (CurrentPage *) \
-    NoGeometryWithInfo, CurrentAtEnd, NoCurrentDeskTitle, NoDeskNum, \
-    ShowPage, NotAlphabetic, MaxLabelWidth 25, NoOnBottom "Prev SwitchToWindow"
-Style * FPSortWindowlistByFocus
-
-DestroyFunc TileFull
-AddToFunc TileFull
-+ I ThisWindow (!Shaded, !Iconic) Maximize 90 90
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move +5 +5
-DestroyFunc TileLeft
-AddToFunc TileLeft
-+ I ThisWindow (!Shaded, !Iconic) Maximize 50 100
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 +0
-DestroyFunc TileRight
-AddToFunc TileRight
-+ I ThisWindow (!Shaded, !Iconic) Maximize 50 100
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move -0 +0
-DestroyFunc TileTop
-AddToFunc TileTop
-+ I ThisWindow (!Shaded, !Iconic) Maximize 100 50
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 +0
-DestroyFunc TileBottom
-AddToFunc TileBottom
-+ I ThisWindow (!Shaded, !Iconic) Maximize 100 50
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 -0
-DestroyFunc TileTopLeft
-AddToFunc TileTopLeft
-+ I ThisWindow (!Shaded, !Iconic) Maximize 50 50
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 +0
-DestroyFunc TileTopRight
-AddToFunc TileTopRight
-+ I ThisWindow (!Shaded, !Iconic) Maximize 50 50
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move -0 +0
-DestroyFunc TileBottomLeft
-AddToFunc TileBottomLeft
-+ I ThisWindow (!Shaded, !Iconic) Maximize 50 50
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 -0
-DestroyFunc TileBottomRight
-AddToFunc TileBottomRight
-+ I ThisWindow (!Shaded, !Iconic) Maximize 50 50
-+ I ThisWindow (Maximized, !Shaded, !Iconic) Move -0 -0
-
-#CursorBarrier 2559p 1395p 0 0
-#CursorBarrier 0 1400p 2559p 0
-##                                                              }}}3
-##   │ ├IconifyWindow                                           {{{3
-
-DestroyFunc IconifyWindow
-AddToFunc IconifyWindow
-+ I UnsetEnv THUMB
-+ I ThisWindow (!Iconifiable) Break 1
-+ I ThisWindow (Iconic) Break 1
-+ I ThisWindow (Shaded) UnShadeWindow
-+ I Test (R $[FVWM_THUMBS]/$[w.class].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.class].png
-+ I Test (R $[FVWM_THUMBS]/$[w.resource].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.resource].png
-+ I Test (R $[FVWM_THUMBS]/$[w.name].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.name].png
-+ I Test (R $[FVWM_THUMBS]/$[w.id].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.id].png
-+ I Test (!EnvIsSet THUMB) Break 1
-+ I ThisWindow InfoStoreAdd layer_$[w.id] $[w.layer]
-+ I ThisWindow Layer 0 $[infostore.bottomlayer]
-+ I ThisWindow WindowStyle IconOverride, Icon $[THUMB]
-+ I ThisWindow (Sticky) WindowStyle StickyIcon
-+ I UnsetEnv THUMB
-#+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate pause
-+ I ThisWindow Iconify True
-#+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate play
-
-DestroyFunc DeIconifyWindow
-AddToFunc DeIconifyWindow
-+ I ThisWindow Layer 0 $[infostore.putlayer]
-+ I ThisWindow WindowStyle ClickToFocus
-#+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate pause
-+ I ThisWindow Iconify False
-#+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate play
-+ I ThisWindow FlipFocus NoWarp
-+ I ThisWindow Raise
-+ I ThisWindow (FvwmButtons) WarpToWindow 30 30
-#                                                               }}}3
-DestroyFunc EWMHActivateWindowFunc
-AddToFunc EWMHActivateWindowFunc
-+ I ThisWindow (Iconic) DeIconifyWindow
-+ I ThisWindow (!CurrentPage) MoveToPage
-+ I ThisWindow (StickyIcon) WindowStyle Sticky
-+ I Focus
-+ I Raise
-
-
+##                                                           }}}3
+##   │ ├ Show/RestoreDesktop                                 {{{3
 DestroyFunc ShowDesktop
 AddToFunc   ShowDesktop
 + I All (CurrentPage, Iconic, State 1) RestoreDesktop
@@ -314,8 +156,8 @@ DestroyFunc RestoreDesktop
 AddToFunc   RestoreDesktop
 + I All (CurrentPage, Iconic, State 1) ThisWindow DeIconifyWindow
 + I All (CurrentPage, State 1) ThisWindow State 1 False
-
-
+##                                                           }}}3
+##   │ ├ Events                                              {{{3
 
 SetEnv FocusPage 0
 DestroyFunc SavePageFocus
@@ -368,57 +210,8 @@ AddToFunc FocusChange
 DestroyModuleConfig EventChangeFocus:*
 *EventChangeFocus: Cmd Function
 *EventChangeFocus: focus_change FocusChange
-
-DestroyFunc PlaySound
-AddToFunc   PlaySound
-+ I Exec exec mpg123 ~/.fvwm/sounds/$0
-
-DestroyFunc IconManClick
-AddToFunc   IconManClick
-+ I ThisWindow (Focused, !Iconic, CurrentPage, AnyScreen) IconifyWindow
-+ I TestRc (Match) Break
-+ I ThisWindow (Iconic) DeIconifyWindow
-+ I TestRc (Match) Break
-+ I ThisWindow (Raised, !Shaded, !Iconic, CurrentPage, AnyScreen) Focus
-+ I Raise
-
-DestroyFunc LazyResize
-AddToFunc LazyResize
-+ I Focus
-+ I Raise
-+ I WarpToWindow 100 100
-+ M Resize Direction automatic
-
-
-# Function: ToggleTitle
-#
-# This function will toggle if fvwm shows the TitleBar.
-DestroyFunc ToggleTitle
-AddToFunc   ToggleTitle
-+ I ThisWindow (State 1) WindowStyle Title
-+ I TestRc (Match) State 1 False
-+ I TestRc (Match) Break
-+ I WindowStyle !Title
-+ I State 1 True
-
-# Win+F: toggle fullscreen — covers full screen (ewmhiwa ignores panel struts),
-# raises above panel, strips decorations. State 14 = currently in our fullscreen.
-DestroyFunc FullscreenToggle
-AddToFunc FullscreenToggle
-+ I ThisWindow (!State 14) WindowStyle !Title, BorderWidth 0
-+ I ThisWindow (!State 14) Maximize fullscreen 100 100+$[infostore.title_height]p ewmhiwa
-+ I ThisWindow (!State 14) Layer 0 $[infostore.toplayer]
-+ I ThisWindow (State 14) Layer 0 $[infostore.putlayer]
-+ I ThisWindow (State 14) Maximize fullscreen 100 100+$[infostore.title_height]p ewmhiwa
-+ I ThisWindow (State 14) WindowStyle Title, BorderWidth $[infostore.border_width]
-+ I ThisWindow State 14
-
-
-
-#
-## PAGER / EDGESCROLL
-##
-#
+##                                                           }}}3
+##   │ ├ Pager                                               {{{3
 DestroyFunc PagerNavigate
 AddToFunc PagerNavigate
 + I All (FvwmPager, !State 12) Layer 0 $[infostore.toplayer]
@@ -452,8 +245,8 @@ AddToFunc TogglePagerPersist
 DestroyFunc LowerPagerPersist
 AddToFunc LowerPagerPersist
 + I All (FvwmPager, State 13) Layer 0 $[infostore.bottomlayer]
-
-
+##                                                           }}}3
+##   │ ├ Edge                                                {{{3
 DestroyFunc ToggleEdgeScroll
 AddToFunc ToggleEdgeScroll
 + I Test (EnvMatch EDGE_SCROLL on) EdgeResistance -1
@@ -463,39 +256,201 @@ AddToFunc ToggleEdgeScroll
 + I EdgeResistance 0
 + I Exec exec notify-send -t 1000 -a Fvwm "Edge scroll enabled."
 + I SetEnv EDGE_SCROLL on
+##                                                           }}}3
+##                                                           }}}2
+##   ├ Windows                                               {{{2
+##   │ ├ Operations                                          {{{3
+DestroyFunc RaiseMoveX
+AddToFunc RaiseMoveX
++ I Raise
++ M $0
++ D $1
+
+DestroyFunc MoveClickX
+AddToFunc MoveClickX
++ M $0
++ C $1
++ D $2
+
+DestroyFunc RaiseMove
+AddToFunc RaiseMove
++ I Raise
++ M $0
+
+DestroyFunc IfDoubleClick
+AddToFunc IfDoubleClick D $[*]
+
+DestroyFunc LazyResize
+AddToFunc LazyResize
++ I Focus
++ I Raise
++ I WarpToWindow 100 100
++ M Resize Direction automatic
 
 
+# Function: ToggleTitle
+#
+# This function will toggle if fvwm shows the TitleBar.
+DestroyFunc ToggleTitle
+AddToFunc   ToggleTitle
++ I ThisWindow (State 1) WindowStyle Title
++ I TestRc (Match) State 1 False
++ I TestRc (Match) Break
++ I WindowStyle !Title
++ I State 1 True
 
-#
-#
-#                                             ###
-#                                              ###
-#                           #                   ##
-#                          ##                   ##
-#                          ##                   ##
-#               /###     ######## ##   ####     ##      /##       /###
-#              / #### / ########   ##    ###  / ##     / ###     / #### /
-#             ##  ###/     ##      ##     ###/  ##    /   ###   ##  ###/
-#            ####          ##      ##      ##   ##   ##    ### ####
-#              ###         ##      ##      ##   ##   ########    ###
-#                ###       ##      ##      ##   ##   #######       ###
-#                  ###     ##      ##      ##   ##   ##              ###
-#             /###  ##     ##      ##      ##   ##   ####    /  /###  ##
-#            / #### /      ##       #########   ### / ######/  / #### /
-#               ###/        ##        #### ###   ##/   #####      ###/
-#                                           ###
-#                                    #####   ###
-#                                  /#######  /#
-#                                 /      ###/
-#
-#
-#
-#
+# Win+F: toggle fullscreen — covers full screen (ewmhiwa ignores panel struts),
+# raises above panel, strips decorations. State 14 = currently in our fullscreen.
+DestroyFunc FullscreenToggle
+AddToFunc FullscreenToggle
++ I ThisWindow (!State 14) WindowStyle !Title, BorderWidth 0
++ I ThisWindow (!State 14) Maximize fullscreen 100 100+$[infostore.title_height]p ewmhiwa
++ I ThisWindow (!State 14) Layer 0 $[infostore.toplayer]
++ I ThisWindow (State 14) Layer 0 $[infostore.putlayer]
++ I ThisWindow (State 14) Maximize fullscreen 100 100+$[infostore.title_height]p ewmhiwa
++ I ThisWindow (State 14) WindowStyle Title, BorderWidth $[infostore.border_width]
++ I ThisWindow State 14
+
+DestroyFunc EWMHActivateWindowFunc
+AddToFunc EWMHActivateWindowFunc
++ I ThisWindow (Iconic) DeIconifyWindow
++ I ThisWindow (!CurrentPage) MoveToPage
++ I ThisWindow (StickyIcon) WindowStyle Sticky
++ I Focus
++ I Raise
+
+##                                                           }}}3
+##                                                           }}}3
+##   │ ├ WindowListFunc                                      {{{3
+DestroyFunc WindowListFunc
+AddToFunc WindowListFunc
++ I Iconify off
++ I FlipFocus
++ I ChangeFocus
++ I Raise
+AddToFunc SwitchToWindow
++ I WindowListFunc
+DestroyMenuStyle WindowList
+MenuStyle WindowList SelectOnRelease Alt_L
+Silent Key Tab A M WindowList (CurrentPage *) \
+    NoGeometryWithInfo, CurrentAtEnd, NoCurrentDeskTitle, NoDeskNum, \
+    ShowPage, NotAlphabetic, MaxLabelWidth 25, NoOnBottom "Prev SwitchToWindow"
+Style * FPSortWindowlistByFocus
+##                                                           }}}3
+##   │ ├ Tile                                                {{{3
+##
+DestroyFunc TileFull
+AddToFunc TileFull
++ I ThisWindow (!Shaded, !Iconic) Maximize 90 90
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move +5 +5
+DestroyFunc TileLeft
+AddToFunc TileLeft
++ I ThisWindow (!Shaded, !Iconic) Maximize 50 100
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 +0
+DestroyFunc TileRight
+AddToFunc TileRight
++ I ThisWindow (!Shaded, !Iconic) Maximize 50 100
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move -0 +0
+DestroyFunc TileTop
+AddToFunc TileTop
++ I ThisWindow (!Shaded, !Iconic) Maximize 100 50
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 +0
+DestroyFunc TileBottom
+AddToFunc TileBottom
++ I ThisWindow (!Shaded, !Iconic) Maximize 100 50
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 -0
+DestroyFunc TileTopLeft
+AddToFunc TileTopLeft
++ I ThisWindow (!Shaded, !Iconic) Maximize 50 50
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 +0
+DestroyFunc TileTopRight
+AddToFunc TileTopRight
++ I ThisWindow (!Shaded, !Iconic) Maximize 50 50
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move -0 +0
+DestroyFunc TileBottomLeft
+AddToFunc TileBottomLeft
++ I ThisWindow (!Shaded, !Iconic) Maximize 50 50
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move +0 -0
+DestroyFunc TileBottomRight
+AddToFunc TileBottomRight
++ I ThisWindow (!Shaded, !Iconic) Maximize 50 50
++ I ThisWindow (Maximized, !Shaded, !Iconic) Move -0 -0
+##                                                           }}}3
+##   │ ├ Shuffle                                             {{{3
+# Shuffle moves a window in a given direction until it hits another window.
+# These bindings will shuffle a window using the arrow keys.
+#    Ctrl-Alt Up_Arrow     - Shuffle window up
+#    Ctrl-Alt Right_Arrow  - Shuffle window right
+#    Ctrl-Alt Down_Arrow   - Shuffle window down
+#    Ctrl-Alt Left_Arrow   - Shuffle window left
+# Holding shift (Ctrl-Alt-Shift) will grow the window in the given direction.
+DestroyFunc ShuffleDir
+AddToFunc   ShuffleDir
++ I Move shuffle layers $[w.layer] $[w.layer] snap windows $0
++ I WarpToWindow 50 50
+Key Up      WTSF    CM  ShuffleDir up
+Key Down    WTSF    CM  ShuffleDir down
+Key Left    WTSF    CM  ShuffleDir left
+Key Right   WTSF    CM  ShuffleDir right
+Key Up      WTSF    CSM Maximize True 0 growup
+Key Down    WTSF    CSM Maximize True 0 growdown
+Key Right   WTSF    CSM Maximize True growright 0
+Key Left    WTSF    CSM Maximize True growleft 0
+##                                                           }}}3
+##   │ ├ (De)Iconify                                         {{{3
+DestroyFunc IconifyWindow
+AddToFunc IconifyWindow
++ I UnsetEnv THUMB
++ I ThisWindow (!Iconifiable) Break 1
++ I ThisWindow (Iconic) Break 1
++ I ThisWindow (Shaded) UnShadeWindow
++ I Test (R $[FVWM_THUMBS]/$[w.class].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.class].png
++ I Test (R $[FVWM_THUMBS]/$[w.resource].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.resource].png
++ I Test (R $[FVWM_THUMBS]/$[w.name].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.name].png
++ I Test (R $[FVWM_THUMBS]/$[w.id].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.id].png
++ I Test (!EnvIsSet THUMB) Break 1
++ I ThisWindow InfoStoreAdd layer_$[w.id] $[w.layer]
++ I ThisWindow Layer 0 $[infostore.bottomlayer]
++ I ThisWindow WindowStyle IconOverride, Icon $[THUMB]
++ I ThisWindow (Sticky) WindowStyle StickyIcon
++ I UnsetEnv THUMB
+#+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate pause
++ I ThisWindow Iconify True
+#+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate play
+
+DestroyFunc DeIconifyWindow
+AddToFunc DeIconifyWindow
++ I ThisWindow Layer 0 $[infostore.putlayer]
++ I ThisWindow WindowStyle ClickToFocus
+#+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate pause
++ I ThisWindow Iconify False
+#+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate play
++ I ThisWindow FlipFocus NoWarp
++ I ThisWindow Raise
++ I ThisWindow (FvwmButtons) WarpToWindow 30 30
+##                                                           }}}3
+##                                                           }}}2
+DestroyFunc PlaySound
+AddToFunc   PlaySound
++ I Exec exec mpg123 ~/.fvwm/sounds/$0
+
+DestroyFunc IconManClick
+AddToFunc   IconManClick
++ I ThisWindow (Focused, !Iconic, CurrentPage, AnyScreen) IconifyWindow
++ I TestRc (Match) Break
++ I ThisWindow (Iconic) DeIconifyWindow
++ I TestRc (Match) Break
++ I ThisWindow (Raised, !Shaded, !Iconic, CurrentPage, AnyScreen) Focus
++ I Raise
+##                                                           }}}1
+##  Style                                                    {{{1
+##   ├ Cursor                                                {{{2
 CursorStyle ROOT         left_ptr
 CursorStyle TITLE        left_ptr
 CursorStyle DEFAULT      left_ptr
 CursorStyle MENU         left_ptr
-
+##                                                           }}}2
+##   ├ Desktops                                              {{{2
 #
 #       0   1   2   3   4   5   6   7   8
 #     +---+---+---+---+---+---+---+---+---+
@@ -504,14 +459,16 @@ CursorStyle MENU         left_ptr
 #
 EwmhNumberOfDesktops 10 0
 DesktopSize 10x1
-
+##                                                           }}}2
+##   ├ Edge                                                  {{{2
 EdgeScroll 100 0
 EdgeResistance -1
 EdgeThickness 1
 Style * EdgeMoveDelay 250
 Style * EdgeMoveResistance 20
 Style * EdgeResizeDelay -1
-
+##                                                           }}}2
+##   ├ Windows                                               {{{2
 Style * TileCascadePlacement
 
 # EwmhBaseStruts [left] [right] [top] [bottom]
@@ -528,13 +485,11 @@ MoveThreshold 3
 # in a window will Raise it.
 Style * SloppyFocus, MouseFocusClickRaises, ClickToFocus
 
-# Default Font
-DefaultFont "xft:P052:Bold:Italic:size=10:antialias=True:minspace=True"
-
-# Window Placement
+##   │ ├ Window Placement                                    {{{3
 Style * MinOverlapPlacement
 Style * PositionPlacement Center
 Style * GrabFocus, GrabFocusTransient
+##                                                           }}}3
 
 ## Sets all windows to OpaqueMove (vs a wired frame) and  windows will
 ## snap to each other and the edge of the screen.
@@ -551,37 +506,28 @@ Style * FPSortWindowlistByFocus
 
 ## WindowShade
 Style * WindowShadeScrolls, WindowShadeSteps 10
-
-# Decor Styles
-TitleStyle LeftJustified Height $[infostore.title_height] -- Raised
-Style * BorderWidth $[infostore.border_width]
-Style * HandleWidth $[infostore.border_width]
-Style * MWMButtons
-Style * CornerLength 7
-Style * !DepressableBorder
-
-Style * Colorset 1, HilightColorset 2
-Style * BorderColorset 3, HilightBorderColorset 4
-
-Style * SnapAttraction 10 Windows ScreenWindows
+##                                                           }}}2
+##   ├ Font                                                  {{{2
+DefaultFont "xft:P052:Bold:Italic:size=10:antialias=True:minspace=True"
 Style * Font "xft:P052:size=10:antialias=True"
-#Style * Font "xft:MythosChina:size=24:antialias=True"
-
-##### Thumbnails
+##                                                           }}}2
+##   ├ Thumbnails                                            {{{2
 Style * IconOverride, !UseIconPosition
 Style * IconBox 800x1365+0+0, IconGrid 10 10, IconFill top left
 Style * IconTitleFormat %c
-
-
-# Disable Icons from appearing on desktop.
-# Comment this out or use Style * Icon to get the icons back.
-#Style * !Icon
-
-# Window Specific Styles
+##                                                           }}}2
+##   ├ Overrides                                             {{{2
+##   │ ├ Fvwm                                                {{{3
 Style ConfirmQuit !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
 Style ConfirmReboot !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
 Style ConfirmShutdown !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
 Style FvwmIdent WindowListSkip
+Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, Layer 0 1, \
+                !Iconifiable, PositionPlacement 50-50w 0-100w ewmhiwa, \
+                FixedSize
+Style FvwmIconMan WindowListSkip
+##                                                           }}}3
+##   │ ├ Other                                               {{{3
 Style lxqt-panel !Title, !Borders, Layer $[infostore.putlayer]
 Style Picture-in-Picture !Title, WindowListSkip, Sticky, Layer $[infostore.toplayer]
 Style "Picture in picture" !Title, WindowListSkip, Sticky, Layer $[infostore.toplayer]
@@ -591,64 +537,29 @@ Style qterminal Resize 700p 700p
 Style "Steam*" !UsePPosition
 Style "Steam*" !UseUSPosition, FixedPPosition
 Style "Steam*" !Title
-#Style easyeffects !Title, !Borders
 Style kittydesk !Title
 Style qlipper !Title, !Borders
 Style lxqt-runner !Title, WindowListSkip, Layer $[infostore.toplayer], PositionPlacement Center #Move +637p +677p, !UseUSPosition, FixedPPosition
 Style krunner !Title, WindowListSkip, Layer $[infostore.toplayer], BorderWidth 0
 Style qterminal Resize 1500p 1000p
 Style "Nicotine+" IgnoreRestack
-#Style xdesktopwaves
-#Style kitty Resize 1040p 980p
-
-#Style steam_proton !Title, BorderColorset 3, HighlightBorderColorset 3
 Style "popMenu" !Title, !Borders, FPGrabFocus, Layer $[infostore.toplayer]
 Style "assistant" !Borders, !Title, ParentalRelativity, BackingStore, Sticky, Layer $[infostore.toplayer]
-
 Style bottles !Borders, !Title
 Style chromium-browser !Borders, !Title, WindowListSkip, Layer $[infostore.toplayer], Sticky
 Style easyterm.py !Borders, !Title
-
-Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, Layer 0 1, \
-                !Iconifiable, PositionPlacement 50-50w 0-100w ewmhiwa, \
-                FixedSize
-
-Style FvwmIconMan WindowListSkip
-
 Style Qmmp Sticky, !Borders, !Title, Layer $[infostore.toplayer]
-
 Style conhost.exe WindowListSkip # InitialMapCommand IconifyWindow
 Style "*Wine desktop" !Title, !Borders
 Style "TouchDesigner*" !Title, !Borders
 Style "Snippets" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
 Style "Component Editor" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
-#Style *.exe !Title, !Borders
-
 Style comfyui-desktop-2 !Title, !Borders
 Style looking-glass-client !Title, !Borders
-
-#
-#
-#                           ###
-#                            ###
-#                             ##                                              #
-#                             ##                                             ##
-#                             ##                                             ##
-#           /###      /###    ##      /###   ###  /###     /###      /##   ######## /###
-#          / ###  /  / ###  / ##     / ###  / ###/ #### / / #### /  / ### ######## / #### /
-#         /   ###/  /   ###/  ##    /   ###/   ##   ###/ ##  ###/  /   ###   ##   ##  ###/
-#        ##        ##    ##   ##   ##    ##    ##       ####      ##    ###  ##  ####
-#        ##        ##    ##   ##   ##    ##    ##         ###     ########   ##    ###
-#        ##        ##    ##   ##   ##    ##    ##           ###   #######    ##      ###
-#        ##        ##    ##   ##   ##    ##    ##             ### ##         ##        ###
-#        ###     / ##    ##   ##   ##    ##    ##        /###  ## ####    /  ##   /###  ##
-#         ######/   ######    ### / ######     ###      / #### /   ######/   ##  / #### /
-#          #####     ####      ##/   ####       ###        ###/     #####     ##    ###/
-#
-#
-#
-#
-#
+##                                                           }}}3
+##                                                           }}}2
+##                                                           }}}1
+##  Colorsets                                                {{{1
 #~~~~~~~ 0 - Default
 Colorset 0 fg #ffc996, bg #432727, hi, sh, Plain, NoShape
 #~~~~~~~ 1 - Inactive Windows
@@ -702,24 +613,11 @@ Colorset 21 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], 
 
 ## NEW
 #Colorset 20 fg white, bg #94293e, hi, sh, Plain, NoShape
-
-
-#     ### /### /###     /##  ###  /###   ##   ####       /###
-#      ##/ ###/ /##  / / ###  ###/ #### / ##    ###  /  / #### /
-#       ##  ###/ ###/ /   ###  ##   ###/  ##     ###/  ##  ###/
-#       ##   ##   ## ##    ### ##    ##   ##      ##  ####
-#       ##   ##   ## ########  ##    ##   ##      ##    ###
-#       ##   ##   ## #######   ##    ##   ##      ##      ###
-#       ##   ##   ## ##        ##    ##   ##      ##        ###
-#       ##   ##   ## ####    / ##    ##   ##      /#   /###  ##
-#       ###  ###  ### ######/  ###   ###   ######/ ## / #### /
-#        ###  ###  ### #####    ###   ###   #####   ##   ###/
-
-#
-# Root Menu
-#
-# The root menu will PopUp with a click in the root
-# window or using alt-f1 (or menu).
+##                                                           }}}1
+##  Menus                                                    {{{1
+##   ├ Root Menu                                             {{{2
+## The root menu will PopUp with a click in the root
+## window or using alt-f1 (or menu).
 
 MenuStyle MenuFvwmRoot MenuColorset 5, ActiveColorset 6, GreyedColorset 7, TitleColorset 8
 MenuStyle MenuFvwmRoot Hilight3DThick, HilightBack, HilightTitleBack, SeparatorsLong
@@ -753,9 +651,8 @@ AddToMenu   SessionMenu "Leave Session" Title
 + "Reboot%$[FVWM_ICON]/quit.png%" Module FvwmScript FvwmScript-ConfirmReboot
 + "Power Off%$[FVWM_ICON]/quit.png%" Module FvwmScript FvwmScript-ConfirmShutdown
 
-
-
-# Window Operations Menus
+##                                                           }}}2
+##   ├ WindowOps                                             {{{2
 DestroyMenu MenuWindowOps
 AddToMenu   MenuWindowOps
 + "StaysOnTop"          Pick (CirculateHit) Layer 0 6
@@ -783,7 +680,15 @@ AddToMenu   MenuWindowOpsLong
 + "" Nop
 + "Identify"            Module FvwmIdent
 
+DestroyMenu MenuSendTo
+AddToMenu MenuSendTo
++ "Top Left" MoveToPage 0 0
++ "Top Right" MoveToPage 1 0
++ "Bottom Left" MoveToPage 0 1
++ "Bottom Right" MoveToPage 1 1
 
+##                                                           }}}2
+##   ├ IconOps                                               {{{2
 DestroyMenu MenuIconOps
 AddToMenu   MenuIconOps
 + "(De)Iconify"         Iconify
@@ -799,15 +704,8 @@ AddToMenu   MenuIconOps
 + "StaysOnBottom"       Pick (CirculateHit) Layer 0 2
 + "" Nop
 + "Identify"            Module FvwmIdent
-
-DestroyMenu MenuSendTo
-AddToMenu MenuSendTo
-+ "Top Left" MoveToPage 0 0
-+ "Top Right" MoveToPage 1 0
-+ "Bottom Left" MoveToPage 0 1
-+ "Bottom Right" MoveToPage 1 1
-
-# Fvwm Man Pages (Help) Menu
+##                                                           }}}2
+##   ├ FvwmManPages                                          {{{2
 DestroyMenu MenuFvwmManPages
 AddToMenu   MenuFvwmManPages "Help" Title
 + "fvwm"                ViewManPage fvwm
@@ -834,35 +732,10 @@ AddToMenu   MenuFvwmManPages "Help" Title
 + "fvwm-menu-headlines" ViewManPage fvwm-menu-headlines
 + "fvwm-menu-xlock"     ViewManPage fvwm-menu-xlock
 + "fvwm-config"         ViewManPage fvwm-config
-
-
-
-#
-#
-#           /                              ##
-#         #/          #                     ##    #
-#         ##         ###                    ##   ###
-#         ##          #                     ##    #
-#         ##                                ##
-#         ## /###   ###   ###  /###     ### ##  ###   ###  /###     /###      /###
-#         ##/ ###  / ###   ###/ #### / ######### ###   ###/ #### / /  ###  / / #### /
-#         ##   ###/   ##    ##   ###/ ##   ####   ##    ##   ###/ /    ###/ ##  ###/
-#         ##    ##    ##    ##    ##  ##    ##    ##    ##    ## ##     ## ####
-#         ##    ##    ##    ##    ##  ##    ##    ##    ##    ## ##     ##   ###
-#         ##    ##    ##    ##    ##  ##    ##    ##    ##    ## ##     ##     ###
-#         ##    ##    ##    ##    ##  ##    ##    ##    ##    ## ##     ##       ###
-#         ##    /#    ##    ##    ##  ##    /#    ##    ##    ## ##     ##  /###  ##
-#          ####/      ### / ###   ###  ####/      ### / ###   ### ######## / #### /
-#           ###        ##/   ###   ###  ###        ##/   ###   ###  ### ###   ###/
-#                                                                        ###
-#                                                                  ####   ###
-#                                                                /######  /#
-#                                                               /     ###/
-#
-#
-
-
-#
+##                                                           }}}2
+##                                                           }}}1
+##  Bindings                                                 {{{1
+##   ├ Reference                                             {{{2
 # Contexts:
 #     R = Root Window                 rrrrrrrrrrrrrrrrrrrrrr
 #     W = Application Window          rIrrrr<---------^rrrrr
@@ -886,13 +759,9 @@ AddToMenu   MenuFvwmManPages "Help" Title
 #
 # Format: Key <X>  <Context> <Modifier> <Action>
 #         Mouse <X> <Context> <Modifier> <Action>
-#
-# Silent supresses any errors (such as keyboards with no Menu key).
-
-##  Prevent NumLock/ScrollLock - known to cause problems w/bindings.
-IgnoreModifiers L25
-
-# App Shortcuts
+#                                                            }}}2
+##   ├ Keyboard                                              {{{2
+##   │ ├ App Shortcuts                                       {{{3
 Silent Key L A 4 Exec exec xscreensaver-command --lock
 Silent Key S A 4 Exec flameshot gui
 Silent Key Print A A Exec flameshot screen
@@ -901,8 +770,8 @@ Silent Key XF86Calculator A N Exec exec $[infostore.calculator]
 Silent Key W A 4 Exec exec firefox
 Silent Key E A 4 Exec exec $[infostore.filemanager]
 #Silent Key . A 14 Exec exec kcharselect
-
-# Window controls
+##                                                           }}}3
+##   │ ├ Window controls                                     {{{3
 Silent Key A A 4 ThisWindow Stick Toggle
 Silent Key Q A S4 ThisWindow Delete
 Silent Key k A 4 Pick Destroy
@@ -910,28 +779,14 @@ Silent Key T WTFS S4 ToggleTitle
 Silent Key I A 4 Exec exec FvwmCommand FvwmIdent
 Silent Key S WFST S4 ThisWindow IconifyWindow
 Silent Key D A 4 ShowDesktop "prev RestoreDesktop"
-
-# FVWM controls
+##                                                           }}}3
+##   │ ├ FVWM controls                                       {{{3
+IgnoreModifiers L25
 Silent Key F1 A M Menu MenuFvwmRoot
 Silent Key Escape A 4 Restart
 
-# desktops/pages
-Silent Key Tab A 4  PagerNavigate +1p
-Silent Key Right A 4 PagerNavigate +1p
-Silent Key Tab A S4 PagerNavigate -1p
-Silent Key Left A 4 PagerNavigate -1p
-
-Silent Key grave A 4 ToggleEdgeScroll
-Silent Key grave A 4C TogglePagerPersist
 Silent Key F A 4 FullscreenToggle
 Silent Key F W S4 Maximize 100 100 ewmhiwa
-
-# Audio
-#Silent Key XF86AudioRaiseVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%+"
-#Silent Key XF86AudioLowerVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%-"
-#Silent Key XF86AudioMute A A Exec exec "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
-Silent Key Pause A A Exec exec /home/deer/.scripts/volume_brightness.sh play_pause
-
 
 # Window Buttons: [1 3 5 7 9  TTTTT  0 8 6 4 2]
 #   1 - Open the WindowOps menu.
@@ -944,38 +799,14 @@ Mouse 1 4 A Maximize 100 100
 Mouse 2 4 A Maximize 0 100
 Mouse 3 4 A Maximize 100 0
 Mouse 1 6 A ThisWindow IconifyWindow
-
-##  Double-click to deiconify.
-##  Pointer is over a thumbnail icon.
-
-
-# Left Click
-Mouse 1	T    A RaiseMoveX Move Maximize
-Mouse 1 I    A IfDoubleClick DeIconifyWindow
-Mouse 1 R    A -
-Mouse 1 R    M Menu MenuFvwmRoot
-Mouse 1	FS   A RaiseMove Resize
-Mouse 1 W    4 RaiseMoveX Move
-
-# Middle Click
-Mouse 2	T    A Delete
-
-# Right Click
-Mouse 3 R    M Menu MenuFvwmRoot
-Mouse 3 T    A WindowShade Toggle
-Mouse 3	R    A -
-Mouse 3 I    A Menu MenuIconOps
-Mouse 3 W    4 LazyResize
-
-Mouse 6 RWFSTI 4 NavLeft
-Mouse 7 RWFSTI 4 NavRight
-
-
-Mouse 9 RWFSTI 4 NavRight
-Mouse 8 RWFSTI 4 NavLeft
-
-
-# Window tiling
+##                                                           }}}3
+##   │ ├ Audio                                               {{{3
+#Silent Key XF86AudioRaiseVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%+"
+#Silent Key XF86AudioLowerVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%-"
+#Silent Key XF86AudioMute A A Exec exec "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+Silent Key Pause A A Exec exec /home/deer/.scripts/volume_brightness.sh play_pause
+##                                                           }}}3
+##   │ ├ Window tiling                                       {{{3
 Key KP_Left WTSF 1 TileLeft
 Key KP_Right WTSF 1 TileRight
 Key KP_Up WTSF 1 TileTop
@@ -985,8 +816,9 @@ Key KP_Prior WTSF 1 TileTopRight
 Key KP_End WTSF 1 TileBottomLeft
 Key KP_Next WTSF 1 TileBottomRight
 Key KP_Begin WTSF 1 TileFull
-
-
+##                                                           }}}3
+##   │ ├ Desktop Switching                                   {{{3
+#
 #       0   1   2   3   4   5   6   7   8
 #     +---+---+---+---+---+---+---+---+---+
 #   0 |   |   |   |   |   |   |   |   |   |
@@ -1004,68 +836,56 @@ Silent Key 8 A 4 GotoPage 7 0
 Silent Key 9 A 4 GotoPage 8 0
 Silent Key 0 A 4 GotoPage 9 0
 
-
-#
 # Move window to page
-#
 Key KP_Insert WTSF 4 MoveToPage 0 0
-
 Key KP_End WTSF 4 MoveToPage 1 0
 Key KP_Down WTSF 4 MoveToPage 2 0
 Key KP_Next WTSF 4 MoveToPage 3 0
-
 Key KP_Left WTSF 4 MoveToPage 4 0
 Key KP_Begin WTSF 4 MoveToPage 5 0
 Key KP_Right WTSF 4 MoveToPage 6 0
-
-
 Key KP_Home WTSF 4 MoveToPage 7 0
 Key KP_Up WTSF 4 MoveToPage 8 0
 Key KP_Prior WTSF 4 MoveToPage 9 0
 
+Silent Key Tab A 4  PagerNavigate +1p
+Silent Key Right A 4 PagerNavigate +1p
+Silent Key Tab A S4 PagerNavigate -1p
+Silent Key Left A 4 PagerNavigate -1p
 
-# Shuffle moves a window in a given direction until it hits another window.
-# These bindings will shuffle a window using the arrow keys.
-#    Ctrl-Alt Up_Arrow     - Shuffle window up
-#    Ctrl-Alt Right_Arrow  - Shuffle window right
-#    Ctrl-Alt Down_Arrow   - Shuffle window down
-#    Ctrl-Alt Left_Arrow   - Shuffle window left
-# Holding shift (Ctrl-Alt-Shift) will grow the window in the given direction.
-DestroyFunc ShuffleDir
-AddToFunc   ShuffleDir
-+ I Move shuffle layers $[w.layer] $[w.layer] snap windows $0
-+ I WarpToWindow 50 50
-Key Up      WTSF    CM  ShuffleDir up
-Key Down    WTSF    CM  ShuffleDir down
-Key Left    WTSF    CM  ShuffleDir left
-Key Right   WTSF    CM  ShuffleDir right
-Key Up      WTSF    CSM Maximize True 0 growup
-Key Down    WTSF    CSM Maximize True 0 growdown
-Key Right   WTSF    CSM Maximize True growright 0
-Key Left    WTSF    CSM Maximize True growleft 0
+Silent Key grave A 4 ToggleEdgeScroll
+Silent Key grave A 4C TogglePagerPersist
 
-
-#
-#
-#                  ##
-#                   ##
-#                   ##
-#                   ##
-#                   ##
-#               ### ##    /##       /###      /###   ###  /###
-#              ######### / ###     / ###  /  / ###  / ###/ #### /
-#             ##   #### /   ###   /   ###/  /   ###/   ##   ###/
-#             ##    ## ##    ### ##        ##    ##    ##
-#             ##    ## ########  ##        ##    ##    ##
-#             ##    ## #######   ##        ##    ##    ##
-#             ##    ## ##        ##        ##    ##    ##
-#             ##    /# ####    / ###     / ##    ##    ##
-#              ####/    ######/   ######/   ######     ###
-#               ###      #####     #####     ####       ###
-#
-#
-#
-#
+##                                                           }}}3
+##                                                           }}}2
+##   ├ Mouse                                                 {{{2
+##   │ ├ Left Click                                          {{{3
+Mouse 1	T    A RaiseMoveX Move Maximize
+Mouse 1 I    A IfDoubleClick DeIconifyWindow
+Mouse 1 R    A -
+Mouse 1 R    M Menu MenuFvwmRoot
+Mouse 1	FS   A RaiseMove Resize
+Mouse 1 W    4 RaiseMoveX Move
+##                                                           }}}3
+##   │ ├ Middle Click                                        {{{3
+Mouse 2	T    A Delete
+##                                                           }}}3
+##   │ ├ Right Click                                         {{{3
+Mouse 3 R    M Menu MenuFvwmRoot
+Mouse 3 T    A WindowShade Toggle
+Mouse 3	R    A -
+Mouse 3 I    A Menu MenuIconOps
+Mouse 3 W    4 LazyResize
+##                                                           }}}3
+##   │ ├ Other                                               {{{3
+Mouse 6 RWFSTI 4 NavLeft
+Mouse 7 RWFSTI 4 NavRight
+Mouse 9 RWFSTI 4 NavRight
+Mouse 8 RWFSTI 4 NavLeft
+##                                                           }}}3
+##                                                           }}}2
+##                                                           }}}1
+##  Decor                                                    {{{1
 # Buttons Locations: [1 3 5 7 9  TTTTT  0 8 6 4 2]
 #
 #   1 - Close
@@ -1094,38 +914,16 @@ ButtonStyle All - Clear
 ButtonStyle 1 - MwmDecorMenu
 ButtonStyle 4 - MwmDecorMax
 ButtonStyle 6 - MwmDecorMin
-
-
-
-#
-#                                     ##               ###
-#                                      ##               ###
-#                                      ##                ##
-#                                      ##                ##
-#                                      ##                ##
-#       ### /### /###     /###     ### ##  ##   ####     ##      /##       /###
-#        ##/ ###/ /##  / / ###  / ######### ##    ###  / ##     / ###     / #### /
-#         ##  ###/ ###/ /   ###/ ##   ####  ##     ###/  ##    /   ###   ##  ###/
-#         ##   ##   ## ##    ##  ##    ##   ##      ##   ##   ##    ### ####
-#         ##   ##   ## ##    ##  ##    ##   ##      ##   ##   ########    ###
-#         ##   ##   ## ##    ##  ##    ##   ##      ##   ##   #######       ###
-#         ##   ##   ## ##    ##  ##    ##   ##      ##   ##   ##              ###
-#         ##   ##   ## ##    ##  ##    /#   ##      /#   ##   ####    /  /###  ##
-#         ###  ###  ### ######    ####/      ######/ ##  ### / ######/  / #### /
-#          ###  ###  ### ####      ###        #####   ##  ##/   #####      ###/
-#
-#
-#
-#
-#
-# FvwmIdent
+##                                                           }}}1
+##  Modules                                                  {{{1
+##   ├ FvwmIdent                                             {{{2
 # FvwmIdent is a module that can be used to get the various info about
 # a window. One use is getting the class/resource/name of a window.
 DestroyModuleConfig FvwmIdent:*
 *FvwmIdent: Colorset 10
 *FvwmIdent: Font "xft:LiberationSans-Regular:size=10:antialias=False"
-
-# FvwmScript
+##                                                           }}}2
+##   ├ FvwmScript                                            {{{2
 #
 # FvwmScript is a module that allows one to write custom desktop
 # widgets and various other tools. This config uses two FvwmScripts.
@@ -1136,47 +934,36 @@ DestroyModuleConfig FvwmIdent:*
 DestroyModuleConfig FvwmScript:*
 *FvwmScript: DefaultColorset 10
 *FvwmScript: Font "xft:P052:Italic:Bold:size=10:antialias=True"
-
-# FvwmForm
+##                                                           }}}2
+##   ├ FvwmForm                                              {{{2
 #
 # FvwmForm is a module that can be used to build a GUI
 # form. Used with fvwm-menu-desktop-config.fpl.
 # This sets the default colorsets.
 *FvwmFormDefault: Colorset 10
 *FvwmFormDefault: ItemColorset 13
-
-#
-# FvwmPager
-#
+##                                                           }}}2
+##   ├ FvwmPager                                             {{{2
 #DestroyModuleConfig FvwmPager:*
 *FvwmPager: Colorset 21
 *FvwmPager: HilightColorset 20
 *FvwmPager: WindowColorset 19
 *FvwmPager: FocusColorset 18
-
 *FvwmPager: NoDeskLabels
 *FvwmPager: MiniIcons
 *FvwmPager: Balloons All
 *FvwmPager: SolidSeparators
 *FvwmPager: UseSkipList
-
 *FvwmPager: Geometry 1400x80
-
 *FvwmPager: Mouse 3 Scroll
 *FvwmPager: Mouse 4 Cmd GotoPage -1p 0p
 *FvwmPager: Mouse 5 Cmd GotoPage +1p 0p
-
-
-#
-# FvwmAnimate
-#
+##                                                           }}}2
+##   ├ FvwmAnimate                                           {{{2
 #*FvwmAnimate: Effect Zoom3D
 #*FvwmAnimate: Iterations 25
-
-
-#####
-# FvwmTaskBar
-##########
+##                                                           }}}2
+##   ├ FvwmTaskBar                                           {{{2
 DestroyModuleConfig FvwmTaskBar:*
 *FvwmTaskBar: Geometry 2560x40+0-0
 *FvwmTaskBar: Colorset 10
@@ -1222,7 +1009,7 @@ DestroyModuleConfig FvwmTaskBar:*
     Colorset 5, Frame 0)
 *FvwmTaskBar: (1x1, Frame 0)
 
-
+##   │ ├ TaskBarIcons                                        {{{3
 DestroyModuleConfig TaskBarIcons: *
 *TaskBarIcons: IconName "TaskBarIcons"
 *TaskBarIcons: UseWinList true
@@ -1257,6 +1044,9 @@ DestroyModuleConfig TaskBarIcons: *
 *TaskBarIcons: IconAndSelectColorset 12
 *TaskBarIcons: IconColorset 14
 
+
+##                                                           }}}3
+##   │ ├ TaskBarInactive                                     {{{3
 DestroyModuleConfig TaskBarInactive: *
 *TaskBarInactive: IconName "TaskBarInactive"
 *TaskBarInactive: UseWinList true
@@ -1287,14 +1077,7 @@ DestroyModuleConfig TaskBarInactive: *
 *TaskBarInactive: FocusAndSelectColorset 5
 *TaskBarInactive: SelectColorset 5
 *TaskBarInactive: IconAndSelectColorset 5
-
-
-# Button Actions
-*TaskBarIcons: Action Mouse 1 A sendcommand IconManClick
-*TaskBarIcons: Action Mouse 2 A sendcommand Close
-*TaskBarIcons: Action Mouse 3 A sendcommand "Menu MenuIconOps Mouse 0 o100"
-
-
+##                                                           }}}3
 # FvwmTaskBar styles
 Style FvwmTaskBar !Borders, !Title, WindowListSkip, \
                   Layer 6, Sticky, FixedSize, !Iconifiable, NeverFocus
@@ -1303,7 +1086,7 @@ Style FvwmTaskBar !Borders, !Title, WindowListSkip, \
 # Run FvwmTaskBar
 #Module FvwmIconMan FvwmTaskBar  FvwmIconMan here will show in top left
 
-
+##                                                           }}}1
 
 
 

@@ -1,6 +1,10 @@
 # fvwm-crystal thumbnail cache (regenerated on demand)
 .thumbs
 **/.thumbs/
+icons
+images
+.idea
+.vscode
 
 # Auto-generated XDG application menu
 .XDGMenu
