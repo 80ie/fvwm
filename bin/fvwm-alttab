@@ -1,0 +1,369 @@
+#!/usr/bin/perl
+# fvwm-alttab: live-thumbnail Alt-Tab window switcher for FVWM3.
+# Pops a Gtk3 overlay showing thumbnails of windows on the current page.
+# Tab / Shift-Tab cycle selection; Escape cancels; Alt release commits.
+
+use strict;
+use warnings;
+use v5.40;
+
+use IO::Socket::UNIX;
+use IO::Select;
+use JSON::PP;
+use Fcntl qw(:flock);
+use POSIX qw(:sys_wait_h);
+use Gtk3 -init;
+use Glib qw(TRUE FALSE);
+
+my $THUMB_DIR = "$ENV{HOME}/.fvwm/images/thumbs";
+my $THUMB_W   = 200;
+my $THUMB_H   = 180;
+my $MFL_SOCK  = $ENV{FVWMMFL_SOCKET} // "/tmp/fvwmmfl/fvwm_mfl_$ENV{DISPLAY}.sock";
+my $RUN_DIR   = $ENV{XDG_RUNTIME_DIR} // "/tmp";
+my $LOCKFILE  = "$RUN_DIR/fvwm-alttab.pid";
+my $SEP       = "<<>>";
+my $SENTINEL  = "ALTTAB";
+my $END_MARK  = "$SENTINEL${SEP}END";
+my $READ_TIMEOUT = 2.0;
+
+# Suppress noisy Gtk warnings when running headless-ish
+$SIG{__WARN__} = sub { print STDERR "[fvwm-alttab] $_[0]" };
+
+sub acquire_lock {
+    open(my $fh, '>', $LOCKFILE) or die "cannot open $LOCKFILE: $!";
+    unless (flock($fh, LOCK_EX | LOCK_NB)) {
+        exit 0;  # another instance is up; be silent
+    }
+    print $fh "$$\n"; $fh->flush;
+    return $fh;   # kept in scope until process exits
+}
+
+sub get_windows {
+    my $sock = IO::Socket::UNIX->new(
+        Type => SOCK_STREAM,
+        Peer => $MFL_SOCK,
+    ) or do {
+        warn "cannot connect to MFL socket $MFL_SOCK: $!\n";
+        return [];
+    };
+    $sock->autoflush(1);
+    print $sock "set echo\n";
+
+    # Fire the Echo commands that will surface on our socket
+    my $fmt = "$SENTINEL${SEP}\$[w.id]${SEP}\$[w.class]${SEP}\$[w.name]";
+    system("FvwmCommand", "All (CurrentPage, !Iconic, AcceptsFocus) Echo $fmt");
+    system("FvwmCommand", "Echo $END_MARK");
+
+    my $sel = IO::Select->new($sock);
+    my $j   = JSON::PP->new->utf8;
+    my @out;
+    my $buf = '';
+    my $deadline = time() + $READ_TIMEOUT;
+
+  READ:
+    while (time() < $deadline) {
+        my ($ready) = $sel->can_read($deadline - time());
+        last unless $ready;
+        my $chunk;
+        my $n = sysread($sock, $chunk, 4096);
+        last if !defined($n) || $n == 0;
+        $buf .= $chunk;
+
+        while ($buf =~ s/^([^\n]*)\n//) {
+            my $line = $1;
+            next unless length $line;
+            my $data = eval { $j->decode($line) };
+            next if $@ || !ref($data);
+            my $msg = eval { $data->{echo}{message} };
+            next unless defined $msg;
+            next unless $msg =~ /^\Q$SENTINEL\E\Q$SEP\E/;
+            if ($msg eq $END_MARK) {
+                last READ;
+            }
+            my (undef, $wid, $class, $name) = split /\Q$SEP\E/, $msg, 4;
+            $class //= ''; $name //= '';
+            # FVWM wraps values with spaces in single quotes; strip them
+            for ($class, $name) { s/^'(.*)'$/$1/ }
+            push @out, { wid => $wid, class => $class, name => $name };
+        }
+    }
+    close $sock;
+    return \@out;
+}
+
+sub placeholder_pixbuf {
+    my ($label) = @_;
+    my $surface = Cairo::ImageSurface->create('argb32', $THUMB_W, $THUMB_H);
+    my $cr = Cairo::Context->create($surface);
+    $cr->set_source_rgb(0.75, 0.75, 0.75);
+    $cr->paint;
+    $cr->set_source_rgb(0.15, 0.15, 0.15);
+    $cr->select_font_face('Sans', 'normal', 'normal');
+    $cr->set_font_size(14);
+    my $extents = $cr->text_extents($label // '?');
+    $cr->move_to(($THUMB_W - $extents->{width}) / 2,
+                 ($THUMB_H + $extents->{height}) / 2);
+    $cr->show_text($label // '?');
+    $cr->stroke;
+    return Gtk3::Gdk::pixbuf_get_from_surface($surface, 0, 0, $THUMB_W, $THUMB_H);
+}
+
+sub thumb_pixbuf {
+    my ($wid, $label) = @_;
+    my $path = "$THUMB_DIR/$wid.png";
+    if (-e $path) {
+        my $pb = eval {
+            Gtk3::Gdk::Pixbuf->new_from_file_at_scale($path, $THUMB_W, $THUMB_H, TRUE);
+        };
+        return $pb if $pb;
+    }
+    return placeholder_pixbuf($label);
+}
+
+my ($SEL_IDX, $WINDOWS, $FRAMES, $LABEL, $GTK_WIN, $KBD_GRABBED);
+
+sub install_css {
+    my $css = Gtk3::CssProvider->new;
+    $css->load_from_data(<<'CSS');
+frame.selected > border {
+    border: 1px solid #ffa733;
+    background-color: #aa4d50;
+}
+frame.selected {
+    background-color: #000080;
+}
+CSS
+    Gtk3::StyleContext::add_provider_for_screen(
+        Gtk3::Gdk::Screen::get_default(),
+        $css,
+        600,   # GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+    );
+}
+
+sub highlight {
+    for my $i (0 .. $#$FRAMES) {
+        my $ctx = $FRAMES->[$i]->get_style_context;
+        if ($i == $SEL_IDX) {
+            $ctx->add_class('selected');
+            $FRAMES->[$i]->set_shadow_type('in');
+        } else {
+            $ctx->remove_class('selected');
+            $FRAMES->[$i]->set_shadow_type('etched-out');
+        }
+    }
+    if ($LABEL && $WINDOWS->[$SEL_IDX]) {
+        my $w = $WINDOWS->[$SEL_IDX];
+        my $title = $w->{name} ne '' ? $w->{name} : $w->{class};
+        $LABEL->set_text($title);
+    }
+}
+
+sub commit_selection {
+    my $w = $WINDOWS->[$SEL_IDX] or return;
+    system("FvwmCommand", "WindowId $w->{wid} AltTabFocus");
+}
+
+sub advance { my ($step) = @_;
+    my $n = scalar @$WINDOWS;
+    return if $n < 2;
+    $SEL_IDX = ($SEL_IDX + $step) % $n;
+    $SEL_IDX += $n if $SEL_IDX < 0;
+    highlight();
+}
+
+sub state_has {
+    my ($state, $name) = @_;
+    # $state may be a Gtk3::Gdk::ModifierType (hash-flag) or an integer.
+    if (ref $state) {
+        my $ok = eval { $state * [$name] };
+        return $ok ? 1 : 0 unless $@;
+        return $state->{$name} ? 1 : 0;
+    }
+    my %bit = ( 'shift-mask' => 1<<0, 'mod1-mask' => 1<<3 );
+    return ($state & ($bit{$name} // 0)) ? 1 : 0;
+}
+
+sub on_key_press {
+    my (undef, $ev) = @_;
+    my $kv = $ev->keyval;
+    if ($kv == Gtk3::Gdk::keyval_from_name('Tab') ||
+        $kv == Gtk3::Gdk::keyval_from_name('ISO_Left_Tab')) {
+        my $shift = state_has($ev->state, 'shift-mask');
+        advance($shift ? -1 : +1);
+        return TRUE;
+    }
+    if ($kv == Gtk3::Gdk::keyval_from_name('Escape')) {
+        Gtk3->main_quit;
+        return TRUE;
+    }
+    if ($kv == Gtk3::Gdk::keyval_from_name('Return')) {
+        commit_selection();
+        Gtk3->main_quit;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+sub on_key_release {
+    my (undef, $ev) = @_;
+    my $kv = $ev->keyval;
+    if ($kv == Gtk3::Gdk::keyval_from_name('Alt_L') ||
+        $kv == Gtk3::Gdk::keyval_from_name('Alt_R') ||
+        $kv == Gtk3::Gdk::keyval_from_name('Meta_L') ||
+        $kv == Gtk3::Gdk::keyval_from_name('Meta_R')) {
+        commit_selection();
+        Gtk3->main_quit;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+sub build_ui {
+    my $win = Gtk3::Window->new('toplevel');
+    $win->set_decorated(FALSE);
+    $win->set_type_hint('dialog');
+    $win->set_position('center-always');
+    $win->set_keep_above(TRUE);
+    $win->set_skip_taskbar_hint(TRUE);
+    $win->set_skip_pager_hint(TRUE);
+    $win->set_accept_focus(TRUE);
+    $win->set_focus_on_map(TRUE);
+    $win->set_resizable(FALSE);
+    $win->set_wmclass('fvwm-alttab', 'fvwm-alttab');
+    $win->set_title('fvwm-alttab');
+
+    my $outer = Gtk3::Frame->new;
+    $outer->set_shadow_type('out');   # classic Windows raised outer bevel
+    my $vbox = Gtk3::Box->new('vertical', 6);
+    $vbox->set_border_width(8);
+
+    my $hbox = Gtk3::Box->new('horizontal', 6);
+    my @frames;
+    for my $i (0 .. $#$WINDOWS) {
+        my $w = $WINDOWS->[$i];
+        my $frame = Gtk3::Frame->new;
+        $frame->set_shadow_type('etched-out');
+        my $img = Gtk3::Image->new_from_pixbuf(
+            thumb_pixbuf($w->{wid}, $w->{class} || $w->{name})
+        );
+        my $inner = Gtk3::Box->new('vertical', 0);
+        $inner->set_border_width(4);
+        $inner->pack_start($img, FALSE, FALSE, 0);
+        $frame->add($inner);
+
+        # GtkFrame has no GdkWindow, so wrap it in an EventBox to capture
+        # pointer events.  Capture $i lexically for each iteration.
+        my $idx  = $i;
+        my $ebox = Gtk3::EventBox->new;
+        $ebox->add($frame);
+        $ebox->signal_connect('enter-notify-event' => sub {
+            my (undef, $ev) = @_;
+            # 'inferior' means the pointer moved between child widgets —
+            # ignore those to avoid flicker on frame/image boundaries.
+            return FALSE if $ev->detail eq 'inferior';
+            $SEL_IDX = $idx;
+            highlight();
+            return FALSE;
+        });
+        $ebox->signal_connect('button-press-event' => sub {
+            $SEL_IDX = $idx;
+            commit_selection();
+            Gtk3->main_quit;
+            return TRUE;
+        });
+
+        $hbox->pack_start($ebox, FALSE, FALSE, 0);
+        push @frames, $frame;
+    }
+    $FRAMES = \@frames;
+
+    my $lbl = Gtk3::Label->new('');
+    $lbl->set_ellipsize('end');
+    $lbl->set_max_width_chars(60);
+    $LABEL = $lbl;
+
+    $vbox->pack_start($hbox, FALSE, FALSE, 0);
+    $vbox->pack_start($lbl,  FALSE, FALSE, 0);
+    $outer->add($vbox);
+    $win->add($outer);
+
+    $win->signal_connect('key-press-event'   => \&on_key_press);
+    $win->signal_connect('key-release-event' => \&on_key_release);
+    $win->signal_connect('destroy'           => sub { Gtk3->main_quit });
+
+    # Grab the keyboard only after the WM has actually given us focus.
+    # Doing it before (based on timing) is a race — XGrabKeyboard fails if
+    # we don't yet own the input focus, leaving FVWM's passive Alt+Tab grab
+    # active and swallowing subsequent Tab presses.
+    $win->signal_connect('focus-in-event' => sub {
+        my ($w) = @_;
+        unless ($KBD_GRABBED) {
+            $KBD_GRABBED = grab_keyboard($w);
+            unless (alt_still_held()) {
+                commit_selection();
+                Gtk3->main_quit;
+            }
+        }
+        return FALSE;
+    });
+
+    return $win;
+}
+
+sub grab_keyboard {
+    my ($win) = @_;
+    my $gdkwin = $win->get_window or return 0;
+    $win->grab_focus();
+    my $display = $gdkwin->get_display;
+
+    # Try modern seat API first; stringify enum in case Perl-Glib returns an object
+    my $ok = eval {
+        my $seat = $display->get_default_seat;
+        my $status = $seat->grab($gdkwin, 'keyboard', TRUE, undef, undef, undef);
+        return ($status && "$status" eq 'success') ? 1 : 0;
+    };
+    return 1 if $ok;
+
+    # Legacy fallback
+    my $status = eval { Gtk3::Gdk::keyboard_grab($gdkwin, TRUE, 0) };
+    return ($status && "$status" eq 'success') ? 1 : 0;
+}
+
+sub alt_still_held {
+    my $display = Gtk3::Gdk::Display::get_default() or return 1;
+    my $ok = eval {
+        my $seat = $display->get_default_seat;
+        my $kb = $seat->get_keyboard or return 1;
+        my $pos = $kb->get_position;   # sanity call to ensure keyboard object usable
+        # Read modifier state from the root window pointer query
+        my ($screen, $x, $y, $mask) = $display->get_pointer;
+        return state_has($mask, 'mod1-mask');
+    };
+    return $ok if defined $ok && !$@;
+    return 1;   # be conservative: assume Alt held if we couldn't check
+}
+
+sub main {
+    my $lock = acquire_lock();
+
+    $WINDOWS = get_windows();
+    exit 0 if !$WINDOWS || @$WINDOWS < 2;
+
+    $SEL_IDX = 1;   # MRU-second: standard Alt-Tab default
+    install_css();
+    $GTK_WIN = build_ui();
+    $GTK_WIN->show_all;
+    highlight();
+
+    # present() asks FVWM to give us focus.  The keyboard grab and the
+    # quick-tap Alt-release check both happen inside the focus-in-event
+    # handler, so they fire only after the WM has actually granted focus —
+    # no timing guesswork needed.
+    Gtk3::main_iteration() while Gtk3::events_pending();
+    $GTK_WIN->present();
+
+    Gtk3->main;
+    exit 0;
+}
+
+main();

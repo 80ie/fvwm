@@ -5,9 +5,7 @@
 SetEnv FVWM_USERDIR "/home/deer/.fvwm"
 SetEnv FVWM_THUMBS "$[FVWM_USERDIR]/images/thumbs"
 SetEnv FVWM_ICON "$[FVWM_USERDIR]/images/icons"
-
 SetEnv EDGE_SCROLL 0
-
 ##                                                           }}}2
 ##   ├ InfoStore                                             {{{2
 
@@ -22,8 +20,8 @@ InfoStoreAdd bg $[FVWM_USERDIR]/images/background/bg.png
 InfoStoreAdd pager_bg $[FVWM_USERDIR]/images/background/bg_pager.png
 InfoStoreAdd pager_scale 18
 
-InfoStoreAdd title_height 24
-InfoStoreAdd border_width 4
+InfoStoreAdd title_height 22
+InfoStoreAdd border_width 5
 
 # FvwmPager width/height
 InfoStoreAdd pager_width 1200
@@ -67,7 +65,7 @@ AddToFunc   StartFunction
 + I Module FvwmPager
 + I Module FvwmPerl
 #+ I Module FvwmAnimate
-#+ I Module FvwmButtons FvwmTaskBar
++ I Module FvwmButtons FvwmTaskBar
 + I Test (Init) Exec exec lxqt-panel
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
@@ -212,14 +210,18 @@ DestroyModuleConfig EventChangeFocus:*
 *EventChangeFocus: focus_change FocusChange
 ##                                                           }}}3
 ##   │ ├ Pager                                               {{{3
+# State 12 == Pager down
+#
 DestroyFunc PagerNavigate
 AddToFunc PagerNavigate
++ I Schedule Cancel 9901
 + I All (FvwmPager, !State 12) Layer 0 $[infostore.toplayer]
 + I All (FvwmPager, !State 12) AnimatedMove w0 +-$[infostore.border_width]p ewmhiwa
 + I All (FvwmPager, !State 12) State 12
 + I GotoPage $0 0p
-+ I Schedule Cancel 9901
-+ I Schedule 2000 9901 LowerPagerPersist
+#+ I Schedule Cancel 9901
+#+ I Schedule 2000 9901 LowerPagerPersist
++ I All (FvwmPager, !State 13) Schedule 2500 9901 HidePagerOnly
 
 
 DestroyFunc HidePagerOnly
@@ -332,10 +334,16 @@ AddToFunc SwitchToWindow
 + I WindowListFunc
 DestroyMenuStyle WindowList
 MenuStyle WindowList SelectOnRelease Alt_L
-Silent Key Tab A M WindowList (CurrentPage *) \
-    NoGeometryWithInfo, CurrentAtEnd, NoCurrentDeskTitle, NoDeskNum, \
-    ShowPage, NotAlphabetic, MaxLabelWidth 25, NoOnBottom "Prev SwitchToWindow"
-Style * FPSortWindowlistByFocus
+
+# Alt-Tab: live-thumbnail picker (Perl+Gtk3). Replaces the text WindowList.
+# Focus commit target — shared by the picker via WindowId <wid> AltTabFocus.
+DestroyFunc AltTabFocus
+AddToFunc AltTabFocus
++ I Iconify off
++ I FlipFocus
++ I ChangeFocus
++ I Raise
+
 ##                                                           }}}3
 ##   │ ├ Tile                                                {{{3
 ##
@@ -449,6 +457,12 @@ CursorStyle ROOT         left_ptr
 CursorStyle TITLE        left_ptr
 CursorStyle DEFAULT      left_ptr
 CursorStyle MENU         left_ptr
+
+# This sets the ClickTime and MoveThreshold used to determine
+# Double Clicks, Hold and Move for the mouse.
+ClickTime 250
+MoveThreshold 3
+
 ##                                                           }}}2
 ##   ├ Desktops                                              {{{2
 #
@@ -459,53 +473,53 @@ CursorStyle MENU         left_ptr
 #
 EwmhNumberOfDesktops 10 0
 DesktopSize 10x1
-##                                                           }}}2
-##   ├ Edge                                                  {{{2
 EdgeScroll 100 0
 EdgeResistance -1
 EdgeThickness 1
 Style * EdgeMoveDelay 250
 Style * EdgeMoveResistance 20
 Style * EdgeResizeDelay -1
-##                                                           }}}2
-##   ├ Windows                                               {{{2
-Style * TileCascadePlacement
 
 # EwmhBaseStruts [left] [right] [top] [bottom]
 # Reserves space along the edge(s) of the Screen that will not
 # be covered when maximizing or placing windows.
 EwmhBaseStruts 0 0 0 40
 
-# This sets the ClickTime and MoveThreshold used to determine
-# Double Clicks, Hold and Move for the mouse.
-ClickTime 250
-MoveThreshold 3
-
-# Sets the focus style to SloppyFocus and a mouse click
-# in a window will Raise it.
+##                                                           }}}2
+##   ├ Windows                                               {{{2
+##   │ ├ Focus Style                                         {{{3
+# Sets the focus style to SloppyFocus and a mouse click in a window will Raise it.
 Style * SloppyFocus, MouseFocusClickRaises, ClickToFocus
-
-##   │ ├ Window Placement                                    {{{3
+Style * FPSortWindowlistByFocus
+##                                                           }}}3
+##   │ ├ Placement                                           {{{3
+Style * TileCascadePlacement
 Style * MinOverlapPlacement
 Style * PositionPlacement Center
 Style * GrabFocus, GrabFocusTransient
 ##                                                           }}}3
-
+##   │ ├ Movement                                            {{{3
 ## Sets all windows to OpaqueMove (vs a wired frame) and  windows will
 ## snap to each other and the edge of the screen.
 OpaqueMoveSize unlimited
 Style * ResizeOpaque
-
-## Snap Attraction
 Style * SnapAttraction 15 Windows ScreenAll
-
-## Transient Windows (such as open file windows)
+#                                                            }}}3
+##   │ ├ Transience                                          {{{3
 Style * StackTransientParent, NoDecorHint #NoFuncHint
 Style * !FPGrabFocusTransient, FPReleaseFocusTransient
 Style * FPSortWindowlistByFocus
-
-## WindowShade
+#                                                            }}}3
+##   │ ├ WindowShade                                         {{{3
 Style * WindowShadeScrolls, WindowShadeSteps 10
+##                                                           }}}3
+##   │ ├ Borders                                             {{{3
+Style * HandleWidth $[infostore.border_width]
+Style * BorderWidth $[infostore.border_width]
+##                                                           }}}3
+##   │ ├ Title                                               {{{3
+TitleStyle Centered Height $[infostore.title_height]
+##                                                           }}}3
 ##                                                           }}}2
 ##   ├ Font                                                  {{{2
 DefaultFont "xft:P052:Bold:Italic:size=10:antialias=True:minspace=True"
@@ -517,17 +531,19 @@ Style * IconBox 800x1365+0+0, IconGrid 10 10, IconFill top left
 Style * IconTitleFormat %c
 ##                                                           }}}2
 ##   ├ Overrides                                             {{{2
-##   │ ├ Fvwm                                                {{{3
-Style ConfirmQuit !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
+Style fvwm-alttab !Title, !Handles, BorderWidth 1, WindowListSkip, CirculateSkip, \
+    Sticky, StaysOnTop, PositionPlacement Center, FixedPPosition, \
+    Layer $[infostore.abovetoplayer]
+Style ConfirmQuit !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer
 Style ConfirmReboot !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
 Style ConfirmShutdown !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
 Style FvwmIdent WindowListSkip
 Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, Layer 0 1, \
                 !Iconifiable, PositionPlacement 50-50w 0-100w ewmhiwa, \
-                FixedSize
+                FixedSize, NeverFocus
 Style FvwmIconMan WindowListSkip
-##                                                           }}}3
-##   │ ├ Other                                               {{{3
+
+
 Style lxqt-panel !Title, !Borders, Layer $[infostore.putlayer]
 Style Picture-in-Picture !Title, WindowListSkip, Sticky, Layer $[infostore.toplayer]
 Style "Picture in picture" !Title, WindowListSkip, Sticky, Layer $[infostore.toplayer]
@@ -556,7 +572,8 @@ Style "Snippets" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit
 Style "Component Editor" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
 Style comfyui-desktop-2 !Title, !Borders
 Style looking-glass-client !Title, !Borders
-##                                                           }}}3
+Style com.anthropic.claude !Title
+
 ##                                                           }}}2
 ##                                                           }}}1
 ##  Colorsets                                                {{{1
@@ -769,6 +786,7 @@ Silent Key T A 4 Exec exec $[infostore.terminal] -1
 Silent Key XF86Calculator A N Exec exec $[infostore.calculator]
 Silent Key W A 4 Exec exec firefox
 Silent Key E A 4 Exec exec $[infostore.filemanager]
+Silent Key R A 4 Exec exec kitten quick-access-terminal
 #Silent Key . A 14 Exec exec kcharselect
 ##                                                           }}}3
 ##   │ ├ Window controls                                     {{{3
@@ -779,6 +797,7 @@ Silent Key T WTFS S4 ToggleTitle
 Silent Key I A 4 Exec exec FvwmCommand FvwmIdent
 Silent Key S WFST S4 ThisWindow IconifyWindow
 Silent Key D A 4 ShowDesktop "prev RestoreDesktop"
+Silent Key Tab A M Exec exec $[FVWM_USERDIR]/bin/fvwm-alttab
 ##                                                           }}}3
 ##   │ ├ FVWM controls                                       {{{3
 IgnoreModifiers L25
@@ -923,7 +942,7 @@ DestroyModuleConfig FvwmIdent:*
 *FvwmIdent: Colorset 10
 *FvwmIdent: Font "xft:LiberationSans-Regular:size=10:antialias=False"
 ##                                                           }}}2
-##   ├ FvwmScript                                            {{{2
+	##   ├ FvwmScript                                            {{{2
 #
 # FvwmScript is a module that allows one to write custom desktop
 # widgets and various other tools. This config uses two FvwmScripts.
@@ -954,7 +973,7 @@ DestroyModuleConfig FvwmScript:*
 *FvwmPager: Balloons All
 *FvwmPager: SolidSeparators
 *FvwmPager: UseSkipList
-*FvwmPager: Geometry 1400x80
+*FvwmPager: Geometry $[infostore.pager_width]x$[infostore.pager_height]
 *FvwmPager: Mouse 3 Scroll
 *FvwmPager: Mouse 4 Cmd GotoPage -1p 0p
 *FvwmPager: Mouse 5 Cmd GotoPage +1p 0p
@@ -992,7 +1011,6 @@ DestroyModuleConfig FvwmTaskBar:*
 *FvwmTaskBar: (170x1, Left, Swallow TaskBarIcons \
     'Module FvwmIconMan TaskBarIcons', Frame 0)
 *FvwmTaskBar: (1x1, Frame 0)
-*FvwmTaskBar: (32x1, Swallow FvwmPager 'Module FvwmPager *', Frame 0)
 *FvwmTaskBar: (16x1, Swallow(NoClose,UseOld) stalonetray \
     `Exec exec stalonetray --config "$[FVWM_USERDIR]/stalonetrayrc"`, \
     Colorset 5, Frame 0)
