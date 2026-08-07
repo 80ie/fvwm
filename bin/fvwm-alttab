@@ -333,34 +333,44 @@ sub alt_still_held {
     my $display = Gtk3::Gdk::Display::get_default() or return 1;
     my $ok = eval {
         my $seat = $display->get_default_seat;
-        my $kb = $seat->get_keyboard or return 1;
-        my $pos = $kb->get_position;   # sanity call to ensure keyboard object usable
-        # Read modifier state from the root window pointer query
-        my ($screen, $x, $y, $mask) = $display->get_pointer;
+        my $ptr  = $seat->get_pointer;
+        my $root = Gtk3::Gdk::get_default_root_window();
+        my (undef, undef, $mask) = $root->get_device_position($ptr);
         return state_has($mask, 'mod1-mask');
     };
     return $ok if defined $ok && !$@;
-    return 1;   # be conservative: assume Alt held if we couldn't check
+    return 1;
 }
 
 sub main {
-    my $lock = acquire_lock();
+    my $lock    = acquire_lock();
+    my $reverse = grep { $_ eq '--reverse' } @ARGV;
 
     $WINDOWS = get_windows();
     exit 0 if !$WINDOWS || @$WINDOWS < 2;
 
-    $SEL_IDX = 1;   # MRU-second: standard Alt-Tab default
+    # Forward (Alt-Tab): start at MRU-second.
+    # Reverse (Alt-Shift-Tab): start at last (MRU-oldest), cycling backward.
+    $SEL_IDX = $reverse ? $#$WINDOWS : 1;
     install_css();
     $GTK_WIN = build_ui();
     $GTK_WIN->show_all;
     highlight();
 
-    # present() asks FVWM to give us focus.  The keyboard grab and the
-    # quick-tap Alt-release check both happen inside the focus-in-event
-    # handler, so they fire only after the WM has actually granted focus —
-    # no timing guesswork needed.
     Gtk3::main_iteration() while Gtk3::events_pending();
     $GTK_WIN->present();
+
+    # Timer fallback for the quick-tap race: if Alt is released before the
+    # keyboard grab lands, on_key_release never fires (the release event went
+    # to the previous window).  Poll once after a short delay so the picker
+    # doesn't get stuck open.
+    Glib::Timeout->add(150, sub {
+        unless (alt_still_held()) {
+            commit_selection();
+            Gtk3->main_quit;
+        }
+        return FALSE;
+    });
 
     Gtk3->main;
     exit 0;

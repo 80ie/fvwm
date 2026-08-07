@@ -65,7 +65,7 @@ AddToFunc   StartFunction
 + I Module FvwmPager
 + I Module FvwmPerl
 #+ I Module FvwmAnimate
-+ I Module FvwmButtons FvwmTaskBar
+#+ I Module FvwmButtons FvwmTaskBar
 + I Test (Init) Exec exec lxqt-panel
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
@@ -471,8 +471,8 @@ MoveThreshold 3
 #   0 |   |   |   |   |   |   |   |   |   |
 #     +---+---+---+---+---+---+---+---+---+
 #
-EwmhNumberOfDesktops 10 0
-DesktopSize 10x1
+EwmhNumberOfDesktops 9 0
+DesktopSize 9x1
 EdgeScroll 100 0
 EdgeResistance -1
 EdgeThickness 1
@@ -523,7 +523,8 @@ TitleStyle Centered Height $[infostore.title_height]
 ##                                                           }}}2
 ##   ├ Font                                                  {{{2
 DefaultFont "xft:P052:Bold:Italic:size=10:antialias=True:minspace=True"
-Style * Font "xft:P052:size=10:antialias=True"
+#Style * Font "xft:P052:size=10:antialias=True"
+Style * Font "xft:LibreCaslonText:size=10:antialias=True"
 ##                                                           }}}2
 ##   ├ Thumbnails                                            {{{2
 Style * IconOverride, !UseIconPosition
@@ -572,7 +573,7 @@ Style "Snippets" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit
 Style "Component Editor" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
 Style comfyui-desktop-2 !Title, !Borders
 Style looking-glass-client !Title, !Borders
-Style com.anthropic.claude !Title
+Style com.anthropic.claude !Title, !Borders
 
 ##                                                           }}}2
 ##                                                           }}}1
@@ -797,7 +798,8 @@ Silent Key T WTFS S4 ToggleTitle
 Silent Key I A 4 Exec exec FvwmCommand FvwmIdent
 Silent Key S WFST S4 ThisWindow IconifyWindow
 Silent Key D A 4 ShowDesktop "prev RestoreDesktop"
-Silent Key Tab A M Exec exec $[FVWM_USERDIR]/bin/fvwm-alttab
+Silent Key Tab A M  Exec exec $[FVWM_USERDIR]/bin/fvwm-alttab
+Silent Key Tab A SM Exec exec $[FVWM_USERDIR]/bin/fvwm-alttab --reverse
 ##                                                           }}}3
 ##   │ ├ FVWM controls                                       {{{3
 IgnoreModifiers L25
@@ -853,7 +855,6 @@ Silent Key 6 A 4 GotoPage 5 0
 Silent Key 7 A 4 GotoPage 6 0
 Silent Key 8 A 4 GotoPage 7 0
 Silent Key 9 A 4 GotoPage 8 0
-Silent Key 0 A 4 GotoPage 9 0
 
 # Move window to page
 Key KP_Insert WTSF 4 MoveToPage 0 0
@@ -865,7 +866,6 @@ Key KP_Begin WTSF 4 MoveToPage 5 0
 Key KP_Right WTSF 4 MoveToPage 6 0
 Key KP_Home WTSF 4 MoveToPage 7 0
 Key KP_Up WTSF 4 MoveToPage 8 0
-Key KP_Prior WTSF 4 MoveToPage 9 0
 
 Silent Key Tab A 4  PagerNavigate +1p
 Silent Key Right A 4 PagerNavigate +1p

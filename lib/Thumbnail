@@ -27,7 +27,12 @@ my $tries = 3 ;
 ##  Expiration time in seconds for saved thumbnails.
 my $expires = 100 ;
 ##  Destination folder for thumbnail icons.
-my $folder = "/home/deer/.fvwm/.thumbs" ;
+my $folder = "/home/deer/.fvwm/images/thumbs" ;
+##  Tracks windows we've already attached a WindowStyle Icon to this session,
+##  so a client that self-iconifies (e.g. Claude's own minimize button) still
+##  gets a thumbnail icon without the config-level EventIcon path having to
+##  re-set WindowStyle every focus change (which risked an event loop).
+my %icon_set ;
 
 ##  Enable/disable logging
 my $logfile = path("/tmp/Thumbnail.log") ;
@@ -166,6 +171,17 @@ sub thumbnail  {
         logger("$modname: im->Write() succeeded for $pngfile");
     } else {
         logger("$modname: current thumb valid") ;
+    }
+
+    ##  Pre-attach the thumbnail as this window's icon. Once per wid per
+    ##  module lifetime is enough — FVWM re-reads the file at iconify time,
+    ##  so subsequent captures overwriting the same $pngfile stay effective
+    ##  without needing to re-send WindowStyle (which would risk triggering
+    ##  cascading iconify/property_change events on already-iconic windows).
+    unless ($icon_set{$widhex}) {
+        $module->send("WindowStyle IconOverride, Icon $pngfile", $wid) ;
+        $icon_set{$widhex} = 1 ;
+        logger("$modname: WindowStyle Icon attached for $widhex") ;
     }
     return 1 ;
 }
