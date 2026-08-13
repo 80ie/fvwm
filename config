@@ -221,7 +221,7 @@ AddToFunc PagerNavigate
 + I GotoPage $0 0p
 #+ I Schedule Cancel 9901
 #+ I Schedule 2000 9901 LowerPagerPersist
-+ I All (FvwmPager, !State 13) Schedule 2500 9901 HidePagerOnly
++ I All (FvwmPager, !State 13) Schedule 4500 9901 HidePagerOnly
 
 
 DestroyFunc HidePagerOnly
@@ -554,7 +554,7 @@ Style qterminal Resize 700p 700p
 Style "Steam*" !UsePPosition
 Style "Steam*" !UseUSPosition, FixedPPosition
 Style "Steam*" !Title
-Style kittydesk !Title
+Style "desktop-terminal" !Title, !Borders, Layer $[infostore.bottomlayer], WindowListSkip, Sticky
 Style qlipper !Title, !Borders
 Style lxqt-runner !Title, WindowListSkip, Layer $[infostore.toplayer], PositionPlacement Center #Move +637p +677p, !UseUSPosition, FixedPPosition
 Style krunner !Title, WindowListSkip, Layer $[infostore.toplayer], BorderWidth 0
@@ -573,7 +573,7 @@ Style "Snippets" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit
 Style "Component Editor" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
 Style comfyui-desktop-2 !Title, !Borders
 Style looking-glass-client !Title, !Borders
-Style com.anthropic.claude !Title, !Borders
+# Style com.anthropic.claude !Title, !Borders
 
 ##                                                           }}}2
 ##                                                           }}}1
