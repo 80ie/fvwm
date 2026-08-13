@@ -471,8 +471,8 @@ MoveThreshold 3
 #   0 |   |   |   |   |   |   |   |   |   |
 #     +---+---+---+---+---+---+---+---+---+
 #
-EwmhNumberOfDesktops 9 0
-DesktopSize 9x1
+EwmhNumberOfDesktops 8 0
+DesktopSize 8x1
 EdgeScroll 100 0
 EdgeResistance -1
 EdgeThickness 1
