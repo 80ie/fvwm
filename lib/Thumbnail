@@ -186,21 +186,55 @@ sub thumbnail  {
     return 1 ;
 }
 
+##  Cheap liveness probe for a window id.
+##
+##  xwininfo exits nonzero for an id the server does not know about and, unlike
+##  import, never grabs the pointer when it fails -- which makes it safe to ask
+##  speculatively.  Measured at under a millisecond.
+##
+sub window_alive {
+    my $wid = shift ;
+    my $ok = eval {
+        run( [ 'xwininfo', '-id', $wid ], \undef, \my $out, \my $err, timeout(5) ) ;
+    } ;
+    return $ok ? 1 : 0 ;
+}
+
 ##  To capture an image of the current window.
 sub capture  {
     my $widhex = shift ;
-    my $wid = hex($widhex) ; 
+    my $wid = hex($widhex) ;
     my $tmp_png = "$folder/$widhex.tmp.png" ;
 
     logger("$modname: begin capture() ");
     unlink $tmp_png;
 
-    my $cmd = "import -window $wid $tmp_png";
-    logger("$modname: running: $cmd");
-    my $rc = system($cmd);
+    ##  Captures arrive via "Schedule 100 ... SendToModule Thumbnail capture
+    ##  $[w.id]", so the window can easily be gone by the time we run: any
+    ##  short-lived focused window (the alt-tab picker, a dismissed dialog)
+    ##  routinely is.  Handed an id it cannot find, "import" does NOT just
+    ##  fail -- it falls back to INTERACTIVE selection, grabbing the pointer
+    ##  and blocking on a click.  That freezes input and stalls every X client
+    ##  behind it until the user clicks somewhere.  So never hand import an id
+    ##  we have not just confirmed is alive.
+    unless (window_alive($wid)) {
+        logger("$modname: capture() : window $widhex is gone, skipping") ;
+        return 0 ;
+    }
 
-    unless ($rc == 0 && -e $tmp_png) {
+    ##  -silent suppresses the capture beep.  The timeout is a hard backstop
+    ##  for the race between the liveness check above and import connecting:
+    ##  bounded disruption beats an indefinite pointer grab.
+    my @cmd = ( 'import', '-silent', '-window', $wid, $tmp_png ) ;
+    logger("$modname: running: @cmd");
+    my $rc = eval {
+        run( \@cmd, \undef, \my $out, \my $err, timeout(5) ) ;
+    } ;
+    logger("$modname: capture() : import aborted: $@") if $@ ;
+
+    unless ($rc && -e $tmp_png) {
         logger("$modname: capture() : import failed for $tmp_png");
+        unlink $tmp_png ;
         return 0;
     }
 

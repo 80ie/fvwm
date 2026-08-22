@@ -87,6 +87,12 @@ AddToFunc   StartFunction
 + I Test (Init) Schedule 1000 Exec exec qlipper
 #+ I Test (Init) Schedule 1000 Exec exec ~/.local/opt/activitywatch/start.sh
 + I BugOpts QtDragnDropWorkaround True
+###  Prune stale window thumbnails.  Thumbnails expire after 100s and are
+###  recaptured on demand, so anything a week old belongs to a window that is
+###  long gone.  Without this the cache only grows -- it had reached 9641
+###  files / 239MB before the sweep was added.  Runs on restart too; it is a
+###  find over a few hundred files.
++ I Exec exec find $[FVWM_USERDIR]/images/thumbs -maxdepth 1 -type f -mtime +7 -delete
 + I Schedule 100 Module Thumbnail
 + I Schedule Periodic 300000 1222 5minutes
 + I Test (EnvMatch DISPLAY :1) Read vnc-overrides
@@ -180,7 +186,7 @@ DestroyModuleConfig EventNewDesk:*
 
 DestroyFunc EventDeIcon
 AddToFunc EventDeIcon
-+ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible) \
++ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible, !fvwm-alttab) \
         SendToModule Thumbnail capture $[w.id]
 + I ThisWindow Layer 0 $[infostore.putlayer]
 + I All (CurrentDesk, Iconic) PlaceAgain Icon
@@ -202,7 +208,7 @@ DestroyModuleConfig EventIcon:*
 
 DestroyFunc FocusChange
 AddToFunc FocusChange
-+ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible) \
++ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible, !fvwm-alttab) \
     SendToModule Thumbnail capture $[w.id]
 
 DestroyModuleConfig EventChangeFocus:*

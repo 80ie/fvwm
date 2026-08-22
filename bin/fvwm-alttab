@@ -10,6 +10,7 @@ use v5.40;
 use IO::Socket::UNIX;
 use IO::Select;
 use JSON::PP;
+use Time::HiRes qw(time);
 use Fcntl qw(:flock);
 use POSIX qw(:sys_wait_h);
 use Gtk3 -init;
@@ -38,21 +39,75 @@ sub acquire_lock {
     return $fh;   # kept in scope until process exits
 }
 
-sub get_windows {
-    my $sock = IO::Socket::UNIX->new(
+# The one MFL connection, held open for the life of the process.  FvwmCommand
+# is a Python script whose entire job is to connect to this same socket and
+# write the command string to it, so shelling out to it costs a full Python
+# interpreter startup (~21ms measured) per call to say something we can say
+# ourselves for free.  Talk to the socket directly instead.
+my $MFL;
+
+sub mfl_connect {
+    return $MFL if $MFL;
+    $MFL = IO::Socket::UNIX->new(
         Type => SOCK_STREAM,
         Peer => $MFL_SOCK,
     ) or do {
         warn "cannot connect to MFL socket $MFL_SOCK: $!\n";
-        return [];
+        return undef;
     };
-    $sock->autoflush(1);
+    $MFL->autoflush(1);
+    return $MFL;
+}
+
+# Send one FVWM command over the held socket.  Falls back to FvwmCommand only
+# if we never got a socket, so a broken MFL degrades instead of going mute.
+sub mfl_send {
+    my ($cmd) = @_;
+    if ($MFL) {
+        print { $MFL } "$cmd\n";
+        return 1;
+    }
+    system("FvwmCommand", $cmd);
+    return 0;
+}
+
+# Block until FVWM has actually processed everything sent so far.
+#
+# Writing a command and exiting immediately LOSES it: MFL drops whatever is
+# still buffered when it sees the peer hang up.  (FvwmCommand only avoids this
+# because it blocks on recv() before closing.)  Since FVWM runs commands in
+# order, echoing a sentinel and reading until it comes back proves the command
+# ahead of it has run.  Costs one socket round-trip, ~0.5ms.
+sub mfl_sync {
+    my ($timeout) = @_;
+    return 0 unless $MFL;
+    $timeout //= 0.5;
+    my $mark = "$SENTINEL${SEP}SYNC";
+    print { $MFL } "Echo $mark\n";
+
+    my $sel      = IO::Select->new($MFL);
+    my $deadline = time() + $timeout;
+    my $buf      = '';
+    while ((my $left = $deadline - time()) > 0) {
+        my ($ready) = $sel->can_read($left);
+        last unless $ready;
+        my $chunk;
+        my $n = sysread($MFL, $chunk, 4096);
+        last if !defined($n) || $n == 0;
+        $buf .= $chunk;
+        return 1 if index($buf, $mark) >= 0;
+    }
+    return 0;
+}
+
+sub get_windows {
+    my $sock = mfl_connect() or return [];
     print $sock "set echo\n";
 
     # Fire the Echo commands that will surface on our socket
     my $fmt = "$SENTINEL${SEP}\$[w.id]${SEP}\$[w.class]${SEP}\$[w.name]";
-    system("FvwmCommand", "All (CurrentPage, !Iconic, AcceptsFocus) Echo $fmt");
-    system("FvwmCommand", "Echo $END_MARK");
+    mfl_send("All (CurrentPage, !Iconic, AcceptsFocus) Echo $fmt");
+    mfl_send("Echo $END_MARK");
 
     my $sel = IO::Select->new($sock);
     my $j   = JSON::PP->new->utf8;
@@ -87,7 +142,8 @@ sub get_windows {
             push @out, { wid => $wid, class => $class, name => $name };
         }
     }
-    close $sock;
+    # Deliberately left open: commit_selection() reuses this connection so the
+    # focus command costs a socket write rather than another interpreter spawn.
     return \@out;
 }
 
@@ -160,7 +216,9 @@ sub highlight {
 
 sub commit_selection {
     my $w = $WINDOWS->[$SEL_IDX] or return;
-    system("FvwmCommand", "WindowId $w->{wid} AltTabFocus");
+    mfl_send("WindowId $w->{wid} AltTabFocus");
+    # Must not return until FVWM has run it -- we exit right after this.
+    mfl_sync();
 }
 
 sub advance { my ($step) = @_;
@@ -331,14 +389,25 @@ sub grab_keyboard {
 
 sub alt_still_held {
     my $display = Gtk3::Gdk::Display::get_default() or return 1;
+
+    # Ask the keymap for the live modifier state.
+    #
+    # Do NOT go via the pointer (get_default_seat->get_pointer, then read the
+    # mask out of $root->get_device_position): GDK hands back the mask cached
+    # from the last pointer EVENT, so with the mouse sitting still it reports
+    # whatever was true before Alt went down.  Measured on this machine with
+    # Alt physically held: the pointer query reported "held" 0 times out of 40
+    # (0/40 even while the mouse was being moved), the keymap query 40/40.
+    # Both correctly report 0/40 with Alt up.  That stale read is what made the
+    # picker dismiss itself the instant it appeared.
     my $ok = eval {
-        my $seat = $display->get_default_seat;
-        my $ptr  = $seat->get_pointer;
-        my $root = Gtk3::Gdk::get_default_root_window();
-        my (undef, undef, $mask) = $root->get_device_position($ptr);
-        return state_has($mask, 'mod1-mask');
+        my $keymap = Gtk3::Gdk::Keymap::get_for_display($display);
+        return state_has($keymap->get_modifier_state, 'mod1-mask');
     };
     return $ok if defined $ok && !$@;
+
+    # If even that fails, assume Alt is down.  Leaving the picker up is
+    # recoverable (Escape, a click, or the next poll); dismissing it is not.
     return 1;
 }
 
@@ -364,11 +433,15 @@ sub main {
     # keyboard grab lands, on_key_release never fires (the release event went
     # to the previous window).  Poll once after a short delay so the picker
     # doesn't get stuck open.
+    # Keep polling rather than checking once.  alt_still_held() answers "yes"
+    # whenever the X query fails, so a single unlucky sample used to burn the
+    # only fallback we had and strand the picker on screen until something else
+    # happened to close it.  Re-arming (TRUE) makes it self-healing: it holds
+    # while Alt is genuinely down and commits the moment it is not.
     Glib::Timeout->add(150, sub {
-        unless (alt_still_held()) {
-            commit_selection();
-            Gtk3->main_quit;
-        }
+        return TRUE if alt_still_held();
+        commit_selection();
+        Gtk3->main_quit;
         return FALSE;
     });
 
