@@ -23,9 +23,10 @@ InfoStoreAdd pager_scale 18
 InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
 
-# FvwmPager width/height (3x3 grid of 16:9 cells -> 200x112 each)
-InfoStoreAdd pager_width 600
-InfoStoreAdd pager_height 338
+# FvwmPager width/height. Keep both divisible by DesktopSize so the generated
+# background tile lines up with the page cells (3x3 -> 128x72 per page).
+InfoStoreAdd pager_width 384
+InfoStoreAdd pager_height 216
 # How long the pager stays raised after a page change
 InfoStoreAdd pager_flash_ms 900
 
@@ -469,7 +470,7 @@ MoveThreshold 3
 #     +---+---+---+
 #   ^ page y
 #
-EwmhNumberOfDesktops 9 0
+EwmhNumberOfDesktops 1 0
 DesktopSize 3x3
 EdgeScroll 100 0
 EdgeResistance -1
@@ -619,6 +620,10 @@ Colorset 18 fg #b76b43, bg #5c3b1c, hi, sh, Plain, NoShape
 #~~~~~~~ 19 - FvwmPager Window Default
 Colorset 19 fg #463900, bg #96724f, hi, sh, Plain, NoShape
 
+
+# Cut the pager tile to one page cell first, so TiledPixmap repeats the
+# wallpaper once per page. PipeRead blocks, so the tile exists by Colorset time.
+PipeRead "$[FVWM_USERDIR]/bin/mk-pager-bg.sh $[infostore.bg] $[infostore.pager_bg] $[desk.pagesx] $[desk.pagesy] $[infostore.pager_width] $[infostore.pager_height] >/dev/null 2>&1; echo Nop"
 
 Colorset 20 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint #b76b43 25, Dither
 Colorset 21 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint #472828 10, Dither
