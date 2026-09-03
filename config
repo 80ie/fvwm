@@ -28,7 +28,7 @@ InfoStoreAdd border_width 5
 InfoStoreAdd pager_width 384
 InfoStoreAdd pager_height 216
 # How long the pager stays raised after a page change
-InfoStoreAdd pager_flash_ms 900
+InfoStoreAdd pager_flash_ms 500
 
 InfoStoreAdd belowbottomlayer 1
 InfoStoreAdd bottomlayer 2
@@ -883,6 +883,8 @@ Silent Key Right A 4 PagerNavigate +1p 0p
 Silent Key Left A 4  PagerNavigate -1p 0p
 Silent Key Up A 4    PagerNavigate 0p -1p
 Silent Key Down A 4  PagerNavigate 0p +1p
+Silent Key Prior A 4 PagerNavigate 0p -1p
+Silent Key Next A 4  PagerNavigate 0p +1p
 
 Silent Key grave A 4 ToggleEdgeScroll
 
