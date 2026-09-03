@@ -23,9 +23,11 @@ InfoStoreAdd pager_scale 18
 InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
 
-# FvwmPager width/height (4x2 grid of 16:9 cells -> 200x112 each)
-InfoStoreAdd pager_width 800
-InfoStoreAdd pager_height 225
+# FvwmPager width/height (3x3 grid of 16:9 cells -> 200x112 each)
+InfoStoreAdd pager_width 600
+InfoStoreAdd pager_height 338
+# How long the pager stays raised after a page change
+InfoStoreAdd pager_flash_ms 900
 
 InfoStoreAdd belowbottomlayer 1
 InfoStoreAdd bottomlayer 2
@@ -216,19 +218,16 @@ DestroyModuleConfig EventChangeFocus:*
 *EventChangeFocus: focus_change FocusChange
 ##                                                           }}}3
 ##   │ ├ Pager                                               {{{3
-# State 12 == Pager down
+# The pager sits centre-screen and never moves. Navigating raises it above
+# everything; Schedule 9901 drops it back to the bottom layer.
 #
 # $0 $1 = GotoPage x y args (absolute, or relative with a trailing 'p')
 DestroyFunc PagerNavigate
 AddToFunc PagerNavigate
 + I Schedule Cancel 9901
-+ I All (FvwmPager, !State 12) Layer 0 $[infostore.toplayer]
-+ I All (FvwmPager, !State 12) AnimatedMove w0 +-$[infostore.border_width]p ewmhiwa
-+ I All (FvwmPager, !State 12) State 12
 + I GotoPage wrapx wrapy $0 $1
-#+ I Schedule Cancel 9901
-#+ I Schedule 2000 9901 LowerPagerPersist
-+ I All (FvwmPager, !State 13) Schedule 4500 9901 HidePagerOnly
++ I All (FvwmPager) Layer 0 $[infostore.abovetoplayer]
++ I Schedule $[infostore.pager_flash_ms] 9901 PagerPark
 
 # Step $0 pages in reading order, carrying across rows. GotoPage's wrapx/wrapy
 # only wrap within a row/column, so the row carry is done in the shell.
@@ -236,30 +235,9 @@ DestroyFunc PagerNavigateSeq
 AddToFunc PagerNavigateSeq
 + I PipeRead "n=$$(( $[desk.pagesx] * $[desk.pagesy] )); i=$$(( ($[page.nx] + $[page.ny] * $[desk.pagesx] + ($0) + n) % n )); echo PagerNavigate $$(( i % $[desk.pagesx] )) $$(( i / $[desk.pagesx] ))"
 
-
-DestroyFunc HidePagerOnly
-AddToFunc HidePagerOnly
-+ I All (FvwmPager, State 12, !State 13) Layer 0 1
-+ I All (FvwmPager, State 12, !State 13) AnimatedMove w0 +-100w ewmhiwa
-+ I All (FvwmPager, State 12, !State 13) State 12 False
-
-
-# Ctrl+Super+grave: persistently toggle pager down at normal layer (State 13)
-DestroyFunc TogglePagerPersist
-AddToFunc TogglePagerPersist
-+ I All (FvwmPager, State 13) Schedule Cancel 9902
-+ I All (FvwmPager, State 13) Layer 0 $[infostore.belowbottomlayer]
-+ I All (FvwmPager, State 13) AnimatedMove w0 +-100w ewmhiwa
-+ I All (FvwmPager, State 13) State 12 False
-+ I All (FvwmPager, !State 13) Schedule Cancel 9901
-+ I All (FvwmPager, !State 13) Layer 0 $[infostore.putlayer]
-+ I All (FvwmPager, !State 13) AnimatedMove w0 +-$[infostore.border_width]p ewmhiwa
-+ I All (FvwmPager) State 13
-
-# Lower persistent pager back to normal layer after navigation
-DestroyFunc LowerPagerPersist
-AddToFunc LowerPagerPersist
-+ I All (FvwmPager, State 13) Layer 0 $[infostore.bottomlayer]
+DestroyFunc PagerPark
+AddToFunc PagerPark
++ I All (FvwmPager) Layer 0 $[infostore.bottomlayer]
 ##                                                           }}}3
 ##   │ ├ Edge                                                {{{3
 DestroyFunc ToggleEdgeScroll
@@ -479,18 +457,20 @@ MoveThreshold 3
 ##                                                           }}}2
 ##   ├ Desktops                                              {{{2
 #
-# 8 pages on a single Desk (Desk 0). Cells show the Super+<n> binding.
+# 9 pages on a single Desk (Desk 0). Cells show the Super+<n> binding.
 #
-#       0   1   2   3   <- page x
-#     +---+---+---+---+
-#   0 | 1 | 2 | 3 | 4 |
-#     +---+---+---+---+
-#   1 | 5 | 6 | 7 | 8 |
-#     +---+---+---+---+
+#       0   1   2   <- page x
+#     +---+---+---+
+#   0 | 1 | 2 | 3 |
+#     +---+---+---+
+#   1 | 4 | 5 | 6 |
+#     +---+---+---+
+#   2 | 7 | 8 | 9 |
+#     +---+---+---+
 #   ^ page y
 #
-EwmhNumberOfDesktops 8 0
-DesktopSize 4x2
+EwmhNumberOfDesktops 9 0
+DesktopSize 3x3
 EdgeScroll 100 0
 EdgeResistance -1
 EdgeThickness 1
@@ -557,9 +537,9 @@ Style ConfirmQuit !Title, PositionPlacement Center, WindowListSkip, Layer $[info
 Style ConfirmReboot !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
 Style ConfirmShutdown !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
 Style FvwmIdent WindowListSkip
-Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, Layer 0 1, \
-                !Iconifiable, PositionPlacement 50-50w 0-100w ewmhiwa, \
-                FixedSize, NeverFocus
+Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, \
+                Layer $[infostore.bottomlayer], !Iconifiable, \
+                PositionPlacement Center, FixedSize, FixedPosition, NeverFocus
 Style FvwmIconMan WindowListSkip
 
 
@@ -721,12 +701,14 @@ AddToMenu MenuSendTo
 + "Page &1"	MoveToPage 0 0
 + "Page &2"	MoveToPage 1 0
 + "Page &3"	MoveToPage 2 0
-+ "Page &4"	MoveToPage 3 0
 + "" Nop
-+ "Page &5"	MoveToPage 0 1
-+ "Page &6"	MoveToPage 1 1
-+ "Page &7"	MoveToPage 2 1
-+ "Page &8"	MoveToPage 3 1
++ "Page &4"	MoveToPage 0 1
++ "Page &5"	MoveToPage 1 1
++ "Page &6"	MoveToPage 2 1
++ "" Nop
++ "Page &7"	MoveToPage 0 2
++ "Page &8"	MoveToPage 1 2
++ "Page &9"	MoveToPage 2 2
 
 ##                                                           }}}2
 ##   ├ IconOps                                               {{{2
@@ -862,24 +844,26 @@ Key KP_Next WTSF 1 TileBottomRight
 Key KP_Begin WTSF 1 TileFull
 ##                                                           }}}3
 ##   │ ├ Desktop Switching                                   {{{3
-Silent Key 1 A 4 GotoPage 0 0
-Silent Key 2 A 4 GotoPage 1 0
-Silent Key 3 A 4 GotoPage 2 0
-Silent Key 4 A 4 GotoPage 3 0
-Silent Key 5 A 4 GotoPage 0 1
-Silent Key 6 A 4 GotoPage 1 1
-Silent Key 7 A 4 GotoPage 2 1
-Silent Key 8 A 4 GotoPage 3 1
+Silent Key 1 A 4 PagerNavigate 0 0
+Silent Key 2 A 4 PagerNavigate 1 0
+Silent Key 3 A 4 PagerNavigate 2 0
+Silent Key 4 A 4 PagerNavigate 0 1
+Silent Key 5 A 4 PagerNavigate 1 1
+Silent Key 6 A 4 PagerNavigate 2 1
+Silent Key 7 A 4 PagerNavigate 0 2
+Silent Key 8 A 4 PagerNavigate 1 2
+Silent Key 9 A 4 PagerNavigate 2 2
 
 # Move window to page (mirrors the Super+<n> page numbering above)
 Silent Key 1 WTSF S4 MoveToPage 0 0
 Silent Key 2 WTSF S4 MoveToPage 1 0
 Silent Key 3 WTSF S4 MoveToPage 2 0
-Silent Key 4 WTSF S4 MoveToPage 3 0
-Silent Key 5 WTSF S4 MoveToPage 0 1
-Silent Key 6 WTSF S4 MoveToPage 1 1
-Silent Key 7 WTSF S4 MoveToPage 2 1
-Silent Key 8 WTSF S4 MoveToPage 3 1
+Silent Key 4 WTSF S4 MoveToPage 0 1
+Silent Key 5 WTSF S4 MoveToPage 1 1
+Silent Key 6 WTSF S4 MoveToPage 2 1
+Silent Key 7 WTSF S4 MoveToPage 0 2
+Silent Key 8 WTSF S4 MoveToPage 1 2
+Silent Key 9 WTSF S4 MoveToPage 2 2
 
 # Move window one page in a direction
 Silent Key Right WTSF S4 MoveToPage wrapx wrapy +1p 0p
@@ -887,7 +871,7 @@ Silent Key Left  WTSF S4 MoveToPage wrapx wrapy -1p 0p
 Silent Key Up    WTSF S4 MoveToPage wrapx wrapy 0p -1p
 Silent Key Down  WTSF S4 MoveToPage wrapx wrapy 0p +1p
 
-# Tab walks all 8 pages in reading order; arrows move on the grid
+# Tab walks all 9 pages in reading order; arrows move on the grid
 Silent Key Tab A S4 PagerNavigateSeq -1
 Silent Key Tab A 4  PagerNavigateSeq +1
 Silent Key Right A 4 PagerNavigate +1p 0p
@@ -896,7 +880,6 @@ Silent Key Up A 4    PagerNavigate 0p -1p
 Silent Key Down A 4  PagerNavigate 0p +1p
 
 Silent Key grave A 4 ToggleEdgeScroll
-Silent Key grave A 4C TogglePagerPersist
 
 ##                                                           }}}3
 ##                                                           }}}2
@@ -986,7 +969,7 @@ DestroyModuleConfig FvwmScript:*
 *FvwmFormDefault: ItemColorset 13
 ##                                                           }}}2
 ##   ├ FvwmPager                                             {{{2
-#DestroyModuleConfig FvwmPager:*
+DestroyModuleConfig FvwmPager:*
 *FvwmPager: Colorset 21
 *FvwmPager: HilightColorset 20
 *FvwmPager: WindowColorset 19
