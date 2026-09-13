@@ -1,0 +1,170 @@
+##   ├ Reference                                             {{{2
+# Contexts:
+#     R = Root Window                 rrrrrrrrrrrrrrrrrrrrrr
+#     W = Application Window          rIrrrr<---------^rrrrr
+#     F = Frame Corners               rrrrrr[13TTTT642]rrrrr
+#     S = Frame Sides                 rIrrrr[wwwwwwwww]rrrrr
+#     T = Title Bar                   rrrrrr[wwwwwwwww]rrrrr
+#     I = Icon                        rIrrrrv_________>rrrrr
+#                                     rrrrrrrrrrrrrrrrrrrrrr
+#
+#     Numbers are buttons: [1 3 5 7 9  TTTTT  0 8 6 4 2]
+#
+#   shift       Shift_L (0x32),  Shift_R (0x3e)
+#   lock        Caps_Lock (0x42)
+#   control     Control_L (0x25),  Control_R (0x69)
+#   mod1        Alt_L (0x40),  Alt_R (0x6c),  Meta_L (0xcd)
+#   mod2        Num_Lock (0x4d)
+#   mod3
+#   mod4        Super_L (0x85),  Super_R (0x86), switch (0xcb)
+#
+# Modifiers: (A)ny, (C)ontrol, (S)hift, (M)eta, (N)othing
+#
+# Format: Key <X>  <Context> <Modifier> <Action>
+#         Mouse <X> <Context> <Modifier> <Action>
+#                                                            }}}2
+##   ├ Keyboard                                              {{{2
+##   │ ├ App Shortcuts                                       {{{3
+Silent Key L A 4 Exec exec xscreensaver-command --lock
+Silent Key S A 4 Exec flameshot gui
+Silent Key Print A A Exec flameshot screen
+Silent Key T A 4 Exec exec $[infostore.terminal] -1
+Silent Key XF86Calculator A N Exec exec $[infostore.calculator]
+Silent Key W A 4 Exec exec firefox
+Silent Key E A 4 Exec exec $[infostore.filemanager]
+Silent Key R A 4 Exec exec kitten quick-access-terminal
+#Silent Key . A 14 Exec exec kcharselect
+##                                                           }}}3
+##   │ ├ Window controls                                     {{{3
+Silent Key A A 4 ThisWindow Stick Toggle
+Silent Key Q A S4 ThisWindow Delete
+Silent Key k A 4 Pick Destroy
+Silent Key T WTFS S4 ToggleTitle
+Silent Key I A 4 Exec exec FvwmCommand FvwmIdent
+Silent Key S WFST S4 ThisWindow IconifyWindow
+Silent Key D A 4 ShowDesktop "prev RestoreDesktop"
+Silent Key Tab A M  Exec exec $[FVWM_USERDIR]/bin/fvwm-alttab
+Silent Key Tab A SM Exec exec $[FVWM_USERDIR]/bin/fvwm-alttab --reverse
+##                                                           }}}3
+##   │ ├ FVWM controls                                       {{{3
+IgnoreModifiers L25
+Silent Key F1 A M Menu MenuFvwmRoot
+Silent Key Escape A 4 Restart
+
+Silent Key slash A 4 Exec exec $[FVWM_USERDIR]/bin/fvwm-keys
+
+Silent Key F A 4 FullscreenToggle
+Silent Key F W S4 Maximize 100 100 ewmhiwa
+
+# Window Buttons: [1 3 5 7 9  TTTTT  0 8 6 4 2]
+#   1 - Open the WindowOps menu.
+#   2 - Close on single click, Destory on double click.
+#   4 - Maximize (right/middle button will only maximize vertical/horizontal)
+#   6 - Iconify (minimize)
+Mouse 1 1 A Menu MenuWindowOps Delete
+Mouse 1 2 A Delete
+Mouse 1 4 A Maximize 100 100
+Mouse 2 4 A Maximize 0 100
+Mouse 3 4 A Maximize 100 0
+Mouse 1 6 A ThisWindow IconifyWindow
+##                                                           }}}3
+##   │ ├ Audio                                               {{{3
+#Silent Key XF86AudioRaiseVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%+"
+#Silent Key XF86AudioLowerVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%-"
+#Silent Key XF86AudioMute A A Exec exec "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+Silent Key Pause A A Exec exec /home/deer/.scripts/volume_brightness.sh play_pause
+##                                                           }}}3
+##   │ ├ Window tiling                                       {{{3
+Key KP_Left WTSF 1 TileLeft
+Key KP_Right WTSF 1 TileRight
+Key KP_Up WTSF 1 TileTop
+Key KP_Down WTSF 1 TileBottom
+Key KP_Home WTSF 1 TileTopLeft
+Key KP_Prior WTSF 1 TileTopRight
+Key KP_End WTSF 1 TileBottomLeft
+Key KP_Next WTSF 1 TileBottomRight
+Key KP_Begin WTSF 1 TileFull
+##                                                           }}}3
+##   │ ├ Move window to page (numpad, spatial)               {{{3
+# Numpad layout matches the 3x3 page grid: KP_7/8/9 top row, KP_4/5/6 mid,
+# KP_1/2/3 bottom row.
+Silent Key KP_Home  WTSF 4 MoveToPage 0 0
+Silent Key KP_Up    WTSF 4 MoveToPage 1 0
+Silent Key KP_Prior WTSF 4 MoveToPage 2 0
+Silent Key KP_Left  WTSF 4 MoveToPage 0 1
+Silent Key KP_Begin WTSF 4 MoveToPage 1 1
+Silent Key KP_Right WTSF 4 MoveToPage 2 1
+Silent Key KP_End   WTSF 4 MoveToPage 0 2
+Silent Key KP_Down  WTSF 4 MoveToPage 1 2
+Silent Key KP_Next  WTSF 4 MoveToPage 2 2
+##                                                           }}}3
+##   │ ├ Desktop Switching                                   {{{3
+Silent Key 1 A 4 PagerNavigate 0 0
+Silent Key 2 A 4 PagerNavigate 1 0
+Silent Key 3 A 4 PagerNavigate 2 0
+Silent Key 4 A 4 PagerNavigate 0 1
+Silent Key 5 A 4 PagerNavigate 1 1
+Silent Key 6 A 4 PagerNavigate 2 1
+Silent Key 7 A 4 PagerNavigate 0 2
+Silent Key 8 A 4 PagerNavigate 1 2
+Silent Key 9 A 4 PagerNavigate 2 2
+
+# Move window to page (mirrors the Super+<n> page numbering above)
+Silent Key 1 WTSF S4 MoveToPage 0 0
+Silent Key 2 WTSF S4 MoveToPage 1 0
+Silent Key 3 WTSF S4 MoveToPage 2 0
+Silent Key 4 WTSF S4 MoveToPage 0 1
+Silent Key 5 WTSF S4 MoveToPage 1 1
+Silent Key 6 WTSF S4 MoveToPage 2 1
+Silent Key 7 WTSF S4 MoveToPage 0 2
+Silent Key 8 WTSF S4 MoveToPage 1 2
+Silent Key 9 WTSF S4 MoveToPage 2 2
+
+# Move window one page in a direction
+Silent Key Right WTSF S4 MoveToPage wrapx wrapy +1p 0p
+Silent Key Left  WTSF S4 MoveToPage wrapx wrapy -1p 0p
+Silent Key Up    WTSF S4 MoveToPage wrapx wrapy 0p -1p
+Silent Key Down  WTSF S4 MoveToPage wrapx wrapy 0p +1p
+
+# Tab walks all 9 pages in reading order; arrows move on the grid
+Silent Key Tab A S4 PagerNavigateSeq -1
+Silent Key Tab A 4  PagerNavigateSeq +1
+Silent Key Tab A C4  PagerNavigate 0p +1p
+Silent Key Tab A SC4 PagerNavigate 0p -1p
+Silent Key Right A 4 PagerNavigate +1p 0p
+Silent Key Left A 4  PagerNavigate -1p 0p
+Silent Key Up A 4    PagerNavigate 0p -1p
+Silent Key Down A 4  PagerNavigate 0p +1p
+Silent Key Prior A 4 PagerNavigate 0p -1p
+Silent Key Next A 4  PagerNavigate 0p +1p
+
+Silent Key grave A 4 ToggleEdgeScroll
+
+##                                                           }}}3
+##                                                           }}}2
+##   ├ Mouse                                                 {{{2
+##   │ ├ Left Click                                          {{{3
+Mouse 1	T    A RaiseMoveX Move Maximize
+Mouse 1 I    A IfDoubleClick DeIconifyWindow
+Mouse 1 R    A -
+Mouse 1 R    M Menu MenuFvwmRoot
+Mouse 1	FS   A RaiseMove Resize
+Mouse 1 W    4 RaiseMoveX Move
+##                                                           }}}3
+##   │ ├ Middle Click                                        {{{3
+Mouse 2	T    A Delete
+##                                                           }}}3
+##   │ ├ Right Click                                         {{{3
+Mouse 3 R    M Menu MenuFvwmRoot
+Mouse 3 T    A WindowShade Toggle
+Mouse 3	R    A -
+Mouse 3 I    A Menu MenuIconOps
+Mouse 3 W    4 LazyResize
+##                                                           }}}3
+##   │ ├ Other                                               {{{3
+Mouse 6 RWFSTI 4 NavLeft
+Mouse 7 RWFSTI 4 NavRight
+Mouse 9 RWFSTI 4 NavRight
+Mouse 8 RWFSTI 4 NavLeft
+##                                                           }}}3
+##                                                           }}}2

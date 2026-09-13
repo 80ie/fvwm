@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""fvwm-keys: browse and edit FVWM key/mouse bindings from a local web page.
+
+Serves bin/fvwm-keys.html on 127.0.0.1, hands it the parsed bindings file, and
+on save writes the file back and re-applies it live via FvwmCommand.
+"""
+
+import argparse
+import json
+import os
+import re
+import secrets
+import signal
+import shutil
+import subprocess
+import sys
+import threading
+import time
+from dataclasses import dataclass, asdict
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+USERDIR = Path(os.environ.get("FVWM_USERDIR", HERE.parent))
+BINDINGS = USERDIR / "bindings"
+PAGE = HERE / "fvwm-keys.html"
+RUNDIR = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache")
+URLFILE = RUNDIR / "fvwm-keys.url"
+
+
+def write_urlfile(url):
+    """The URL carries the write token, so never let it land world-readable."""
+    fd = os.open(URLFILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(url)
+
+CTX_CHARS = set("RWDFSTIP[]-_MA0123456789")
+MOD_CHARS = set("ACSMNL12345")
+
+BIND_RE = re.compile(
+    r"^(?P<off>#\s*)?"
+    r"(?P<silent>Silent\s+)?"
+    r"(?P<kind>Key|Mouse|PointerKey)\s+"
+    r"(?P<win>\([^)]*\)\s+)?"
+    r"(?P<key>\S+)\s+(?P<ctx>\S+)\s+(?P<mod>\S+)\s+"
+    r"(?P<action>\S.*?)\s*$"
+)
+SECTION_RE = re.compile(
+    r"^##[^\w{(]*(?P<label>[\w(][\w/()&.,' -]*?)\s*\{\{\{(?P<depth>\d)"
+)
+
+
+@dataclass
+class Binding:
+    t: str
+    kind: str
+    silent: bool
+    enabled: bool
+    win: str | None
+    key: str
+    ctx: str
+    mod: str
+    action: str
+    raw: str
+
+    def tuple(self):
+        return (self.kind, self.win or "", self.key, self.ctx, self.mod)
+
+    def render(self):
+        parts = []
+        if not self.enabled:
+            parts.append("#")
+        if self.silent:
+            parts.append("Silent ")
+        parts.append(self.kind + " ")
+        if self.win:
+            parts.append(self.win + " ")
+        parts.append(f"{self.key} {self.ctx} {self.mod} {self.action}")
+        return "".join(parts)
+
+
+def parse_binding(line):
+    m = BIND_RE.match(line)
+    if not m:
+        return None
+    ctx, mod, key = m["ctx"], m["mod"], m["key"]
+    # Guards keep the Reference block's "Key <X> <Context> <Modifier>" doc line
+    # and similar prose out of the binding list.
+    if not set(ctx) <= CTX_CHARS or not set(mod) <= MOD_CHARS:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9_+.]+", key):
+        return None
+    return Binding(
+        t="bind",
+        kind=m["kind"],
+        silent=bool(m["silent"]),
+        enabled=not m["off"],
+        win=m["win"].strip() if m["win"] else None,
+        key=key,
+        ctx=ctx,
+        mod=mod,
+        action=m["action"],
+        raw=line,
+    )
+
+
+def parse(text):
+    """Ordered records. Binding lines become structs, everything else passes through."""
+    records = []
+    for line in text.split("\n"):
+        b = parse_binding(line)
+        if b:
+            records.append(asdict(b))
+            continue
+        sec = SECTION_RE.match(line)
+        if sec and sec["label"].strip():
+            records.append(
+                {"t": "sec", "raw": line, "label": sec["label"], "depth": int(sec["depth"])}
+            )
+            continue
+        records.append({"t": "raw", "raw": line})
+    if records and records[-1].get("raw") == "":
+        records.pop()
+    return records
+
+
+def render(records):
+    out = []
+    for r in records:
+        if r["t"] == "bind" and r.get("dirty"):
+            out.append(Binding(**{k: v for k, v in r.items() if k in Binding.__annotations__}).render())
+        else:
+            out.append(r["raw"])
+    return "\n".join(out) + "\n"
+
+
+def active_tuples(records):
+    return {
+        (r["kind"], r.get("win") or "", r["key"], r["ctx"], r["mod"])
+        for r in records
+        if r["t"] == "bind" and r["enabled"]
+    }
+
+
+def fvwm(cmd):
+    return subprocess.run(
+        ["FvwmCommand", cmd], capture_output=True, text=True, timeout=5
+    ).returncode == 0
+
+
+def apply(before, after):
+    """Re-read the file, after explicitly unbinding what the edit removed.
+
+    Key/Mouse overwrite by (key, context, modifier), so a plain re-read adds and
+    updates but never deletes. Removals need an explicit '-' action.
+    """
+    removed = []
+    for kind, win, key, ctx, mod in sorted(active_tuples(before) - active_tuples(after)):
+        cmd = f"{kind} {win + ' ' if win else ''}{key} {ctx} {mod} -"
+        removed.append(cmd)
+        fvwm(cmd)
+    ok = fvwm(f"Read {BINDINGS.name}")
+    return ok, removed
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "fvwm-keys"
+
+    def log_message(self, *a):
+        pass
+
+    def authed(self):
+        token = self.headers.get("X-Token") or ""
+        if secrets.compare_digest(token, self.server.token):
+            return True
+        self.send_error(403, "bad token")
+        return False
+
+    def reply(self, body, ctype="application/json"):
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body)
+        body = body.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        self.server.touch()
+        path = self.path.split("?")[0]
+        if path == "/":
+            self.reply(PAGE.read_text(), "text/html; charset=utf-8")
+        elif path == "/api/bindings":
+            if not self.authed():
+                return
+            self.reply({"file": str(BINDINGS), "records": parse(BINDINGS.read_text())})
+        else:
+            self.send_error(404)
+
+    def do_PUT(self):
+        self.server.touch()
+        if self.path != "/api/bindings":
+            return self.send_error(404)
+        if not self.authed():
+            return
+        n = int(self.headers.get("Content-Length", 0))
+        records = json.loads(self.rfile.read(n))["records"]
+        before = parse(BINDINGS.read_text())
+        shutil.copy2(BINDINGS, BINDINGS.with_suffix(".bak"))
+        BINDINGS.write_text(render(records))
+        ok, removed = apply(before, records)
+        self.reply({"ok": ok, "removed": removed, "backup": str(BINDINGS.with_suffix(".bak"))})
+
+
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, addr, token, idle):
+        super().__init__(addr, Handler)
+        self.token = token
+        self.idle = idle
+        self.last = time.monotonic()
+
+    def touch(self):
+        self.last = time.monotonic()
+
+    def watchdog(self):
+        while self.idle:
+            time.sleep(5)
+            if time.monotonic() - self.last > self.idle:
+                threading.Thread(target=self.shutdown, daemon=True).start()
+                return
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--port", type=int, default=8731)
+    ap.add_argument("--idle", type=int, default=600, help="exit after N idle seconds (0 = never)")
+    ap.add_argument("--no-browser", action="store_true")
+    args = ap.parse_args()
+
+    if not BINDINGS.exists():
+        sys.exit(f"no bindings file at {BINDINGS}")
+
+    def open_browser(url):
+        if not args.no_browser:
+            subprocess.Popen(
+                ["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+
+    # Pressing the launch key again reuses the running server instead of failing
+    # to bind, so the binding is safe to mash.
+    try:
+        srv = Server(("127.0.0.1", args.port), secrets.token_urlsafe(16), args.idle)
+    except OSError:
+        if not URLFILE.exists():
+            sys.exit(f"port {args.port} busy and no url at {URLFILE}")
+        url = URLFILE.read_text().strip()
+        print(url, flush=True)
+        return open_browser(url)
+
+    url = f"http://127.0.0.1:{srv.server_address[1]}/#{srv.token}"
+    write_urlfile(url)
+    print(url, flush=True)
+
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    threading.Thread(target=srv.watchdog, daemon=True).start()
+    open_browser(url)
+    try:
+        srv.serve_forever()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        URLFILE.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    main()

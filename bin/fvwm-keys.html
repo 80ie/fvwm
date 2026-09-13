@@ -1,0 +1,516 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FVWM Bindings</title>
+<style>
+:root {
+  --bg: #1c1614; --panel: #241b18; --panel2: #2c2120; --line: #3a2222;
+  --ink: #e8dcd2; --dim: #9d9592; --rust: #aa4d50; --tan: #aa8664;
+  --amber: #ffa733; --copper: #b76b43; --ok: #7fa05a;
+  --mono: ui-monospace, "JetBrains Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 system-ui, sans-serif;
+}
+header {
+  position: sticky; top: 0; z-index: 10; background: var(--panel);
+  border-bottom: 1px solid var(--line); padding: 10px 16px;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; letter-spacing: .04em; }
+h1 span { color: var(--rust); }
+input[type=search], input[type=text], select {
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 5px; padding: 5px 8px; font: inherit;
+}
+input[type=search] { min-width: 200px; }
+button {
+  background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 5px; padding: 5px 11px; font: inherit; cursor: pointer;
+}
+button:hover { border-color: var(--tan); }
+button.primary { background: var(--rust); border-color: var(--rust); color: #fff; }
+button.primary:disabled { background: var(--panel2); border-color: var(--line); color: var(--dim); cursor: default; }
+.grow { flex: 1; }
+.tabs { display: flex; gap: 4px; }
+.tabs button.on { background: var(--copper); border-color: var(--copper); color: #fff; }
+
+main { padding: 16px; max-width: 1200px; margin: 0 auto; }
+.sec { margin: 22px 0 6px; font-size: 12px; letter-spacing: .1em;
+       text-transform: uppercase; color: var(--tan); }
+.sec:first-child { margin-top: 0; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11px; letter-spacing: .08em; color: var(--dim);
+     text-transform: uppercase; padding: 0 8px 5px; font-weight: 500; }
+tr.b { border-top: 1px solid var(--line); }
+tr.b:hover { background: var(--panel); }
+tr.b.off { opacity: .42; }
+tr.b.dirty td:first-child { box-shadow: inset 3px 0 0 var(--amber); }
+tr.b.clash { background: #3a1f1f; }
+td { padding: 5px 8px; vertical-align: middle; }
+td.chord { width: 210px; }
+td.ctx { width: 132px; }
+td.act { font-family: var(--mono); font-size: 13px; }
+td.tools { width: 70px; text-align: right; white-space: nowrap; }
+
+.chip {
+  display: inline-block; font: 600 11px/1 var(--mono); padding: 4px 6px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--bg);
+  color: var(--dim); cursor: pointer; user-select: none; margin-right: 3px;
+}
+.chip.on { background: var(--copper); border-color: var(--copper); color: #fff; }
+.chip.key {
+  cursor: text; min-width: 64px; text-align: center; color: var(--ink);
+  background: var(--panel2); border-color: var(--tan);
+}
+.chip.key.listen { background: var(--amber); color: #2b1a08; border-color: var(--amber);
+                   animation: pulse .9s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+.act-in {
+  width: 100%; background: transparent; border: 1px solid transparent;
+  color: var(--ink); font: 13px/1.4 var(--mono); padding: 3px 5px; border-radius: 4px;
+}
+.act-in:hover { border-color: var(--line); }
+.act-in:focus { border-color: var(--tan); background: var(--bg); outline: none; }
+.icon { background: none; border: none; color: var(--dim); padding: 2px 5px; font-size: 14px; }
+.icon:hover { color: var(--rust); }
+.warn { color: var(--amber); font-size: 12px; }
+.note { color: var(--dim); font-size: 12px; }
+
+/* map view */
+.layer { display: flex; gap: 6px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.kbd { display: flex; flex-direction: column; gap: 5px; }
+.krow { display: flex; gap: 5px; }
+.pads { display: flex; gap: 34px; align-items: flex-start; flex-wrap: wrap; }
+.pad { display: grid; grid-template-columns: repeat(3, 46px); gap: 5px; }
+.k {
+  min-width: 42px; height: 42px; padding: 0 6px; border: 1px solid var(--line);
+  border-radius: 5px; background: var(--panel); color: var(--dim);
+  font: 11px/1.1 var(--mono); cursor: pointer; display: flex;
+  flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.k.bound { background: var(--rust); border-color: var(--rust); color: #fff; }
+.k.bound.multi { background: var(--copper); border-color: var(--amber); }
+.k b { font-size: 11px; font-weight: 700; }
+.k i { font-style: normal; font-size: 9px; opacity: .85; max-width: 62px;
+       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k.w2 { min-width: 72px; } .k.w3 { min-width: 100px; } .k.w5 { min-width: 180px; }
+.mapnote { margin-top: 18px; }
+</style>
+
+<header>
+  <h1>FVWM <span>Bindings</span></h1>
+  <div class="tabs">
+    <button id="tab-list" class="on">List</button>
+    <button id="tab-map">Map</button>
+  </div>
+  <input type="search" id="q" placeholder="filter key, action, section…">
+  <span class="grow"></span>
+  <span id="status" class="note"></span>
+  <button id="add">+ Binding</button>
+  <button id="revert">Revert</button>
+  <button id="save" class="primary" disabled>Save &amp; Apply</button>
+</header>
+<main>
+  <div id="list"></div>
+  <div id="map" hidden></div>
+</main>
+
+<script>
+const TOKEN = location.hash.slice(1);
+const MODS = [['C','Ctrl'], ['S','Shift'], ['M','Alt'], ['4','Super']];
+const CTXS = [['R','Root'], ['W','Window'], ['T','Title'], ['F','Frame'], ['S','Side'], ['I','Icon']];
+const ALLCTX = 'RWDFSTI';
+
+const CODE2SYM = {
+  Backquote:'grave', Minus:'minus', Equal:'equal', BracketLeft:'bracketleft',
+  BracketRight:'bracketright', Backslash:'backslash', Semicolon:'semicolon',
+  Quote:'apostrophe', Comma:'comma', Period:'period', Slash:'slash', Space:'space',
+  Enter:'Return', Escape:'Escape', Tab:'Tab', Backspace:'BackSpace', Delete:'Delete',
+  Insert:'Insert', Home:'Home', End:'End', PageUp:'Prior', PageDown:'Next',
+  ArrowUp:'Up', ArrowDown:'Down', ArrowLeft:'Left', ArrowRight:'Right',
+  PrintScreen:'Print', Pause:'Pause', CapsLock:'Caps_Lock', ContextMenu:'Menu',
+  NumpadDivide:'KP_Divide', NumpadMultiply:'KP_Multiply', NumpadSubtract:'KP_Subtract',
+  NumpadAdd:'KP_Add', NumpadEnter:'KP_Enter', NumpadDecimal:'KP_Delete',
+  Numpad0:'KP_Insert', Numpad1:'KP_End', Numpad2:'KP_Down', Numpad3:'KP_Next',
+  Numpad4:'KP_Left', Numpad5:'KP_Begin', Numpad6:'KP_Right', Numpad7:'KP_Home',
+  Numpad8:'KP_Up', Numpad9:'KP_Prior',
+  AudioVolumeUp:'XF86AudioRaiseVolume', AudioVolumeDown:'XF86AudioLowerVolume',
+  AudioVolumeMute:'XF86AudioMute',
+};
+const codeToSym = c =>
+  CODE2SYM[c] || (/^Key[A-Z]$/.test(c) ? c[3]
+              : /^Digit\d$/.test(c) ? c[5]
+              : /^F\d{1,2}$/.test(c) ? c : null);
+
+let recs = [], pristine = '', view = 'list';
+
+const api = (method, body) => fetch('/api/bindings', {
+  method, headers: {'X-Token': TOKEN, 'Content-Type': 'application/json'},
+  body: body && JSON.stringify(body),
+}).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t)));
+
+const binds = () => recs.filter(r => r.t === 'bind');
+const modSet = m => new Set(m === 'A' || m === 'N' ? [] : [...m]);
+const canonMod = set => {
+  const s = MODS.map(([c]) => c).filter(c => set.has(c)).join('');
+  return s || 'N';
+};
+const expandCtx = c => c.includes('A') ? ALLCTX : c;
+
+/* fvwm matches an exact modifier set unless the binding says A (any), and a
+   context list intersection is what makes two bindings collide. */
+function clashes() {
+  const out = new Set();
+  // '-' unbinds rather than competing, so `Mouse 1 R A -` before a narrower
+  // `Mouse 1 R M ...` is intent, not a collision.
+  const bs = binds().filter(b => b.enabled && b.action.trim() !== '-');
+  for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) {
+    const a = bs[i], b = bs[j];
+    if (a.kind !== b.kind || a.key !== b.key || (a.win || '') !== (b.win || '')) continue;
+    const ca = expandCtx(a.ctx), cb = expandCtx(b.ctx);
+    if (![...ca].some(ch => cb.includes(ch))) continue;
+    const anyMod = a.mod === 'A' || b.mod === 'A';
+    const sa = modSet(a.mod), sb = modSet(b.mod);
+    const same = sa.size === sb.size && [...sa].every(c => sb.has(c));
+    if (anyMod || same) { out.add(a); out.add(b); }
+  }
+  return out;
+}
+
+const dirty = () => recs.some(r => r.dirty) || JSON.stringify(recs) !== pristine;
+
+function touch(rec) {
+  if (rec) rec.dirty = true;
+  document.getElementById('save').disabled = !dirty();
+  render();
+}
+
+function modLabel(m) {
+  if (m === 'A') return 'Any';
+  if (m === 'N') return '—';
+  const named = {C:'Ctrl', S:'Shift', M:'Alt', 4:'Super', 1:'Mod1', 2:'Num', L:'Lock'};
+  return [...m].map(c => named[c] || c).join('+');
+}
+
+/* ---------- list view ---------- */
+
+function chipRow(rec, kind) {
+  const wrap = document.createElement('span');
+  const spec = kind === 'mod' ? MODS : CTXS;
+  const any = document.createElement('span');
+  any.className = 'chip' + (rec[kind] === 'A' ? ' on' : '');
+  any.textContent = 'Any';
+  any.onclick = () => { rec[kind] = 'A'; touch(rec); };
+  wrap.append(any);
+  for (const [ch, name] of spec) {
+    const c = document.createElement('span');
+    const on = rec[kind] !== 'A' && rec[kind].includes(ch);
+    c.className = 'chip' + (on ? ' on' : '');
+    c.textContent = ch;
+    c.title = name;
+    c.onclick = () => {
+      const set = new Set(rec[kind] === 'A' || rec[kind] === 'N' ? [] : [...rec[kind]]);
+      set.has(ch) ? set.delete(ch) : set.add(ch);
+      rec[kind] = kind === 'mod' ? canonMod(set)
+                : ([...set].join('') || 'A');
+      touch(rec);
+    };
+    wrap.append(c);
+  }
+  return wrap;
+}
+
+function keyChip(rec) {
+  const el = document.createElement('span');
+  el.className = 'chip key';
+  el.tabIndex = 0;
+  el.textContent = rec.key;
+  el.title = 'Click, then press the key. Modifiers are the chips beside it.';
+  const stop = () => { el.classList.remove('listen'); el.textContent = rec.key; };
+  el.onclick = () => {
+    el.classList.add('listen');
+    el.textContent = 'press…';
+    el.focus();
+  };
+  el.onblur = stop;
+  el.onkeydown = e => {
+    if (!el.classList.contains('listen')) return;
+    if (['ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight',
+         'MetaLeft','MetaRight'].includes(e.code)) return;
+    e.preventDefault();
+    if (e.code === 'Escape') return el.blur();
+    const sym = codeToSym(e.code);
+    if (!sym) { el.textContent = '?' + e.code; return; }
+    rec.key = sym;
+    el.classList.remove('listen');
+    touch(rec);
+  };
+  return el;
+}
+
+function row(rec, clash) {
+  const tr = document.createElement('tr');
+  tr.className = 'b' + (rec.enabled ? '' : ' off') + (rec.dirty ? ' dirty' : '') +
+                 (clash.has(rec) ? ' clash' : '');
+
+  const chord = document.createElement('td');
+  chord.className = 'chord';
+  chord.append(chipRow(rec, 'mod'), keyChip(rec));
+  if (rec.kind !== 'Key') {
+    const k = document.createElement('span');
+    k.className = 'chip'; k.textContent = rec.kind; k.style.cursor = 'default';
+    chord.prepend(k);
+  }
+
+  const ctx = document.createElement('td');
+  ctx.className = 'ctx';
+  ctx.append(chipRow(rec, 'ctx'));
+
+  const act = document.createElement('td');
+  act.className = 'act';
+  const inp = document.createElement('input');
+  inp.className = 'act-in';
+  inp.value = rec.action;
+  inp.oninput = () => { rec.action = inp.value; rec.dirty = true;
+                        document.getElementById('save').disabled = !dirty(); };
+  act.append(inp);
+
+  const tools = document.createElement('td');
+  tools.className = 'tools';
+  const tog = document.createElement('button');
+  tog.className = 'icon';
+  tog.textContent = rec.enabled ? '◉' : '○';
+  tog.title = rec.enabled ? 'Disable (comment out)' : 'Enable';
+  tog.onclick = () => { rec.enabled = !rec.enabled; touch(rec); };
+  const del = document.createElement('button');
+  del.className = 'icon';
+  del.textContent = '✕';
+  del.title = 'Delete';
+  del.onclick = () => { recs.splice(recs.indexOf(rec), 1); touch(); };
+  tools.append(tog, del);
+
+  tr.append(chord, ctx, act, tools);
+  return tr;
+}
+
+function renderList() {
+  const q = document.getElementById('q').value.toLowerCase();
+  const clash = clashes();
+  const host = document.getElementById('list');
+  host.textContent = '';
+  let section = 'Ungrouped', table = null, shown = 0;
+
+  const openSection = () => {
+    const h = document.createElement('div');
+    h.className = 'sec';
+    h.textContent = section;
+    table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>Chord</th><th>Context</th><th>Action</th><th></th></tr></thead>';
+    const tb = document.createElement('tbody');
+    table.append(tb);
+    host.append(h, table);
+    return tb;
+  };
+  let tb = null;
+
+  for (const rec of recs) {
+    if (rec.t === 'sec') { section = rec.label; tb = null; continue; }
+    if (rec.t !== 'bind') continue;
+    const hay = `${rec.key} ${rec.mod} ${rec.ctx} ${rec.action} ${section}`.toLowerCase();
+    if (q && !hay.includes(q)) continue;
+    if (!tb) tb = openSection();
+    tb.append(row(rec, clash));
+    shown++;
+  }
+  const foot = document.createElement('p');
+  foot.className = clash.size ? 'warn' : 'note';
+  foot.textContent = `${shown} of ${binds().length} bindings` +
+    (clash.size ? ` · ${clash.size} in conflict (same key, overlapping context and modifiers)` : '');
+  host.append(foot);
+}
+
+/* ---------- map view ---------- */
+
+const ROWS = [
+  [['Escape','Esc'],['F1'],['F2'],['F3'],['F4'],['F5'],['F6'],['F7'],['F8'],['F9'],['F10'],['F11'],['F12']],
+  [['grave','`'],['1'],['2'],['3'],['4'],['5'],['6'],['7'],['8'],['9'],['0'],['minus','-'],['equal','='],['BackSpace','⌫','w2']],
+  [['Tab','Tab','w2'],['Q'],['W'],['E'],['R'],['T'],['Y'],['U'],['I'],['O'],['P'],['bracketleft','['],['bracketright',']'],['backslash','\\']],
+  [['Caps_Lock','Caps','w2'],['A'],['S'],['D'],['F'],['G'],['H'],['J'],['K'],['L'],['semicolon',';'],['apostrophe','\''],['Return','⏎','w2']],
+  [['Shift','Shift','w3'],['Z'],['X'],['C'],['V'],['B'],['N'],['M'],['comma',','],['period','.'],['slash','/']],
+  [['space','Space','w5'],['Left','←'],['Down','↓'],['Up','↑'],['Right','→'],['Prior','PgUp'],['Next','PgDn'],['Home','Home'],['End','End']],
+];
+const NUMPAD = [
+  'KP_Home','KP_Up','KP_Prior',
+  'KP_Left','KP_Begin','KP_Right',
+  'KP_End','KP_Down','KP_Next',
+];
+const PADLABEL = {KP_Home:'↖ 7', KP_Up:'↑ 8', KP_Prior:'↗ 9', KP_Left:'← 4',
+  KP_Begin:'· 5', KP_Right:'→ 6', KP_End:'↙ 1', KP_Down:'↓ 2', KP_Next:'↘ 3'};
+
+let layer = new Set(['4']);
+
+function renderMap() {
+  const host = document.getElementById('map');
+  host.textContent = '';
+
+  const bar = document.createElement('div');
+  bar.className = 'layer';
+  const lbl = document.createElement('span');
+  lbl.className = 'note';
+  lbl.textContent = 'Modifier layer:';
+  bar.append(lbl);
+  for (const [ch, name] of MODS) {
+    const c = document.createElement('span');
+    c.className = 'chip' + (layer.has(ch) ? ' on' : '');
+    c.textContent = name;
+    c.onclick = () => { layer.has(ch) ? layer.delete(ch) : layer.add(ch); render(); };
+    bar.append(c);
+  }
+  const cur = document.createElement('span');
+  cur.className = 'note';
+  cur.textContent = `→ ${canonMod(layer)}`;
+  bar.append(cur);
+  host.append(bar);
+
+  const want = canonMod(layer);
+  const at = new Map();
+  for (const b of binds()) {
+    if (!b.enabled || b.kind !== 'Key') continue;
+    const m = b.mod === 'A' ? want : b.mod;
+    if (m !== want) continue;
+    if (!at.has(b.key)) at.set(b.key, []);
+    at.get(b.key).push(b);
+  }
+
+  const mkKey = (sym, label, extra) => {
+    const hits = at.get(sym) || [];
+    const el = document.createElement('button');
+    el.className = 'k' + (hits.length ? ' bound' : '') + (hits.length > 1 ? ' multi' : '') +
+                   (extra ? ' ' + extra : '');
+    const b = document.createElement('b');
+    b.textContent = label || sym;
+    el.append(b);
+    if (hits.length) {
+      const i = document.createElement('i');
+      i.textContent = hits[0].action.replace(/^(Exec exec|Exec)\s+/, '');
+      el.append(i);
+      el.title = hits.map(h => `[${h.ctx}] ${h.action}`).join('\n');
+    } else {
+      el.title = `${modLabel(want)}+${sym} — unbound, click to add`;
+    }
+    el.onclick = () => {
+      if (hits.length) return jumpTo(hits[0]);
+      addBinding({key: sym, mod: want});
+    };
+    return el;
+  };
+
+  const kbd = document.createElement('div');
+  kbd.className = 'kbd';
+  for (const r of ROWS) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'krow';
+    for (const [sym, label, w] of r) rowEl.append(mkKey(sym, label, w));
+    kbd.append(rowEl);
+  }
+
+  const pads = document.createElement('div');
+  pads.className = 'pads';
+  pads.append(kbd);
+  const pad = document.createElement('div');
+  pad.className = 'pad';
+  for (const sym of NUMPAD) pad.append(mkKey(sym, PADLABEL[sym]));
+  pads.append(pad);
+  host.append(pads);
+
+  const n = document.createElement('p');
+  n.className = 'note mapnote';
+  n.textContent = `Numpad names assume NumLock off, matching the config. ` +
+    `Filled keys are bound on the ${modLabel(want)} layer; amber outline means more than one context.`;
+  host.append(n);
+}
+
+function jumpTo(rec) {
+  view = 'list';
+  document.getElementById('q').value = rec.action.slice(0, 24);
+  render();
+}
+
+function addBinding(seed = {}) {
+  const kind = seed.kind || 'Key';
+  const rec = {
+    t: 'bind', kind, silent: true, enabled: true, win: null,
+    key: seed.key || 'F12', ctx: seed.ctx || 'A', mod: seed.mod || '4',
+    action: seed.action || 'Nop', raw: '', dirty: true,
+  };
+  // Land it beside its own kind so it stays inside a section rather than after
+  // the file's closing fold markers.
+  let at = -1;
+  recs.forEach((r, i) => { if (r.t === 'bind' && r.kind === kind) at = i; });
+  at < 0 ? recs.push(rec) : recs.splice(at + 1, 0, rec);
+  view = 'list';
+  document.getElementById('q').value = '';
+  touch();
+}
+
+/* ---------- shell ---------- */
+
+function render() {
+  document.getElementById('tab-list').classList.toggle('on', view === 'list');
+  document.getElementById('tab-map').classList.toggle('on', view === 'map');
+  document.getElementById('list').hidden = view !== 'list';
+  document.getElementById('map').hidden = view !== 'map';
+  view === 'list' ? renderList() : renderMap();
+}
+
+const setStatus = (msg, warn) => {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = warn ? 'warn' : 'note';
+};
+
+async function load() {
+  const data = await api('GET');
+  recs = data.records;
+  pristine = JSON.stringify(recs);
+  setStatus(data.file.replace(/^.*\/\.fvwm\//, '~/.fvwm/'));
+  document.getElementById('save').disabled = true;
+  render();
+}
+
+document.getElementById('save').onclick = async () => {
+  const btn = document.getElementById('save');
+  btn.disabled = true;
+  try {
+    const r = await api('PUT', {records: recs});
+    await load();
+    setStatus(r.ok
+      ? `applied · ${r.removed.length} unbound · backup ${r.backup.replace(/^.*\//, '')}`
+      : 'written, but FvwmCommand failed, check FvwmMFL', !r.ok);
+  } catch (e) {
+    setStatus('save failed: ' + e, true);
+    btn.disabled = false;
+  }
+};
+document.getElementById('revert').onclick = load;
+document.getElementById('add').onclick = () => addBinding();
+document.getElementById('q').oninput = () => view === 'list' && renderList();
+document.getElementById('tab-list').onclick = () => { view = 'list'; render(); };
+document.getElementById('tab-map').onclick = () => { view = 'map'; render(); };
+addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    document.getElementById('save').click();
+  }
+});
+
+// Relaunching hands the already-open tab a new token in the fragment, which on
+// its own would not reload the document and would leave a dead token behind.
+addEventListener('hashchange', () => location.reload());
+
+load().catch(e => setStatus('load failed: ' + e, true));
+</script>
