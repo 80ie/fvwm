@@ -3,9 +3,9 @@
 **/.thumbs/
 icons
 images
+doc
 .idea
 .vscode
-
 # Auto-generated XDG application menu
 .XDGMenu
 .FvwmForm-XDGMenu-Config
