@@ -20,3 +20,6 @@ doc
 bindings.bak
 
 archive
+
+# Agent-session planning docs, not meant to be committed
+docs/
