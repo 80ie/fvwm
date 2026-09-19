@@ -1,128 +1,435 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FVWM Bindings</title>
+<title>Deer DE Keymap</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 :root {
-  --bg: #1c1614; --panel: #241b18; --panel2: #2c2120; --line: #3a2222;
-  --ink: #e8dcd2; --dim: #9d9592; --rust: #aa4d50; --tan: #aa8664;
-  --amber: #ffa733; --copper: #b76b43; --ok: #7fa05a;
-  --mono: ui-monospace, "JetBrains Mono", Menlo, monospace;
+  --ground: #17110f;
+  --surface: #201815;
+  --raised: #2a1f1c;
+  --line: #3d2826;
+  --line-soft: #2f2220;
+  --ink: #ece0d6;
+  --dim: #a2938b;
+  --faint: #6f605b;
+  --rust: #aa4d50;
+  --copper: #b76b43;
+  --amber: #ffa733;
+  --tan: #aa8664;
+  --crit: #d4564f;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --r: 4px;
 }
 * { box-sizing: border-box; }
 body {
-  margin: 0; background: var(--bg); color: var(--ink);
-  font: 14px/1.5 system-ui, sans-serif;
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
 }
-header {
-  position: sticky; top: 0; z-index: 10; background: var(--panel);
-  border-bottom: 1px solid var(--line); padding: 10px 16px;
-  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-}
-h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; letter-spacing: .04em; }
-h1 span { color: var(--rust); }
-input[type=search], input[type=text], select {
-  background: var(--bg); color: var(--ink); border: 1px solid var(--line);
-  border-radius: 5px; padding: 5px 8px; font: inherit;
-}
-input[type=search] { min-width: 200px; }
-button {
-  background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
-  border-radius: 5px; padding: 5px 11px; font: inherit; cursor: pointer;
-}
-button:hover { border-color: var(--tan); }
-button.primary { background: var(--rust); border-color: var(--rust); color: #fff; }
-button.primary:disabled { background: var(--panel2); border-color: var(--line); color: var(--dim); cursor: default; }
-.grow { flex: 1; }
-.tabs { display: flex; gap: 4px; }
-.tabs button.on { background: var(--copper); border-color: var(--copper); color: #fff; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
-main { padding: 16px; max-width: 1200px; margin: 0 auto; }
-.sec { margin: 22px 0 6px; font-size: 12px; letter-spacing: .1em;
-       text-transform: uppercase; color: var(--tan); }
-.sec:first-child { margin-top: 0; }
+/* ---------- chrome ---------- */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding-block: 10px;
+  padding-inline: 16px;
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: baseline; gap: 7px; margin-right: 2px; }
+.brand b { font: 600 15px/1 var(--sans); letter-spacing: .01em; }
+.brand span {
+  font: 500 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--rust);
+}
+.seg { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.seg button {
+  background: transparent; border: 0; color: var(--dim);
+  font: 500 12px/1 var(--sans); padding: 7px 13px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--copper); color: #fff; }
+.seg button + button { border-left: 1px solid var(--line); }
 
-table { width: 100%; border-collapse: collapse; }
-th { text-align: left; font-size: 11px; letter-spacing: .08em; color: var(--dim);
-     text-transform: uppercase; padding: 0 8px 5px; font-weight: 500; }
-tr.b { border-top: 1px solid var(--line); }
-tr.b:hover { background: var(--panel); }
-tr.b.off { opacity: .42; }
-tr.b.dirty td:first-child { box-shadow: inset 3px 0 0 var(--amber); }
-tr.b.clash { background: #3a1f1f; }
-td { padding: 5px 8px; vertical-align: middle; }
-td.chord { width: 210px; }
-td.ctx { width: 132px; }
-td.act { font-family: var(--mono); font-size: 13px; }
-td.tools { width: 70px; text-align: right; white-space: nowrap; }
+input[type="search"] {
+  flex: 1 1 190px; min-width: 0; max-width: 340px;
+  background: var(--ground); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r);
+  padding: 7px 10px; font: 400 13px/1 var(--sans);
+}
+input[type="search"]::placeholder { color: var(--faint); }
 
+.spacer { flex: 1 1 auto; }
+.act {
+  background: var(--raised); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r);
+  font: 500 12px/1 var(--sans); padding: 7px 12px; cursor: pointer;
+}
+.act:hover { border-color: var(--tan); }
+.act.go { background: var(--rust); border-color: var(--rust); color: #fff; }
+.act.go[disabled] { background: transparent; border-color: var(--line-soft); color: var(--faint); cursor: default; }
+
+/* ---------- shell ---------- */
+.shell {
+  display: grid; grid-template-columns: 212px minmax(0, 1fr);
+  gap: 26px; align-items: start;
+  max-width: 1480px; margin: 0 auto;
+  padding-block: 22px; padding-inline: 16px;
+}
+@media (max-width: 900px) { .shell { grid-template-columns: minmax(0, 1fr); gap: 18px; } }
+
+.rail { position: sticky; top: 74px; display: flex; flex-direction: column; gap: 20px; }
+@media (max-width: 900px) { .rail { position: static; } }
+.rail h2 {
+  font: 500 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+  color: var(--faint); margin: 0 0 9px;
+}
+.navlist { display: flex; flex-direction: column; gap: 1px; }
+@media (max-width: 900px) { .navlist { flex-direction: row; flex-wrap: wrap; gap: 5px; } }
+.navlist button {
+  display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+  background: transparent; border: 0; border-left: 2px solid transparent;
+  color: var(--dim); font: 400 13px/1.3 var(--sans);
+  padding: 5px 8px; cursor: pointer; text-align: left; width: 100%;
+}
+@media (max-width: 900px) {
+  .navlist button { width: auto; border: 1px solid var(--line-soft); border-radius: var(--r); }
+}
+.navlist button:hover { color: var(--ink); background: var(--surface); }
+.navlist button[aria-current="true"] { color: var(--ink); border-left-color: var(--rust); background: var(--surface); }
+.navlist .n { font: 400 11px/1 var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.tally { border: 1px solid var(--line); border-radius: var(--r); padding: 11px 12px; background: var(--surface); }
+.tally .big { font: 600 26px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.tally .lab { font: 400 11px/1.4 var(--sans); color: var(--dim); margin-top: 3px; }
+.tally.bad { border-color: var(--crit); }
+.tally.bad .big { color: var(--crit); }
+
+.legend { font: 400 12px/1.6 var(--sans); color: var(--dim); }
+.legend dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 9px; margin: 0; }
+.legend dt { font: 500 11px/1.5 var(--mono); color: var(--tan); }
+.legend dd { margin: 0; }
+
+/* ---------- binding rows ---------- */
+.group { margin-bottom: 26px; scroll-margin-top: 80px; }
+.group > h3 {
+  font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--tan); margin: 0 0 2px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.colhead {
+  display: grid; grid-template-columns: 196px 168px minmax(0,1fr) 58px;
+  gap: 12px; padding: 8px 8px 4px;
+  font: 500 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint);
+}
+@media (max-width: 760px) { .colhead { display: none; } }
+
+.row {
+  display: grid; grid-template-columns: 196px 168px minmax(0,1fr) 58px;
+  gap: 12px; align-items: center;
+  padding: 7px 8px; border-bottom: 1px solid var(--line-soft);
+  border-left: 2px solid transparent;
+}
+.row:hover { background: var(--surface); }
+.row.off { opacity: .45; }
+.row.edited { border-left-color: var(--amber); }
+.row.clash { border-left-color: var(--crit); background: #2a1715; }
+@media (max-width: 760px) {
+  .row { grid-template-columns: minmax(0,1fr); gap: 7px; padding: 11px 8px; }
+}
+
+.chord { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.mods { display: flex; gap: 2px; }
 .chip {
-  display: inline-block; font: 600 11px/1 var(--mono); padding: 4px 6px;
-  border: 1px solid var(--line); border-radius: 4px; background: var(--bg);
-  color: var(--dim); cursor: pointer; user-select: none; margin-right: 3px;
+  font: 500 10px/1 var(--mono); letter-spacing: .02em;
+  padding: 5px 6px; min-width: 22px; text-align: center;
+  border: 1px solid var(--line); border-radius: 3px;
+  background: var(--ground); color: var(--faint);
+  cursor: pointer; user-select: none;
 }
-.chip.on { background: var(--copper); border-color: var(--copper); color: #fff; }
-.chip.key {
-  cursor: text; min-width: 64px; text-align: center; color: var(--ink);
-  background: var(--panel2); border-color: var(--tan);
+.chip:hover { border-color: var(--tan); color: var(--dim); }
+.chip[aria-pressed="true"] { background: var(--copper); border-color: var(--copper); color: #fff; }
+.chip.any[aria-pressed="true"] { background: var(--tan); border-color: var(--tan); color: #241b18; }
+.keycap {
+  font: 600 12px/1 var(--mono);
+  padding: 6px 9px; margin-left: 5px; min-width: 58px; text-align: center;
+  background: var(--raised); border: 1px solid var(--tan); border-radius: 3px;
+  color: var(--ink); cursor: pointer;
 }
-.chip.key.listen { background: var(--amber); color: #2b1a08; border-color: var(--amber);
-                   animation: pulse .9s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .55; } }
-.act-in {
-  width: 100%; background: transparent; border: 1px solid transparent;
-  color: var(--ink); font: 13px/1.4 var(--mono); padding: 3px 5px; border-radius: 4px;
+.keycap:hover { border-color: var(--amber); }
+.keycap.listening {
+  background: var(--amber); color: #241b18; border-color: var(--amber);
+  animation: blink 1s ease-in-out infinite;
 }
-.act-in:hover { border-color: var(--line); }
-.act-in:focus { border-color: var(--tan); background: var(--bg); outline: none; }
-.icon { background: none; border: none; color: var(--dim); padding: 2px 5px; font-size: 14px; }
-.icon:hover { color: var(--rust); }
-.warn { color: var(--amber); font-size: 12px; }
-.note { color: var(--dim); font-size: 12px; }
+@keyframes blink { 50% { opacity: .5; } }
+.kindtag {
+  font: 500 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--copper); border: 1px solid var(--line); border-radius: 3px;
+  padding: 5px 5px; cursor: default;
+}
 
-/* map view */
-.layer { display: flex; gap: 6px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-.kbd { display: flex; flex-direction: column; gap: 5px; }
-.krow { display: flex; gap: 5px; }
-.pads { display: flex; gap: 34px; align-items: flex-start; flex-wrap: wrap; }
-.pad { display: grid; grid-template-columns: repeat(3, 46px); gap: 5px; }
-.k {
-  min-width: 42px; height: 42px; padding: 0 6px; border: 1px solid var(--line);
-  border-radius: 5px; background: var(--panel); color: var(--dim);
-  font: 11px/1.1 var(--mono); cursor: pointer; display: flex;
-  flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+.ctxs { display: flex; gap: 2px; flex-wrap: wrap; }
+.action {
+  width: 100%; background: transparent; color: var(--ink);
+  border: 1px solid transparent; border-radius: 3px;
+  font: 400 12.5px/1.4 var(--mono); padding: 5px 6px;
 }
-.k.bound { background: var(--rust); border-color: var(--rust); color: #fff; }
-.k.bound.multi { background: var(--copper); border-color: var(--amber); }
-.k b { font-size: 11px; font-weight: 700; }
-.k i { font-style: normal; font-size: 9px; opacity: .85; max-width: 62px;
-       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.k.w2 { min-width: 72px; } .k.w3 { min-width: 100px; } .k.w5 { min-width: 180px; }
-.mapnote { margin-top: 18px; }
+.action:hover { border-color: var(--line); }
+.action:focus { border-color: var(--tan); background: var(--ground); outline: none; }
+.tools { display: flex; gap: 1px; justify-content: flex-end; }
+.tools button {
+  background: none; border: 0; color: var(--faint);
+  font-size: 13px; line-height: 1; padding: 5px 6px; cursor: pointer; border-radius: 3px;
+}
+.tools button:hover { color: var(--rust); background: var(--raised); }
+
+.empty { color: var(--dim); padding: 30px 8px; font-size: 13px; }
+
+/* ---------- overview ---------- */
+.layerkey {
+  display: flex; gap: 5px; flex-wrap: wrap; align-items: stretch; margin-bottom: 18px;
+}
+.lk {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface); border: 1px solid var(--line-soft);
+  border-left-width: 3px; border-radius: var(--r);
+  padding: 6px 10px 6px 8px; cursor: pointer;
+}
+.lk:hover { border-color: var(--tan); border-left-color: inherit; }
+.lk[aria-pressed="false"] { opacity: .38; }
+.lk .code { font: 600 11px/1 var(--mono); color: var(--ink); }
+.lk .name { font: 400 11.5px/1 var(--sans); color: var(--dim); }
+.lk .n { font: 500 11px/1 var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.mapscroll { overflow-x: auto; padding-bottom: 10px; }
+.board {
+  /* The board is 22 units wide plus fixed chrome, so solve for the unit that
+     fits the pane instead of guessing at breakpoints. */
+  --u: clamp(24px, calc((100vw - 430px) / 22), 46px);
+  display: flex; flex-direction: column; gap: 16px;
+  min-width: min-content; width: min-content;
+  padding: 14px; border: 1px solid var(--line); border-radius: 8px;
+  background: linear-gradient(180deg, #241b18, #1d1614);
+}
+.fnrow { display: flex; gap: 16px; }
+.decks { display: flex; gap: 16px; align-items: flex-start; }
+.kbd { display: flex; flex-direction: column; gap: 4px; }
+.krow { display: flex; gap: 4px; }
+.midcol { display: flex; flex-direction: column; gap: 4px; }
+.nav { display: grid; grid-template-columns: repeat(3, var(--u)); gap: 4px; }
+.arrows {
+  display: grid; grid-template-columns: repeat(3, var(--u)); gap: 4px;
+  margin-top: calc(var(--u) + 8px);
+}
+/* Auto-flow puts Left beside Up; the inverted T needs every cell named. */
+.arrows > :nth-child(1) { grid-area: 1 / 2; }
+.arrows > :nth-child(2) { grid-area: 2 / 1; }
+.arrows > :nth-child(3) { grid-area: 2 / 2; }
+.arrows > :nth-child(4) { grid-area: 2 / 3; }
+.numpad {
+  display: grid; grid-template-columns: repeat(4, var(--u));
+  grid-auto-rows: 46px; gap: 4px;
+}
+.cap {
+  width: var(--u); min-height: 46px; padding: 3px 2px;
+  border: 1px solid var(--line-soft); border-radius: 4px;
+  background: var(--surface); color: var(--faint);
+  font: 400 10px/1.1 var(--mono); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  overflow: hidden;
+}
+.cap.free { cursor: cell; }
+.cap:hover:not(:disabled) { border-color: var(--tan); }
+.cap.used { background: var(--raised); color: var(--ink); border-color: var(--line); justify-content: flex-start; padding-top: 5px; }
+.cap.modkey { background: #2b2320; color: var(--faint); }
+.cap.accent { border-color: var(--rust); color: var(--rust); }
+.cap.dead { background: #1e1817; color: #574a46; cursor: default; }
+.cap.sel { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.cap b { font: 600 10.5px/1 var(--mono); }
+.cap .sub { font: 400 7.5px/1 var(--mono); color: var(--faint); letter-spacing: .04em; }
+.cap .badges { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
+/* Below ~900px the sidebar stacks, so the board gets the full pane back. */
+@media (max-width: 900px) { .board { --u: clamp(24px, calc((100vw - 90px) / 22), 46px); } }
+@media (max-width: 1180px) { .cap { min-height: 40px; } .cap b { font-size: 9.5px; } }
+@media (max-width: 820px) { .cap { min-height: 34px; } .cap b { font-size: 8.5px; } .cap .sub { display: none; } }
+
+/* ---------- mouse and window zones ---------- */
+.periph { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; margin-top: 20px; }
+.periph h4 {
+  margin: 0 0 9px; font: 500 10px/1 var(--mono);
+  letter-spacing: .14em; text-transform: uppercase; color: var(--tan);
+}
+.mousewrap { display: flex; gap: 12px; align-items: flex-start; }
+.mouse {
+  position: relative; width: 108px; height: 150px;
+  border: 1px solid var(--line); border-radius: 54px 54px 42px 42px;
+  background: linear-gradient(180deg, #241b18, #1b1513); padding: 6px;
+}
+.mbtn {
+  position: absolute; border: 1px solid var(--line-soft); background: var(--surface);
+  color: var(--faint); font: 600 10px/1 var(--mono); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+}
+.mbtn.used { background: var(--raised); color: var(--ink); border-color: var(--line); }
+.mbtn.sel { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.mbtn.b1 { left: 6px; top: 6px; width: 42px; height: 62px; border-radius: 40px 5px 5px 5px; }
+.mbtn.b3 { right: 6px; top: 6px; width: 42px; height: 62px; border-radius: 5px 40px 5px 5px; }
+.mbtn.b2 { left: 50%; transform: translateX(-50%); top: 12px; width: 18px; height: 50px; border-radius: 9px; }
+.extra { display: grid; grid-template-columns: repeat(2, 42px); gap: 4px; align-content: start; }
+.extra .mbtn { position: static; height: 38px; border-radius: 4px; }
+.mhint { font: 400 11px/1.5 var(--sans); color: var(--faint); margin-top: 9px; max-width: 44ch; }
+
+.frame {
+  display: grid; grid-template-columns: 16px minmax(0,1fr) 16px;
+  grid-template-rows: 16px auto 16px; gap: 2px;
+}
+.zone {
+  border: 1px solid var(--line-soft); background: var(--surface); color: var(--faint);
+  font: 600 9px/1 var(--mono); cursor: pointer; border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+}
+.zone.used { background: var(--raised); color: var(--ink); }
+.zone.sel { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.inner { display: flex; flex-direction: column; gap: 2px; min-width: 250px; }
+.tbar { display: flex; gap: 3px; align-items: stretch; height: 28px; }
+.tbtn {
+  width: 26px; border: 1px solid var(--line-soft); background: var(--surface);
+  color: var(--faint); font: 600 9px/1 var(--mono); border-radius: 2px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.tbtn.used { background: var(--raised); color: var(--ink); }
+.tbtn.sel { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.tfill { flex: 1; }
+.wbody { height: 62px; }
+.zonerow { display: flex; gap: 5px; margin-top: 7px; }
+.zonerow .zone { padding: 5px 9px; border-radius: 3px; width: auto; font-size: 9.5px; gap: 5px; }
+.zn { display: flex; align-items: center; gap: 5px; }
+.zn .badges { display: flex; gap: 2px; }
+
+.badge {
+  font: 600 8.5px/1 var(--mono); letter-spacing: .02em;
+  padding: 2px 3px; border-radius: 2px; color: #1a1210; white-space: nowrap;
+}
+.badge.more { background: transparent; color: var(--faint); padding: 2px 1px; }
+.cap.dim .badge { opacity: .22; }
+
+.detail {
+  margin-top: 20px; border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--surface); overflow: hidden;
+}
+.detail header {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 11px 14px; border-bottom: 1px solid var(--line);
+}
+.detail header b { font: 600 13px/1 var(--mono); }
+.detail header .sub { font-size: 12px; color: var(--dim); }
+.detailrows { padding: 4px 6px 6px; }
+.detailrows .row:last-child { border-bottom: 0; }
+.detail .jump {
+  background: transparent; border: 1px solid var(--line); border-radius: 3px;
+  color: var(--dim); font: 500 11px/1 var(--sans); padding: 5px 9px; cursor: pointer;
+}
+.detail .jump:hover { border-color: var(--tan); color: var(--ink); }
+.maplegend { color: var(--dim); font-size: 12px; margin-top: 16px; max-width: 64ch; }
+#status { font: 400 11.5px/1 var(--mono); color: var(--dim); }
+#status.warn { color: var(--amber); }
+.drawer .msg {
+  flex: 1 1 260px; min-width: 0;
+  background: var(--ground); color: var(--ink);
+  border: 1px solid var(--tan); border-radius: var(--r);
+  font: 400 13px/1 var(--mono); padding: 7px 9px;
+}
+.drawer pre .ctx { color: var(--faint); display: block; }
+
+/* ---------- diff drawer ---------- */
+.drawer {
+  position: fixed; inset: auto 0 0 0; z-index: 30;
+  background: var(--surface); border-top: 1px solid var(--tan);
+  max-height: 62vh; display: flex; flex-direction: column;
+  box-shadow: 0 -14px 34px rgba(0,0,0,.5);
+}
+.drawer header {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding: 11px 16px; border-bottom: 1px solid var(--line);
+}
+.drawer h3 { margin: 0; font: 600 13px/1 var(--sans); }
+.drawer .sub { color: var(--dim); font-size: 12px; }
+.drawer pre {
+  margin: 0; padding: 14px 16px; overflow: auto;
+  font: 400 12.5px/1.65 var(--mono); color: var(--dim);
+}
+.drawer pre .add { color: var(--ink); background: #22301f; display: block; }
+.drawer pre .del { color: var(--crit); background: #2e1a19; display: block; }
+.drawer pre .cmd { color: var(--amber); display: block; }
 </style>
 
-<header>
-  <h1>FVWM <span>Bindings</span></h1>
-  <div class="tabs">
-    <button id="tab-list" class="on">List</button>
-    <button id="tab-map">Map</button>
+</head>
+<body>
+<div class="bar">
+  <div class="brand"><b>Deer DE</b><span>keymap</span></div>
+  <div class="seg" role="group" aria-label="View">
+    <button id="v-over" aria-pressed="true">Overview</button>
+    <button id="v-list" aria-pressed="false">List</button>
   </div>
-  <input type="search" id="q" placeholder="filter key, action, section…">
-  <span class="grow"></span>
-  <span id="status" class="note"></span>
-  <button id="add">+ Binding</button>
-  <button id="revert">Revert</button>
-  <button id="save" class="primary" disabled>Save &amp; Apply</button>
-</header>
-<main>
-  <div id="list"></div>
-  <div id="map" hidden></div>
-</main>
+  <input type="search" id="q" placeholder="key, action, or section…" aria-label="Filter bindings"
+         autocomplete="off" autocorrect="off" spellcheck="false">
+  <span class="spacer"></span>
+  <span id="status"></span>
+  <button class="act" id="add">Add binding</button>
+  <button class="act" id="reset">Revert</button>
+  <button class="act" id="commit" disabled>Commit</button>
+  <button class="act go" id="save" disabled>Save&#8230;</button>
+</div>
+
+<div class="shell">
+  <aside class="rail">
+    <div id="tally"></div>
+    <div>
+      <h2>Sections</h2>
+      <div class="navlist" id="nav"></div>
+    </div>
+    <div class="legend">
+      <h2>Context</h2>
+      <dl>
+        <dt>R</dt><dd>root window</dd>
+        <dt>W</dt><dd>application window</dd>
+        <dt>T</dt><dd>title bar</dd>
+        <dt>F</dt><dd>frame corners</dd>
+        <dt>S</dt><dd>frame sides</dd>
+        <dt>I</dt><dd>icon</dd>
+      </dl>
+    </div>
+  </aside>
+  <main>
+    <div id="over"></div>
+    <div id="list" hidden></div>
+  </main>
+</div>
 
 <script>
 const TOKEN = location.hash.slice(1);
-const MODS = [['C','Ctrl'], ['S','Shift'], ['M','Alt'], ['4','Super']];
-const CTXS = [['R','Root'], ['W','Window'], ['T','Title'], ['F','Frame'], ['S','Side'], ['I','Icon']];
+const api = (method, body) => fetch('/api/bindings', {
+  method,
+  headers: { 'X-Token': TOKEN, 'Content-Type': 'application/json' },
+  body: body && JSON.stringify(body),
+}).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t.trim())));
+
+// RECS0 is the last state read back from disk; every "changed" and "edited"
+// marker is measured against it.
+let RECS0 = [];
+let recs = [];
+let view = 'over';
+let focusSection = null;
+
+const MODS = [['C','Ctrl'],['S','Shift'],['M','Alt'],['4','Super']];
+const CTXS = [['R','root'],['W','window'],['T','title'],['F','frame'],['S','sides'],['I','icon']];
 const ALLCTX = 'RWDFSTI';
 
 const CODE2SYM = {
@@ -141,376 +448,755 @@ const CODE2SYM = {
   AudioVolumeUp:'XF86AudioRaiseVolume', AudioVolumeDown:'XF86AudioLowerVolume',
   AudioVolumeMute:'XF86AudioMute',
 };
-const codeToSym = c =>
-  CODE2SYM[c] || (/^Key[A-Z]$/.test(c) ? c[3]
-              : /^Digit\d$/.test(c) ? c[5]
-              : /^F\d{1,2}$/.test(c) ? c : null);
-
-let recs = [], pristine = '', view = 'list';
-
-const api = (method, body) => fetch('/api/bindings', {
-  method, headers: {'X-Token': TOKEN, 'Content-Type': 'application/json'},
-  body: body && JSON.stringify(body),
-}).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t)));
+const codeToSym = c => CODE2SYM[c]
+  || (/^Key[A-Z]$/.test(c) ? c[3] : /^Digit\d$/.test(c) ? c[5] : /^F\d{1,2}$/.test(c) ? c : null);
 
 const binds = () => recs.filter(r => r.t === 'bind');
 const modSet = m => new Set(m === 'A' || m === 'N' ? [] : [...m]);
-const canonMod = set => {
-  const s = MODS.map(([c]) => c).filter(c => set.has(c)).join('');
-  return s || 'N';
-};
+const canonMod = set => MODS.map(([c]) => c).filter(c => set.has(c)).join('') || 'N';
 const expandCtx = c => c.includes('A') ? ALLCTX : c;
+const el = (tag, cls, txt) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (txt != null) n.textContent = txt;
+  return n;
+};
 
-/* fvwm matches an exact modifier set unless the binding says A (any), and a
-   context list intersection is what makes two bindings collide. */
+/* '-' unbinds rather than competing, so `Mouse 1 R A -` ahead of a narrower
+   `Mouse 1 R M ...` is intent, not a collision. */
 function clashes() {
-  const out = new Set();
-  // '-' unbinds rather than competing, so `Mouse 1 R A -` before a narrower
-  // `Mouse 1 R M ...` is intent, not a collision.
+  const hit = new Set();
   const bs = binds().filter(b => b.enabled && b.action.trim() !== '-');
   for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) {
     const a = bs[i], b = bs[j];
     if (a.kind !== b.kind || a.key !== b.key || (a.win || '') !== (b.win || '')) continue;
-    const ca = expandCtx(a.ctx), cb = expandCtx(b.ctx);
-    if (![...ca].some(ch => cb.includes(ch))) continue;
-    const anyMod = a.mod === 'A' || b.mod === 'A';
+    if (![...expandCtx(a.ctx)].some(ch => expandCtx(b.ctx).includes(ch))) continue;
     const sa = modSet(a.mod), sb = modSet(b.mod);
     const same = sa.size === sb.size && [...sa].every(c => sb.has(c));
-    if (anyMod || same) { out.add(a); out.add(b); }
+    if (a.mod === 'A' || b.mod === 'A' || same) { hit.add(a); hit.add(b); }
   }
-  return out;
+  return hit;
 }
 
-const dirty = () => recs.some(r => r.dirty) || JSON.stringify(recs) !== pristine;
+function renderLine(b) {
+  return (b.enabled ? '' : '#') + (b.silent ? 'Silent ' : '') + b.kind + ' '
+    + (b.win ? b.win + ' ' : '') + `${b.key} ${b.ctx} ${b.mod} ${b.action}`;
+}
+const tupleOf = b => `${b.kind} ${b.win ? b.win + ' ' : ''}${b.key} ${b.ctx} ${b.mod}`;
+const changed = () => JSON.stringify(recs) !== JSON.stringify(RECS0);
 
-function touch(rec) {
-  if (rec) rec.dirty = true;
-  document.getElementById('save').disabled = !dirty();
-  render();
+function touch() {
+  document.getElementById('save').disabled = !changed();
+  syncCommitBtn();
+  draw();
 }
 
-function modLabel(m) {
-  if (m === 'A') return 'Any';
-  if (m === 'N') return '—';
-  const named = {C:'Ctrl', S:'Shift', M:'Alt', 4:'Super', 1:'Mod1', 2:'Num', L:'Lock'};
-  return [...m].map(c => named[c] || c).join('+');
+/* ---------- rail ---------- */
+
+function sectionOf(i) {
+  for (let j = i; j >= 0; j--) if (recs[j].t === 'sec' && recs[j].depth === 3) return recs[j].label;
+  return 'Ungrouped';
 }
 
-/* ---------- list view ---------- */
+/* One predicate drives both views, so a search that finds a binding in the list
+   lights the same key on the board. */
+function sectionMap() {
+  const m = new Map();
+  recs.forEach((r, i) => { if (r.t === 'bind') m.set(r, sectionOf(i)); });
+  return m;
+}
+function matcher() {
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const secs = sectionMap();
+  return rec => {
+    const s = secs.get(rec) || '';
+    if (focusSection && s !== focusSection) return false;
+    if (!q) return true;
+    return `${rec.key} ${rec.mod} ${rec.ctx} ${rec.action} ${s}`.toLowerCase().includes(q);
+  };
+}
 
-function chipRow(rec, kind) {
-  const wrap = document.createElement('span');
-  const spec = kind === 'mod' ? MODS : CTXS;
-  const any = document.createElement('span');
-  any.className = 'chip' + (rec[kind] === 'A' ? ' on' : '');
-  any.textContent = 'Any';
-  any.onclick = () => { rec[kind] = 'A'; touch(rec); };
+function drawRail() {
+  const c = clashes();
+  const t = document.getElementById('tally');
+  t.textContent = '';
+  const box = el('div', 'tally' + (c.size ? ' bad' : ''));
+  box.append(el('div', 'big', c.size ? String(c.size) : String(binds().length)));
+  box.append(el('div', 'lab', c.size
+    ? 'bindings collide on the same key, context and modifier'
+    : 'bindings, no collisions'));
+  t.append(box);
+
+  const counts = new Map();
+  recs.forEach((r, i) => {
+    if (r.t !== 'bind') return;
+    const s = sectionOf(i);
+    counts.set(s, (counts.get(s) || 0) + 1);
+  });
+  const nav = document.getElementById('nav');
+  nav.textContent = '';
+  const all = el('button', null, 'All bindings');
+  all.setAttribute('aria-current', focusSection === null);
+  all.append(el('span', 'n', String(binds().length)));
+  all.onclick = () => { focusSection = null; draw(); };
+  nav.append(all);
+  for (const [name, n] of counts) {
+    const b = el('button', null, name);
+    b.setAttribute('aria-current', focusSection === name);
+    b.append(el('span', 'n', String(n)));
+    b.onclick = () => { focusSection = focusSection === name ? null : name; draw(); };
+    nav.append(b);
+  }
+}
+
+/* ---------- list ---------- */
+
+function chipGroup(rec, field) {
+  const wrap = el('div', field === 'mod' ? 'mods' : 'ctxs');
+  const any = el('span', 'chip any', field === 'mod' ? 'any' : 'any');
+  any.setAttribute('aria-pressed', rec[field] === 'A');
+  any.setAttribute('role', 'button');
+  any.tabIndex = 0;
+  any.onclick = () => { rec[field] = 'A'; touch(); };
   wrap.append(any);
-  for (const [ch, name] of spec) {
-    const c = document.createElement('span');
-    const on = rec[kind] !== 'A' && rec[kind].includes(ch);
-    c.className = 'chip' + (on ? ' on' : '');
-    c.textContent = ch;
+  for (const [ch, name] of (field === 'mod' ? MODS : CTXS)) {
+    const c = el('span', 'chip', ch);
     c.title = name;
+    c.setAttribute('role', 'button');
+    c.tabIndex = 0;
+    c.setAttribute('aria-pressed', rec[field] !== 'A' && rec[field].includes(ch));
     c.onclick = () => {
-      const set = new Set(rec[kind] === 'A' || rec[kind] === 'N' ? [] : [...rec[kind]]);
+      const set = new Set(rec[field] === 'A' || rec[field] === 'N' ? [] : [...rec[field]]);
       set.has(ch) ? set.delete(ch) : set.add(ch);
-      rec[kind] = kind === 'mod' ? canonMod(set)
-                : ([...set].join('') || 'A');
-      touch(rec);
+      rec[field] = field === 'mod' ? canonMod(set) : ([...set].join('') || 'A');
+      touch();
     };
     wrap.append(c);
   }
   return wrap;
 }
 
-function keyChip(rec) {
-  const el = document.createElement('span');
-  el.className = 'chip key';
-  el.tabIndex = 0;
-  el.textContent = rec.key;
-  el.title = 'Click, then press the key. Modifiers are the chips beside it.';
-  const stop = () => { el.classList.remove('listen'); el.textContent = rec.key; };
-  el.onclick = () => {
-    el.classList.add('listen');
-    el.textContent = 'press…';
-    el.focus();
-  };
-  el.onblur = stop;
-  el.onkeydown = e => {
-    if (!el.classList.contains('listen')) return;
-    if (['ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight',
-         'MetaLeft','MetaRight'].includes(e.code)) return;
+function keycap(rec) {
+  const k = el('button', 'keycap', rec.key);
+  k.title = 'Click, then press the key. Modifiers are the chips to the left.';
+  k.onclick = () => { k.classList.add('listening'); k.textContent = 'press key'; k.focus(); };
+  k.onblur = () => { k.classList.remove('listening'); k.textContent = rec.key; };
+  k.onkeydown = e => {
+    if (!k.classList.contains('listening')) return;
+    if (/^(Shift|Control|Alt|Meta)(Left|Right)$/.test(e.code)) return;
     e.preventDefault();
-    if (e.code === 'Escape') return el.blur();
+    if (e.code === 'Escape') return k.blur();
     const sym = codeToSym(e.code);
-    if (!sym) { el.textContent = '?' + e.code; return; }
+    if (!sym) { k.textContent = 'unmapped'; return; }
     rec.key = sym;
-    el.classList.remove('listen');
-    touch(rec);
+    k.classList.remove('listening');
+    touch();
   };
-  return el;
+  return k;
 }
 
-function row(rec, clash) {
-  const tr = document.createElement('tr');
-  tr.className = 'b' + (rec.enabled ? '' : ' off') + (rec.dirty ? ' dirty' : '') +
-                 (clash.has(rec) ? ' clash' : '');
+function rowFor(rec, clash, orig) {
+  const edited = !orig || JSON.stringify(rec) !== JSON.stringify(orig);
+  const r = el('div', 'row' + (rec.enabled ? '' : ' off')
+    + (edited ? ' edited' : '') + (clash.has(rec) ? ' clash' : ''));
 
-  const chord = document.createElement('td');
-  chord.className = 'chord';
-  chord.append(chipRow(rec, 'mod'), keyChip(rec));
-  if (rec.kind !== 'Key') {
-    const k = document.createElement('span');
-    k.className = 'chip'; k.textContent = rec.kind; k.style.cursor = 'default';
-    chord.prepend(k);
-  }
+  const chord = el('div', 'chord');
+  if (rec.kind !== 'Key') chord.append(el('span', 'kindtag', rec.kind));
+  chord.append(chipGroup(rec, 'mod'), keycap(rec));
 
-  const ctx = document.createElement('td');
-  ctx.className = 'ctx';
-  ctx.append(chipRow(rec, 'ctx'));
+  const act = el('input', 'action');
+  act.value = rec.action;
+  act.spellcheck = false;
+  act.setAttribute('aria-label', 'Command');
+  act.oninput = () => {
+    rec.action = act.value;
+    document.getElementById('save').disabled = !changed();
+    r.classList.add('edited');
+  };
 
-  const act = document.createElement('td');
-  act.className = 'act';
-  const inp = document.createElement('input');
-  inp.className = 'act-in';
-  inp.value = rec.action;
-  inp.oninput = () => { rec.action = inp.value; rec.dirty = true;
-                        document.getElementById('save').disabled = !dirty(); };
-  act.append(inp);
-
-  const tools = document.createElement('td');
-  tools.className = 'tools';
-  const tog = document.createElement('button');
-  tog.className = 'icon';
-  tog.textContent = rec.enabled ? '◉' : '○';
-  tog.title = rec.enabled ? 'Disable (comment out)' : 'Enable';
-  tog.onclick = () => { rec.enabled = !rec.enabled; touch(rec); };
-  const del = document.createElement('button');
-  del.className = 'icon';
-  del.textContent = '✕';
+  const tools = el('div', 'tools');
+  const tog = el('button', null, rec.enabled ? '◉' : '○');
+  tog.title = rec.enabled ? 'Comment out' : 'Enable';
+  tog.setAttribute('aria-label', tog.title);
+  tog.onclick = () => { rec.enabled = !rec.enabled; touch(); };
+  const del = el('button', null, '✕');
   del.title = 'Delete';
+  del.setAttribute('aria-label', 'Delete');
   del.onclick = () => { recs.splice(recs.indexOf(rec), 1); touch(); };
   tools.append(tog, del);
 
-  tr.append(chord, ctx, act, tools);
-  return tr;
+  r.append(chord, chipGroup(rec, 'ctx'), act, tools);
+  return r;
 }
 
-function renderList() {
-  const q = document.getElementById('q').value.toLowerCase();
+function drawList() {
+  const q = document.getElementById('q').value.trim().toLowerCase();
   const clash = clashes();
   const host = document.getElementById('list');
   host.textContent = '';
-  let section = 'Ungrouped', table = null, shown = 0;
 
-  const openSection = () => {
-    const h = document.createElement('div');
-    h.className = 'sec';
-    h.textContent = section;
-    table = document.createElement('table');
-    table.innerHTML = '<thead><tr><th>Chord</th><th>Context</th><th>Action</th><th></th></tr></thead>';
-    const tb = document.createElement('tbody');
-    table.append(tb);
-    host.append(h, table);
-    return tb;
-  };
-  let tb = null;
-
-  for (const rec of recs) {
-    if (rec.t === 'sec') { section = rec.label; tb = null; continue; }
-    if (rec.t !== 'bind') continue;
-    const hay = `${rec.key} ${rec.mod} ${rec.ctx} ${rec.action} ${section}`.toLowerCase();
-    if (q && !hay.includes(q)) continue;
-    if (!tb) tb = openSection();
-    tb.append(row(rec, clash));
-    shown++;
+  const ok = matcher();
+  const secs = sectionMap();
+  const groups = new Map();
+  for (const rec of binds()) {
+    if (!ok(rec)) continue;
+    const s = secs.get(rec) || 'Ungrouped';
+    if (!groups.has(s)) groups.set(s, []);
+    groups.get(s).push(rec);
   }
-  const foot = document.createElement('p');
-  foot.className = clash.size ? 'warn' : 'note';
-  foot.textContent = `${shown} of ${binds().length} bindings` +
-    (clash.size ? ` · ${clash.size} in conflict (same key, overlapping context and modifiers)` : '');
-  host.append(foot);
+
+  if (!groups.size) {
+    host.append(el('p', 'empty', `Nothing matches “${q}”.`));
+    return;
+  }
+  const origByLine = new Map(RECS0.filter(r => r.t === 'bind').map(r => [r.raw, r]));
+  for (const [name, rows] of groups) {
+    const g = el('section', 'group');
+    g.append(el('h3', null, name));
+    const head = el('div', 'colhead');
+    head.append(el('span', null, 'Chord'), el('span', null, 'Context'),
+                el('span', null, 'Command'), el('span', null, ''));
+    g.append(head);
+    for (const rec of rows) g.append(rowFor(rec, clash, origByLine.get(rec.raw)));
+    host.append(g);
+  }
 }
 
-/* ---------- map view ---------- */
+/* ---------- map ---------- */
 
-const ROWS = [
-  [['Escape','Esc'],['F1'],['F2'],['F3'],['F4'],['F5'],['F6'],['F7'],['F8'],['F9'],['F10'],['F11'],['F12']],
-  [['grave','`'],['1'],['2'],['3'],['4'],['5'],['6'],['7'],['8'],['9'],['0'],['minus','-'],['equal','='],['BackSpace','⌫','w2']],
-  [['Tab','Tab','w2'],['Q'],['W'],['E'],['R'],['T'],['Y'],['U'],['I'],['O'],['P'],['bracketleft','['],['bracketright',']'],['backslash','\\']],
-  [['Caps_Lock','Caps','w2'],['A'],['S'],['D'],['F'],['G'],['H'],['J'],['K'],['L'],['semicolon',';'],['apostrophe','\''],['Return','⏎','w2']],
-  [['Shift','Shift','w3'],['Z'],['X'],['C'],['V'],['B'],['N'],['M'],['comma',','],['period','.'],['slash','/']],
-  [['space','Space','w5'],['Left','←'],['Down','↓'],['Up','↑'],['Right','→'],['Prior','PgUp'],['Next','PgDn'],['Home','Home'],['End','End']],
+/* Physical layout of the 8BitDo Retro Mechanical, so a key sits where the
+   finger expects it. `u` is key width in units, `h` row span on the numpad,
+   `mod` marks a modifier, `dead` a key that emits no X keysym to bind. */
+const K = (s, l, o = {}) => ({ s, l: l ?? s, ...o });
+const normKey = s => /^[a-zA-Z]$/.test(s) ? s.toUpperCase() : s;
+const FNROW = [
+  [K('Escape', 'ESC', { accent: true })],
+  [K('F1'), K('F2'), K('F3'), K('F4')],
+  [K('F5'), K('F6'), K('F7'), K('F8')],
+  [K('F9'), K('F10'), K('F11'), K('F12')],
+  [K('Print', 'PRTSC'), K('Scroll_Lock', 'SCRLK'), K('Pause', 'PAUSE')],
+  [K(null, 'FN', { dead: true }), K('XF86AudioMute', 'MUTE'),
+   K('XF86Calculator', 'CALC'), K(null, 'LOCK', { dead: true })],
 ];
+const ALPHA = [
+  [K('grave', '`'), K('1'), K('2'), K('3'), K('4'), K('5'), K('6'), K('7'), K('8'), K('9'), K('0'),
+   K('minus', '-'), K('equal', '='), K('BackSpace', 'BACKSPACE', { u: 2 })],
+  [K('Tab', 'TAB', { u: 1.5 }), K('Q'), K('W'), K('E'), K('R'), K('T'), K('Y'), K('U'), K('I'),
+   K('O'), K('P'), K('bracketleft', '['), K('bracketright', ']'), K('backslash', '\\', { u: 1.5 })],
+  [K('Caps_Lock', 'CAPSLOCK', { u: 1.75, mod: true }), K('A'), K('S'), K('D'), K('F'), K('G'),
+   K('H'), K('J'), K('K'), K('L'), K('semicolon', ';'), K('apostrophe', "'"),
+   K('Return', 'ENTER', { u: 2.25 })],
+  [K('Shift_L', 'SHIFT', { u: 2.25, mod: true }), K('Z'), K('X'), K('C'), K('V'), K('B'), K('N'),
+   K('M'), K('comma', ','), K('period', '.'), K('slash', '/'),
+   K('Shift_R', 'SHIFT', { u: 2.75, mod: true })],
+  [K('Control_L', 'CTRL', { u: 1.25, mod: true }), K('Super_L', 'WIN', { u: 1.25, mod: true }),
+   K('Alt_L', 'ALT', { u: 1.25, mod: true }), K('space', '', { u: 6.25 }),
+   K('Alt_R', 'ALT', { u: 1.25, mod: true }), K(null, 'B', { dead: true, accent: true }),
+   K(null, 'A', { dead: true, accent: true }), K('Control_R', 'CTRL', { u: 1.25, mod: true })],
+];
+const NAV = [K('Insert', 'INS'), K('Home', 'HOME'), K('Prior', 'PGUP'),
+             K('Delete', 'DEL'), K('End', 'END'), K('Next', 'PGDN')];
+const ARROWS = [K('Up', '▲'), K('Left', '◀'), K('Down', '▼'), K('Right', '▶')];
 const NUMPAD = [
-  'KP_Home','KP_Up','KP_Prior',
-  'KP_Left','KP_Begin','KP_Right',
-  'KP_End','KP_Down','KP_Next',
+  K('Num_Lock', 'NUM'), K('KP_Divide', '/'), K('KP_Multiply', '*'), K('KP_Subtract', '-'),
+  K('KP_Home', '7'), K('KP_Up', '8'), K('KP_Prior', '9'), K('KP_Add', '+', { h: 2 }),
+  K('KP_Left', '4'), K('KP_Begin', '5'), K('KP_Right', '6'),
+  K('KP_End', '1'), K('KP_Down', '2'), K('KP_Next', '3'), K('KP_Enter', 'ENTER', { h: 2 }),
+  K('KP_Insert', '0', { cspan: 2 }), K('KP_Delete', '.'),
 ];
-const PADLABEL = {KP_Home:'↖ 7', KP_Up:'↑ 8', KP_Prior:'↗ 9', KP_Left:'← 4',
-  KP_Begin:'· 5', KP_Right:'→ 6', KP_End:'↙ 1', KP_Down:'↓ 2', KP_Next:'↘ 3'};
+const NUMSUB = { KP_Home: '7', KP_Up: '8', KP_Prior: '9', KP_Left: '4', KP_Begin: '5',
+  KP_Right: '6', KP_End: '1', KP_Down: '2', KP_Next: '3', KP_Insert: '0', KP_Delete: '.' };
 
-let layer = new Set(['4']);
+const MODNAME = { C: 'Ctrl', S: 'Shift', M: 'Alt', '4': 'Super', '1': 'Mod1', '2': 'NumLock', L: 'Lock' };
+const modLabel = m => m === 'N' ? 'no modifier'
+  : m === 'A' ? 'any modifier'
+  : [...m].map(c => MODNAME[c] || c).join(' + ');
 
-function renderMap() {
-  const host = document.getElementById('map');
-  host.textContent = '';
+/* Colour is assigned by how much a layer carries, not by a fixed hue per
+   modifier, so the busiest layers stay distinguishable as the config changes. */
+const LAYER_INK = ['#c96f6a', '#c98a52', '#d8b24a', '#9c8f6a', '#8f7d74'];
+let hidden = new Set();
+let selectedKey = null;
+let selectedMouse = null;
 
-  const bar = document.createElement('div');
-  bar.className = 'layer';
-  const lbl = document.createElement('span');
-  lbl.className = 'note';
-  lbl.textContent = 'Modifier layer:';
-  bar.append(lbl);
-  for (const [ch, name] of MODS) {
-    const c = document.createElement('span');
-    c.className = 'chip' + (layer.has(ch) ? ' on' : '');
-    c.textContent = name;
-    c.onclick = () => { layer.has(ch) ? layer.delete(ch) : layer.add(ch); render(); };
-    bar.append(c);
+/* Title-bar buttons are odd on the left, even on the right, outermost first,
+   which is the diagram the config's own Reference block draws in ASCII. */
+const TITLE_LEFT = ['1', '3', '5'];
+const TITLE_RIGHT = ['2', '4', '6'];
+const ZONES = [['T', 'title bar'], ['S', 'sides'], ['F', 'corners'],
+               ['W', 'window'], ['I', 'icon'], ['R', 'root']];
+const MBTN = [['1', 'left'], ['2', 'middle'], ['3', 'right'],
+              ['6', 'tilt L'], ['7', 'tilt R'], ['8', 'back'], ['9', 'fwd']];
+
+function mousePanel(live, inkOf) {
+  const mice = binds().filter(b => b.enabled && b.kind === 'Mouse');
+  const byBtn = new Map();
+  const byCtx = new Map();
+  for (const b of mice) {
+    if (!byBtn.has(b.key)) byBtn.set(b.key, []);
+    byBtn.get(b.key).push(b);
+    for (const ch of expandCtx(b.ctx)) {
+      if (!byCtx.has(ch)) byCtx.set(ch, []);
+      byCtx.get(ch).push(b);
+    }
   }
-  const cur = document.createElement('span');
-  cur.className = 'note';
-  cur.textContent = `→ ${canonMod(layer)}`;
-  bar.append(cur);
-  host.append(bar);
+  const badgesFor = list => {
+    const w = el('div', 'badges');
+    for (const b of list.slice(0, 2)) {
+      const t = el('span', 'badge', b.mod === 'A' ? '·' : b.mod);
+      t.style.background = inkOf.get(b.mod) || 'var(--tan)';
+      if (!live(b)) t.style.opacity = '.2';
+      w.append(t);
+    }
+    if (list.length > 2) w.append(el('span', 'badge more', '+' + (list.length - 2)));
+    return w;
+  };
+  const pick = (kind, v) => () => {
+    selectedKey = null;
+    selectedMouse = (selectedMouse && selectedMouse.kind === kind && selectedMouse.v === v)
+      ? null : { kind, v };
+    draw();
+  };
+  const isSel = (kind, v) => selectedMouse && selectedMouse.kind === kind && selectedMouse.v === v;
 
-  const want = canonMod(layer);
+  const mkBtn = (cls, num, label) => {
+    const list = byBtn.get(num) || [];
+    const lit = list.filter(live);
+    const b = el('button', cls + (lit.length ? ' used' : '') + (isSel('btn', num) ? ' sel' : ''));
+    b.append(el('b', null, num));
+    if (list.length) b.append(badgesFor(list));
+    b.title = list.length
+      ? `Button ${num} (${label})\n` + list.map(x => `[${x.ctx}] ${x.mod}  ${x.action}`).join('\n')
+      : `Button ${num} (${label}) is unbound`;
+    b.onclick = list.length ? pick('btn', num)
+      : () => addBinding({ kind: 'Mouse', key: num, ctx: 'A', mod: 'A' });
+    return b;
+  };
+
+  const wrap = el('div', 'periph');
+
+  const mcol = el('div');
+  mcol.append(el('h4', null, 'Pointer buttons'));
+  const mrow = el('div', 'mousewrap');
+  const mouse = el('div', 'mouse');
+  mouse.append(mkBtn('mbtn b1', '1', 'left'), mkBtn('mbtn b2', '2', 'middle'), mkBtn('mbtn b3', '3', 'right'));
+  const extra = el('div', 'extra');
+  for (const [num, label] of MBTN.slice(3)) extra.append(mkBtn('mbtn', num, label));
+  mrow.append(mouse, extra);
+  mcol.append(mrow);
+  wrap.append(mcol);
+
+  const fcol = el('div');
+  fcol.append(el('h4', null, 'Contexts'));
+  const frame = el('div', 'frame');
+  const zoneCell = (ch, cls) => {
+    const list = byCtx.get(ch) || [];
+    const z = el('button', (cls || 'zone') + (list.some(live) ? ' used' : '') + (isSel('ctx', ch) ? ' sel' : ''));
+    z.append(el('b', null, ch));
+    z.title = list.length
+      ? `${ch}\n` + list.map(x => `button ${x.key} ${x.mod}  ${x.action}`).join('\n')
+      : `${ch} has no mouse binding`;
+    z.onclick = list.length ? pick('ctx', ch)
+      : () => addBinding({ kind: 'Mouse', key: '1', ctx: ch, mod: 'A' });
+    return z;
+  };
+  frame.append(zoneCell('F'), zoneCell('S'), zoneCell('F'), zoneCell('S'));
+  const inner = el('div', 'inner');
+  const tbar = el('div', 'tbar');
+  for (const n of TITLE_LEFT) if (byCtx.has(n)) tbar.append(zoneCell(n, 'tbtn'));
+  tbar.append(zoneCell('T', 'zone tfill'));
+  for (const n of [...TITLE_RIGHT].reverse()) if (byCtx.has(n)) tbar.append(zoneCell(n, 'tbtn'));
+  inner.append(tbar, zoneCell('W', 'zone wbody'));
+  frame.append(inner, zoneCell('S'), zoneCell('F'), zoneCell('S'), zoneCell('F'));
+  fcol.append(frame);
+  const row = el('div', 'zonerow');
+  for (const [ch, name] of [['I', 'icon'], ['R', 'root']]) {
+    const list = byCtx.get(ch) || [];
+    const z = el('button', 'zone' + (list.some(live) ? ' used' : '') + (isSel('ctx', ch) ? ' sel' : ''));
+    const inner2 = el('span', 'zn');
+    inner2.append(el('b', null, ch), el('span', null, name));
+    if (list.length) inner2.append(badgesFor(list));
+    z.append(inner2);
+    z.onclick = list.length ? pick('ctx', ch)
+      : () => addBinding({ kind: 'Mouse', key: '1', ctx: ch, mod: 'A' });
+    row.append(z);
+  }
+  fcol.append(row);
+  fcol.append(el('p', 'mhint', 'Title buttons: odd left, even right, outermost first. '
+    + 'One appears only once something is bound to it.'));
+  wrap.append(fcol);
+  return wrap;
+}
+
+function layerStats() {
+  const tally = new Map();
+  for (const b of binds()) {
+    if (!b.enabled || b.kind !== 'Key') continue;
+    tally.set(b.mod, (tally.get(b.mod) || 0) + 1);
+  }
+  const order = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+  return order.map(([mod, n], i) => ({ mod, n, ink: LAYER_INK[Math.min(i, LAYER_INK.length - 1)] }));
+}
+
+function drawOverview() {
+  const host = document.getElementById('over');
+  host.textContent = '';
+  const stats = layerStats();
+  const inkOf = new Map(stats.map(s => [s.mod, s.ink]));
+
+  const key = el('div', 'layerkey');
+  for (const s of stats) {
+    const b = el('button', 'lk');
+    b.style.borderLeftColor = s.ink;
+    b.setAttribute('aria-pressed', !hidden.has(s.mod));
+    b.append(el('span', 'code', s.mod));
+    b.append(el('span', 'name', modLabel(s.mod)));
+    b.append(el('span', 'n', String(s.n)));
+    b.onclick = () => { hidden.has(s.mod) ? hidden.delete(s.mod) : hidden.add(s.mod); draw(); };
+    key.append(b);
+  }
+  host.append(key);
+
+  // `Key k` and `Key K` name the same physical key to X, so one cap owns both.
   const at = new Map();
   for (const b of binds()) {
     if (!b.enabled || b.kind !== 'Key') continue;
-    const m = b.mod === 'A' ? want : b.mod;
-    if (m !== want) continue;
-    if (!at.has(b.key)) at.set(b.key, []);
-    at.get(b.key).push(b);
+    const k = normKey(b.key);
+    if (!at.has(k)) at.set(k, []);
+    at.get(k).push(b);
   }
 
-  const mkKey = (sym, label, extra) => {
-    const hits = at.get(sym) || [];
-    const el = document.createElement('button');
-    el.className = 'k' + (hits.length ? ' bound' : '') + (hits.length > 1 ? ' multi' : '') +
-                   (extra ? ' ' + extra : '');
-    const b = document.createElement('b');
-    b.textContent = label || sym;
-    el.append(b);
-    if (hits.length) {
-      const i = document.createElement('i');
-      i.textContent = hits[0].action.replace(/^(Exec exec|Exec)\s+/, '');
-      el.append(i);
-      el.title = hits.map(h => `[${h.ctx}] ${h.action}`).join('\n');
-    } else {
-      el.title = `${modLabel(want)}+${sym} — unbound, click to add`;
+  const ok = matcher();
+  const live = b => ok(b) && !hidden.has(b.mod);
+
+  const cap = k => {
+    const all = k.s ? (at.get(k.s) || []) : [];
+    const shown = all.filter(live);
+    const c = el('button', 'cap' + (k.dead ? ' dead' : k.mod ? ' modkey' : '')
+      + (k.accent ? ' accent' : '')
+      + (shown.length ? ' used' : all.length ? ' dim' : k.dead ? '' : ' free')
+      + (k.s && selectedKey === k.s ? ' sel' : ''));
+    if (k.u && k.u !== 1) c.style.width = `calc(var(--u) * ${k.u} + ${(k.u - 1) * 4}px)`;
+    if (k.h) c.style.gridRow = `span ${k.h}`;
+    if (k.cspan) { c.style.gridColumn = `span ${k.cspan}`; c.style.width = 'auto'; }
+    c.append(el('b', null, k.l));
+    if (NUMSUB[k.s]) c.append(el('span', 'sub', k.s.replace('KP_', '')));
+    if (k.dead) {
+      c.disabled = true;
+      c.title = `${k.l} sends no X keysym, so fvwm cannot bind it`;
+      return c;
     }
-    el.onclick = () => {
-      if (hits.length) return jumpTo(hits[0]);
-      addBinding({key: sym, mod: want});
-    };
-    return el;
+    if (all.length) {
+      const badges = el('div', 'badges');
+      for (const b of all.slice(0, 3)) {
+        const t = el('span', 'badge', b.mod);
+        t.style.background = inkOf.get(b.mod) || 'var(--tan)';
+        if (!live(b)) t.style.opacity = '.2';
+        badges.append(t);
+      }
+      if (all.length > 3) badges.append(el('span', 'badge more', '+' + (all.length - 3)));
+      c.append(badges);
+      c.title = `${k.s}\n` + all.map(b => `${b.mod} [${b.ctx}]  ${b.action}`).join('\n');
+      c.onclick = () => {
+        selectedMouse = null;
+        selectedKey = selectedKey === k.s ? null : k.s;
+        draw();
+      };
+    } else {
+      c.title = `${k.s} is unbound on every layer`;
+      c.onclick = () => addBinding({ key: k.s, mod: '4' });
+    }
+    return c;
   };
 
-  const kbd = document.createElement('div');
-  kbd.className = 'kbd';
-  for (const r of ROWS) {
-    const rowEl = document.createElement('div');
-    rowEl.className = 'krow';
-    for (const [sym, label, w] of r) rowEl.append(mkKey(sym, label, w));
-    kbd.append(rowEl);
+  const scroll = el('div', 'mapscroll');
+  const board = el('div', 'board');
+
+  const fn = el('div', 'fnrow');
+  for (const group of FNROW) {
+    const g = el('div', 'krow');
+    for (const k of group) g.append(cap(k));
+    fn.append(g);
+  }
+  board.append(fn);
+
+  const decks = el('div', 'decks');
+  const alpha = el('div', 'kbd');
+  for (const r of ALPHA) {
+    const rowEl = el('div', 'krow');
+    for (const k of r) rowEl.append(cap(k));
+    alpha.append(rowEl);
+  }
+  const mid = el('div', 'midcol');
+  const nav = el('div', 'nav');
+  for (const k of NAV) nav.append(cap(k));
+  const arrows = el('div', 'arrows');
+  for (const k of ARROWS) arrows.append(cap(k));
+  mid.append(nav, arrows);
+  const pad = el('div', 'numpad');
+  for (const k of NUMPAD) pad.append(cap(k));
+  decks.append(alpha, mid, pad);
+  board.append(decks);
+
+  scroll.append(board);
+  host.append(scroll);
+
+  host.append(mousePanel(live, inkOf));
+
+  if (selectedKey) host.append(detailFor(selectedKey, at.get(selectedKey) || []));
+  else if (selectedMouse) {
+    const { kind, v } = selectedMouse;
+    const mice = binds().filter(b => b.enabled && b.kind === 'Mouse');
+    const list = kind === 'btn'
+      ? mice.filter(b => b.key === v)
+      : mice.filter(b => expandCtx(b.ctx).includes(v));
+    const label = kind === 'btn' ? `Mouse button ${v}` : `Context ${v}`;
+    host.append(detailFor(label, list, { seed: kind === 'btn'
+      ? { kind: 'Mouse', key: v, ctx: 'A', mod: 'A' }
+      : { kind: 'Mouse', key: '1', ctx: v, mod: 'A' } }));
   }
 
-  const pads = document.createElement('div');
-  pads.className = 'pads';
-  pads.append(kbd);
-  const pad = document.createElement('div');
-  pad.className = 'pad';
-  for (const sym of NUMPAD) pad.append(mkKey(sym, PADLABEL[sym]));
-  pads.append(pad);
-  host.append(pads);
-
-  const n = document.createElement('p');
-  n.className = 'note mapnote';
-  n.textContent = `Numpad names assume NumLock off, matching the config. ` +
-    `Filled keys are bound on the ${modLabel(want)} layer; amber outline means more than one context.`;
+  const total = binds().filter(b => b.enabled && b.kind === 'Key').length;
+  const lit = binds().filter(b => b.enabled && b.kind === 'Key' && live(b)).length;
+  const filtering = document.getElementById('q').value.trim() || focusSection || hidden.size;
+  const n = el('p', 'maplegend');
+  const mouseN = binds().filter(b => b.enabled && b.kind === 'Mouse').length;
+  n.textContent = filtering
+    ? `${lit} of ${total} lit, the rest dimmed.`
+    : `${[...at.keys()].length} keys, ${total} key bindings, ${mouseN} mouse bindings. `
+      + 'Badge colour is the layer. Click to edit, empty keys are free. NumLock off.';
   host.append(n);
 }
 
-function jumpTo(rec) {
-  view = 'list';
-  document.getElementById('q').value = rec.action.slice(0, 24);
-  render();
+function detailFor(sym, list, opts = {}) {
+  const clash = clashes();
+  const origByLine = new Map(RECS0.filter(r => r.t === 'bind').map(r => [r.raw, r]));
+  const d = el('section', 'detail');
+  const h = el('header');
+  h.append(el('b', null, sym));
+  h.append(el('span', 'sub', list.length === 1 ? '1 binding here' : `${list.length} bindings here`));
+  h.append(el('span', 'spacer'));
+  const add = el('button', 'jump', opts.seed ? 'Add binding' : 'Add a layer');
+  add.title = opts.seed ? `Add another binding on ${sym}` : `Bind ${sym} on another modifier layer`;
+  add.onclick = () => addBinding(opts.seed || { key: sym, mod: '4' });
+  const close = el('button', 'jump', 'Close');
+  close.onclick = () => { selectedKey = null; selectedMouse = null; draw(); };
+  h.append(add, close);
+  d.append(h);
+  const body = el('div', 'detailrows');
+  const head = el('div', 'colhead');
+  head.append(el('span', null, 'Chord'), el('span', null, 'Context'),
+              el('span', null, 'Command'), el('span', null, ''));
+  body.append(head);
+  for (const b of list) body.append(rowFor(b, clash, origByLine.get(b.raw)));
+  d.append(body);
+  return d;
 }
+
+/* ---------- actions ---------- */
 
 function addBinding(seed = {}) {
   const kind = seed.kind || 'Key';
-  const rec = {
-    t: 'bind', kind, silent: true, enabled: true, win: null,
+  const rec = { t: 'bind', kind, silent: true, enabled: true, win: null,
     key: seed.key || 'F12', ctx: seed.ctx || 'A', mod: seed.mod || '4',
-    action: seed.action || 'Nop', raw: '', dirty: true,
-  };
-  // Land it beside its own kind so it stays inside a section rather than after
-  // the file's closing fold markers.
+    action: seed.action || 'Nop', raw: '' };
   let at = -1;
   recs.forEach((r, i) => { if (r.t === 'bind' && r.kind === kind) at = i; });
   at < 0 ? recs.push(rec) : recs.splice(at + 1, 0, rec);
-  view = 'list';
+  focusSection = null;
+  hidden.clear();
   document.getElementById('q').value = '';
+  // Stay where the user is. On the board that means opening the new binding in
+  // the detail panel under the key they just clicked.
+  if (view === 'over') { selectedKey = kind === 'Key' ? rec.key : null; selectedMouse = null; }
   touch();
 }
 
-/* ---------- shell ---------- */
-
-function render() {
-  document.getElementById('tab-list').classList.toggle('on', view === 'list');
-  document.getElementById('tab-map').classList.toggle('on', view === 'map');
-  document.getElementById('list').hidden = view !== 'list';
-  document.getElementById('map').hidden = view !== 'map';
-  view === 'list' ? renderList() : renderMap();
-}
-
 const setStatus = (msg, warn) => {
-  const el = document.getElementById('status');
-  el.textContent = msg;
-  el.className = warn ? 'warn' : 'note';
+  const s = document.getElementById('status');
+  s.textContent = msg;
+  s.className = warn ? 'warn' : '';
 };
 
-async function load() {
-  const data = await api('GET');
-  recs = data.records;
-  pristine = JSON.stringify(recs);
-  setStatus(data.file.replace(/^.*\/\.fvwm\//, '~/.fvwm/'));
-  document.getElementById('save').disabled = true;
-  render();
+/* What the next write would do, measured against the file as last read. */
+function pendingChange() {
+  const before = RECS0.filter(r => r.t === 'bind');
+  const after = binds();
+  const beforeLines = new Set(before.map(renderLine));
+  const afterLines = new Set(after.map(renderLine));
+  const liveBefore = new Set(before.filter(b => b.enabled).map(tupleOf));
+  const liveAfter = new Set(after.filter(b => b.enabled).map(tupleOf));
+  return {
+    added: [...afterLines].filter(l => !beforeLines.has(l)),
+    removed: [...beforeLines].filter(l => !afterLines.has(l)),
+    unbinds: [...liveBefore].filter(t => !liveAfter.has(t)),
+  };
 }
 
-document.getElementById('save').onclick = async () => {
+function confirmDrawer(p) {
+  document.getElementById('drawer')?.remove();
+  const d = el('aside', 'drawer');
+  d.id = 'drawer';
+  const h = el('header');
+  h.append(el('h3', null, 'Write to ~/.fvwm/bindings?'));
+  h.append(el('span', 'sub', `${p.added.length} added, ${p.removed.length} removed, ${p.unbinds.length} to unbind`));
+  h.append(el('span', 'spacer'));
+  const go = el('button', 'act go', 'Write & apply');
+  const cancel = el('button', 'act', 'Cancel');
+  const close = () => { d.remove(); removeEventListener('keydown', onKey); };
+  const onKey = e => {
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    if (e.key === 'Enter') { e.preventDefault(); go.click(); }
+  };
+  cancel.onclick = close;
+  go.onclick = async () => { go.disabled = true; close(); await writeNow(); };
+  h.append(go, cancel);
+  const pre = el('pre');
+  for (const l of p.removed) pre.append(el('span', 'del', '- ' + l));
+  for (const l of p.added) pre.append(el('span', 'add', '+ ' + l));
+  pre.append(el('span', 'ctx', '\nthen sent to fvwm:'));
+  for (const t of p.unbinds) pre.append(el('span', 'cmd', '  ' + t + ' -'));
+  pre.append(el('span', 'cmd', '  Read bindings'));
+  d.append(h, pre);
+  document.body.append(d);
+  addEventListener('keydown', onKey);
+  go.focus();
+}
+
+async function writeNow() {
   const btn = document.getElementById('save');
   btn.disabled = true;
   try {
-    const r = await api('PUT', {records: recs});
+    const r = await api('PUT', { records: recs });
     await load();
     setStatus(r.ok
-      ? `applied · ${r.removed.length} unbound · backup ${r.backup.replace(/^.*\//, '')}`
+      ? `written · ${r.removed.length} unbound · backup ${r.backup.replace(/^.*\//, '')}`
       : 'written, but FvwmCommand failed, check FvwmMFL', !r.ok);
   } catch (e) {
     setStatus('save failed: ' + e, true);
     btn.disabled = false;
   }
-};
-document.getElementById('revert').onclick = load;
-document.getElementById('add').onclick = () => addBinding();
-document.getElementById('q').oninput = () => view === 'list' && renderList();
-document.getElementById('tab-list').onclick = () => { view = 'list'; render(); };
-document.getElementById('tab-map').onclick = () => { view = 'map'; render(); };
-addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-    e.preventDefault();
-    document.getElementById('save').click();
-  }
-});
+}
 
-// Relaunching hands the already-open tab a new token in the fragment, which on
-// its own would not reload the document and would leave a dead token behind.
+async function load() {
+  const d = await api('GET');
+  RECS0 = d.records;
+  recs = structuredClone(RECS0);
+  document.getElementById('save').disabled = true;
+  draw();
+  refreshGit();
+  return d;
+}
+
+let git = { repo: false, dirty: false };
+
+function syncCommitBtn() {
+  const btn = document.getElementById('commit');
+  // Committing the file on disk while edits are still pending would record a
+  // state you never saved, so the editor has to be clean first.
+  const pending = !document.getElementById('save').disabled;
+  btn.disabled = !git.repo || !git.dirty || pending;
+  btn.textContent = !git.repo ? 'Not a repo'
+    : pending ? 'Save first'
+    : git.dirty ? 'Commit' : 'Committed';
+  btn.title = git.repo ? `branch ${git.branch}` : 'no git repo here';
+}
+
+async function refreshGit() {
+  try {
+    git = await fetch('/api/git', { headers: { 'X-Token': TOKEN } }).then(r => r.json());
+  } catch { git = { repo: false, dirty: false }; }
+  syncCommitBtn();
+}
+
+function commitDrawer() {
+  document.getElementById('drawer')?.remove();
+  const d = el('aside', 'drawer');
+  d.id = 'drawer';
+  const h = el('header');
+  h.append(el('h3', null, 'Commit bindings'));
+  h.append(el('span', 'sub', `on ${git.branch}`));
+  const msg = el('input', 'msg');
+  msg.id = 'commit-msg';
+  msg.value = 'update keybindings';
+  msg.setAttribute('aria-label', 'Commit message');
+  h.append(msg);
+  const go = el('button', 'act go', 'Commit');
+  const cancel = el('button', 'act', 'Cancel');
+  cancel.onclick = () => d.remove();
+  go.onclick = async () => {
+    go.disabled = true;
+    try {
+      const r = await fetch('/api/commit', {
+        method: 'POST',
+        headers: { 'X-Token': TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg.value }),
+      }).then(x => x.ok ? x.json() : x.text().then(t => Promise.reject(t.trim())));
+      if (r.ok) { setStatus('committed ' + r.sha); d.remove(); refreshGit(); }
+      else { setStatus('commit failed: ' + r.error, true); go.disabled = false; }
+    } catch (e) {
+      setStatus('commit failed: ' + e, true);
+      go.disabled = false;
+    }
+  };
+  h.append(go, cancel);
+  const pre = el('pre');
+  for (const line of (git.diff || '(no diff)').split('\n')) {
+    const cls = line.startsWith('+++') || line.startsWith('---') ? 'ctx'
+      : line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : 'ctx';
+    pre.append(el('span', cls, line));
+  }
+  d.append(h, pre);
+  document.body.append(d);
+  msg.focus();
+  msg.select();
+}
+
+function save() {
+  if (document.getElementById('save').disabled) return;
+  const p = pendingChange();
+  if (!p.added.length && !p.removed.length) {
+    setStatus('nothing to write');
+    return;
+  }
+  confirmDrawer(p);
+}
+
+function draw() {
+  document.getElementById('v-over').setAttribute('aria-pressed', view === 'over');
+  document.getElementById('v-list').setAttribute('aria-pressed', view === 'list');
+  document.getElementById('over').hidden = view !== 'over';
+  document.getElementById('list').hidden = view !== 'list';
+  drawRail();
+  view === 'list' ? drawList() : drawOverview();
+}
+
+document.getElementById('v-over').onclick = () => { view = 'over'; draw(); };
+document.getElementById('v-list').onclick = () => { view = 'list'; draw(); };
+document.getElementById('q').oninput = draw;
+document.getElementById('add').onclick = () => addBinding();
+document.getElementById('save').onclick = save;
+document.getElementById('commit').onclick = commitDrawer;
+document.getElementById('reset').onclick = async () => {
+  focusSection = null;
+  selectedKey = null;
+  selectedMouse = null;
+  hidden.clear();
+  document.getElementById('q').value = '';
+  document.getElementById('drawer')?.remove();
+  const d = await load();
+  setStatus('reverted to ' + d.file.replace(/^.*\/\.fvwm\//, '~/.fvwm/'));
+};
+addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
+});
+// Relaunching hands an already-open tab a new token in the fragment, which on
+// its own would not reload and would leave a dead token behind.
 addEventListener('hashchange', () => location.reload());
 
-load().catch(e => setStatus('load failed: ' + e, true));
+load()
+  .then(d => setStatus(d.file.replace(/^.*\/\.fvwm\//, '~/.fvwm/')))
+  .catch(e => setStatus('load failed: ' + e, true));
 </script>
+</body>
+</html>

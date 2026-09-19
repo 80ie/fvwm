@@ -16,4 +16,7 @@ images
 # Interactive FvwmConsole command history
 .FvwmConsole-History
 
+# Pre-save backup written by bin/fvwm-keys
+bindings.bak
+
 archive

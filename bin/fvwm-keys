@@ -124,13 +124,25 @@ def parse(text):
     return records
 
 
+def _fields(b):
+    return (b.kind, b.silent, b.enabled, b.win, b.key, b.ctx, b.mod, b.action)
+
+
 def render(records):
+    """Reprint a binding only when it actually differs from the line it came from.
+
+    Deriving that from the record beats trusting a "dirty" flag the client has to
+    remember to set: a missed flag would silently discard the edit.
+    """
     out = []
     for r in records:
-        if r["t"] == "bind" and r.get("dirty"):
-            out.append(Binding(**{k: v for k, v in r.items() if k in Binding.__annotations__}).render())
-        else:
+        if r["t"] != "bind":
             out.append(r["raw"])
+            continue
+        b = Binding(**{k: v for k, v in r.items() if k in Binding.__annotations__})
+        was = parse_binding(b.raw) if b.raw else None
+        # An unchanged line keeps its original column alignment.
+        out.append(b.raw if was and _fields(was) == _fields(b) else b.render())
     return "\n".join(out) + "\n"
 
 
@@ -146,6 +158,39 @@ def fvwm(cmd):
     return subprocess.run(
         ["FvwmCommand", cmd], capture_output=True, text=True, timeout=5
     ).returncode == 0
+
+
+def git(*args):
+    # USERDIR is usually the ~/.fvwm symlink; resolve so git sees the real repo.
+    return subprocess.run(
+        ["git", "-C", str(USERDIR.resolve()), *args],
+        capture_output=True, text=True, timeout=15,
+    )
+
+
+def git_state():
+    if git("rev-parse", "--git-dir").returncode != 0:
+        return {"repo": False}
+    status = git("status", "--porcelain", "--", BINDINGS.name).stdout
+    diff = git("diff", "--", BINDINGS.name).stdout
+    if status.lstrip().startswith("??"):
+        diff = f"{BINDINGS.name} is untracked; the whole file will be added."
+    return {
+        "repo": True,
+        "dirty": bool(status.strip()),
+        "branch": git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip(),
+        "diff": diff[:40000],
+    }
+
+
+def git_commit(message):
+    """Commit only the bindings file, leaving anything else staged untouched."""
+    if git("add", "--", BINDINGS.name).returncode != 0:
+        return {"ok": False, "error": "git add failed"}
+    done = git("commit", "-m", message, "--", BINDINGS.name)
+    if done.returncode != 0:
+        return {"ok": False, "error": (done.stderr or done.stdout).strip()[:600]}
+    return {"ok": True, "sha": git("rev-parse", "--short", "HEAD").stdout.strip()}
 
 
 def apply(before, after):
@@ -196,8 +241,24 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authed():
                 return
             self.reply({"file": str(BINDINGS), "records": parse(BINDINGS.read_text())})
+        elif path == "/api/git":
+            if not self.authed():
+                return
+            self.reply(git_state())
         else:
             self.send_error(404)
+
+    def do_POST(self):
+        self.server.touch()
+        if self.path != "/api/commit":
+            return self.send_error(404)
+        if not self.authed():
+            return
+        n = int(self.headers.get("Content-Length", 0))
+        message = json.loads(self.rfile.read(n)).get("message", "").strip()
+        if not message:
+            return self.send_error(400, "empty commit message")
+        self.reply(git_commit(message))
 
     def do_PUT(self):
         self.server.touch()
