@@ -29,3 +29,6 @@ docs/Wiki/
 
 # Runtime shelf collapse/live-alias state, written by bin/mk-shelf
 .shelf.state
+
+# Python bytecode cache from the shelf widgets
+__pycache__/

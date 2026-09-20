@@ -39,9 +39,15 @@ group SysMon System Monitor
      Frame -1, Colorset $[infostore.cs_shelf_well]
 
 group Media Media
-##  Height matches WindowSize in FvwmScript-ShelfMedia.  FvwmButtons resizes a
-##  swallowed window to its cell, but the script lays its widgets out at fixed
-##  positions and will not reflow, so a mismatch clips rather than adapts.
+##  bin/shelf-media-widget, a PyQt6 program: see PANEL-DESIGN.md for why this
+##  is no longer an FvwmScript.  It draws its own Photon bevels, so it gets
+##  Frame 0 and the plain shelf face rather than the sunken well -- a frame
+##  around it would double up on the ones it paints itself.
+##
+##  70 matches the widget's own size hint, which in turn is the reference's
+##  CD Player body.  Keep the two in step: FvwmButtons resizes a swallowed
+##  window to its cell, and while the widget reflows its gaps to absorb a
+##  few pixels, a large mismatch still looks wrong.
 70   Swallow(NoClose,UseOld) ShelfMedia \
-     'Module FvwmScript FvwmScript-ShelfMedia', \
-     Frame -1, Colorset $[infostore.cs_shelf_well]
+     'Exec exec $[FVWM_USERDIR]/bin/shelf-media-widget', \
+     Frame 0, Colorset $[infostore.cs_shelf]
