@@ -37,6 +37,16 @@
 ##  desktop.  ShelfDock holds everything swallowed -- pager, meters, media --
 ##  and is --static: it never swaps, so its swallows are stable.
 ##
+##  The kill-and-regenerate above is correct as designed, but it is not the
+##  only design.  FvwmButtons' Panel primitive swallows a window and hides it
+##  rather than destroying it, sliding it into view on a press
+##  (FvwmButtons.html, "CREATING PANELS"), so a panel-based accordion never
+##  destroys anything and the stranding problem does not exist for it.  The
+##  catch is that a panel slides over its parent rather than repacking the
+##  rows below it, so it is a different shelf, not a cheaper one -- but it
+##  was never tried, and the next reader should know that before treating
+##  the regeneration as forced.
+##
 ##  usage: mk-shelf --spec F --alias A --width N --height N|auto [--state F]
 ##                  [--position +0+0] [--toggle GROUP] [--header-height N]
 ##                  [--swap-delay MS] [--define KEY=VALUE]... [--static]

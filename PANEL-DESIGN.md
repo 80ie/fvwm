@@ -1,7 +1,10 @@
 # Panel design note: why the shelf and taskbar get a new rendering layer
 
-Status: **decided, not yet implemented.** Written 2026-09-20, after the
-`fold-in-protos` branch landed the generated shelf and taskbar.
+Status: **option B implemented for the Media widget and the System Monitor
+meters.** Written 2026-09-20, after the `fold-in-protos` branch landed the
+generated shelf and taskbar; the widgets followed on `panel-widgets` the same
+day. The accordion, the taskbar and the pager are untouched, and option C
+remains the deliberate end state.
 
 This note records why the QNX Photon panel stops being rendered by fvwm's own
 module toolkit, what replaces it, and what was measured rather than assumed.
@@ -96,7 +99,8 @@ thumb tracked to 100 and the handler fired.
 
 This does not change the decision — an FvwmScript slider would still flash and
 still have no icons — but the comment should be corrected rather than left to
-mislead the next reader.
+mislead the next reader. `FvwmScript-ShelfMedia` has since been deleted, so
+this paragraph is now the only place the correction lives.
 
 **`FvwmButtons` has a `Panel` primitive we never tried.** `bin/mk-shelf`'s
 kill-and-regenerate is correct *as designed*: `SendToModule ChangeButton`
@@ -130,6 +134,29 @@ widgets carry both `Pt_ARG_DARK_BEVEL_COLOR` (outer edge) and
 `Pt_ARG_DARK_FILL_COLOR` (inner transition), a two-tone bevel-to-fill, not a
 highlight/shadow pair. Colorset 33 ("sunken well") uses `sh #a7a7a7`, which is
 why the meters, the clock field and the pager all read as mushy.
+
+**Correction, from building it:** "raised chrome gets the soft shadow" is true
+of the shelf's own frame and its group faces, and false of every *control* on
+it. Sampled at 1x rather than eyeballed, a Photon push button is a hard
+`#4b4b4b` outline, a `#ffffff` inner top and left, a `#b0b0b0` inner bottom and
+right, and a face that is a vertical `#ebebeb` to `#b0b0b0` gradient rather
+than a flat fill (x=920, rows 582..596). The slider thumb is the same
+construction without the inner bevel (x=968, rows 604..620), and the slider
+groove is five rows — `#cccccc #acacac #8c8c8c #4b4b4b #ebebeb` — a fill
+darkening downward into the hard bevel with a white lip beneath (x=940, rows
+610..614). A sunken data field carries a `#c0c0c0` inner shadow along its top
+and left and a `#dddddd` outer lip, not `#ffffff` (x=900, rows 560..579).
+
+So there are three vocabularies, not two: soft-bevelled chrome, hard-outlined
+sunken wells, and hard-outlined gradient-faced controls. `bin/photon.py` has
+all three, one function each, with the measurement in the docstring.
+
+**A coloured fill bevels by a fixed shift.** The meter fills are not flat
+either: each carries a lighter row and column above and left and a darker one
+below and right, and the shift is exactly 40 on every channel. `#d6cdba`
+carries `#fef5e2` and `#aea592`; `#b5c4b0` carries `#ddecd8` and `#8d9c88`.
+Two hues, one arithmetic, so it is a rule rather than a pair of samples —
+`photon.shade()`.
 
 Colours measured that we do not currently have:
 
@@ -200,6 +227,19 @@ the bevels are hand-built whatever we choose.
 
 **Do B now. Treat C as the deliberate end state.**
 
+The Media widget and the System Monitor meters are done, as
+`bin/shelf-media-widget` and `bin/shelf-meters-widget` over `bin/photon.py`.
+`FvwmScript-ShelfMedia`, `bin/shelf-media` and `conkyrc-shelf` are gone with
+them.
+
+The meters went to Qt rather than to the Lua/cairo hook this note offered as
+the cheaper route, and the reason is the measurements above: conky's
+`${cpubar}` draws a bar's outline and fill in one colour, so with a per-bar
+trough *and* a bevelled fill *and* an icon to place, conky would have supplied
+only the `${cpu}` strings and every visible pixel would have been Lua. That is
+this same look written twice, in two languages, free to drift. The Lua route
+stays viable if the Qt dependency ever becomes unwelcome; it is not cheaper.
+
 Every widget written for B is a drop-in component of C, so none of it is
 throwaway. B fixes the things that are ugly; C fixes the things that are
 fragile; doing B first means the media player and meters look right long before
@@ -239,7 +279,13 @@ replacements:
   bus but implements **none** of the PulseAudio D-Bus extension —
   introspecting `/org/pulseaudio/core1` returns an empty node. The working path
   is libpulse's native `pa_context_subscribe()`, or `pulsectl` from Python.
-  `pactl subscribe` confirms the mechanism is live here.
+  `pactl subscribe` confirms the mechanism is live here. **What shipped** is
+  `pactl subscribe` itself, held open as a child process: `python3-pulsectl`
+  is not installed and there is no compiler here for anything that needs one,
+  while `pactl` and `wpctl` are already hard dependencies of the shelf. A
+  long-lived subscription is event-driven in the way that matters — it says
+  nothing until the server changes something — and swapping it for libpulse
+  later touches one class.
 
 ## Verified, so it is not re-litigated
 

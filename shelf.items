@@ -8,6 +8,15 @@
 ##  find it and Swallow's UseOld spawns a duplicate that ends up stranded on
 ##  the desktop.  Swallowed things belong in shelfdock.items.
 ##
+##  That constraint follows from the swap, and the swap is a choice rather
+##  than the only option: FvwmButtons' Panel primitive swallows a window into
+##  a button and then *hides* it instead of destroying it, sliding it in and
+##  out on a press (FvwmButtons.html, "CREATING PANELS").  Nothing is killed
+##  on toggle, so the stranding cannot arise at all.  It is not a drop-in --
+##  a panel slides over the shelf rather than repacking the rows below it,
+##  which is not what an accordion does -- but a future reader should not
+##  conclude from the paragraph above that kill-and-restart was forced.
+##
 ##  Format:
 ##
 ##    group <Name> [Label]    starts a collapsible group.  mk-shelf draws the

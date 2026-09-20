@@ -39,24 +39,50 @@ generator, which hands leftover pixels to a `flex` cell. **Never put a Swallow
 in `shelf.items`** — `ShelfMenu` swaps between two aliases on every toggle, and
 the outgoing instance still holds a swallowed window when the incoming one
 looks for it, so `UseOld` spawns a stranded duplicate. Swallowed things go in
-`shelfdock.items`, which is `--static` and kills before it starts.
+`shelfdock.items`, which is `--static` and kills before it starts. That
+constraint follows from the alias swap, which is a choice: FvwmButtons'
+`Panel` primitive hides a swallowed window instead of destroying it, so a
+panel-based accordion would not have the problem at all. Untried, and not a
+drop-in — a panel slides over the shelf rather than repacking it.
 
-**bin/shelf-media** — MPRIS transport and sink volume for the shelf's Media
-widget, via `gdbus` and `wpctl` (no playerctl dependency). **conkyrc-shelf** —
-the System Monitor meters, swallowed into the dock.
+**Shelf widgets (PyQt6)** — the dock's Media and System Monitor rows are
+standalone programs swallowed by `shelfdock.items`, not FvwmScript or conky.
+`PANEL-DESIGN.md` has the argument and the measurements; `docs/` has the
+working plan.
+
+| file | what it is |
+|---|---|
+| `bin/photon.py` | the shared Photon look: palette, bevels, themed icons |
+| `bin/shelf-media-widget` | MPRIS transport, marquee title, volume slider |
+| `bin/shelf-meters-widget` | CPU / memory / filesystem meters, via `psutil` |
+
+Three bevel vocabularies, one function each in `photon.py`: soft-bevelled
+chrome (`raised`), hard-outlined sunken wells (`sunken`, `trough`, `groove`),
+and hard-outlined gradient-faced controls (`button`, `thumb`). Do not reach
+for the soft one on a control; that is the mistake the FvwmScript version
+made. Every painter's docstring names the pixel it was measured from.
+
+Neither widget polls. Media takes D-Bus `PropertiesChanged` (matched on the
+sender's *unique* bus name, never the well-known `org.mpris.MediaPlayer2.*`
+one) and a long-lived `pactl subscribe`; the meters sample, because a CPU has
+no change signal, but repaint only when a bar lands on a different pixel.
+Both draw their own bevels, so their dock rows are `Frame 0` on the plain
+shelf face — a frame would double up. FvwmButtons' `Padding` does not reach a
+swallowed window, so a widget insets itself.
 
 **bin/fvwmscript-icontest** — regression check: FvwmScript's `Icon` property is
 broken in fvwm3 1.1.2, and a widget carrying one fails to draw *and takes every
 later widget with it*. Re-run after an fvwm upgrade. FvwmScript also has no
-hover event and its `HScrollBar` emits no message when moved, which is why the
-shelf is FvwmButtons and the media widget uses `-`/`+` rather than a slider.
+hover event, which is why the shelf is FvwmButtons. (Its `HScrollBar` *does*
+emit on drag — the trap is that `SingleClic` is `#define -1`, so a `1 :` case
+label never matches. `PANEL-DESIGN.md` has the detail; this is the correction
+to a comment that used to live in `FvwmScript-ShelfMedia`.)
 
 **lib/Thumbnail** — custom Perl module using Image::Magick for window thumbnail generation (200x180px, cached in `.thumbs/` with 100s expiry). Loaded via `ModulePath` and recycled every 300s.
 
-**FvwmScript-\*** — small UI dialogs (Confirm{Quit,Reboot,Shutdown}) plus
-`ShelfMedia`, the dock's media widget. `FvwmScript-DateTime` is no longer used
-by the taskbar (its clock is a native FvwmButtons cell updated via
-`SendToModule ChangeButton`) but is kept.
+**FvwmScript-\*** — small UI dialogs (Confirm{Quit,Reboot,Shutdown}).
+`FvwmScript-DateTime` is no longer used by the taskbar (its clock is a native
+FvwmButtons cell updated via `SendToModule ChangeButton`) but is kept.
 
 **scripts/** — shell scripts: `onLock.sh` (xsecurelock), `onSuspend.sh`, `onReboot.sh`, `onShutdown.sh`, `toggle_whiskermenu.sh` (xdotool-based).
 

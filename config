@@ -1053,8 +1053,8 @@ PipeRead "echo '*ShelfPager: Geometry \
 ##                                                           }}}3
 
 ##  ShelfDockRender builds the static lower window.  Deliberately NOT called
-##  from ShelfToggle: re-rendering it restarts the module, which restarts the
-##  pager and conky with it.  mk-shelf --static emits its own KillModule and
+##  from ShelfToggle: re-rendering it restarts the module, which restarts
+##  everything swallowed in it -- the pager and both shelf widgets -- with it.  mk-shelf --static emits its own KillModule and
 ##  Module in that order, so a re-render never overlaps two instances and
 ##  UseOld always finds the widgets it left behind.
 ##
