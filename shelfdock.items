@@ -31,12 +31,18 @@ group WorldView World View
      Frame -1, Colorset $[infostore.cs_pager]
 
 group SysMon System Monitor
-##  conky, swallowed.  The height matches minimum_height in conkyrc-shelf; the
-##  sunken frame here is the trough the three bars sit in, because conky draws
-##  a bar's outline and fill in one colour and cannot make its own.
-58   Swallow(NoClose,UseOld) ShelfMeters \
-     'Exec exec conky -c $[FVWM_USERDIR]/conkyrc-shelf', \
-     Frame -1, Colorset $[infostore.cs_shelf_well]
+##  bin/shelf-meters-widget, which replaced conky: conky draws a bar's
+##  outline and fill in one colour, so the per-bar sunken troughs the
+##  reference has were out of reach and the whole block had to sit in one
+##  sunken cell instead.  The widget draws its own, so this row is Frame 0
+##  on the plain shelf face like the Media one.
+##
+##  59 is three rows at the reference's pitch, with the filesystem row's two
+##  thin bars.  `bin/shelf-meters-widget --print-height` prints what this
+##  machine's filesystem count actually needs.
+59   Swallow(NoClose,UseOld) ShelfMeters \
+     'Exec exec $[FVWM_USERDIR]/bin/shelf-meters-widget', \
+     Frame 0, Colorset $[infostore.cs_shelf]
 
 group Media Media
 ##  bin/shelf-media-widget, a PyQt6 program: see PANEL-DESIGN.md for why this

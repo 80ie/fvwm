@@ -44,6 +44,7 @@ HEADER_CELL  = QColor("#c7c7c7")   # the -/+ cell
 HEADER_GLYPH = QColor("#606060")   # the -/+ mark
 FIELD        = QColor("#f4f4f4")   # data field interior
 TROUGH       = QColor("#bcbcbc")   # meter trough, unfilled
+TROUGH_SH    = QColor("#8d8d8d")   # ... and its inner shadow, top and left
 GROOVE       = QColor("#8c8c8c")   # slider groove, the dark end of its fill
 GROOVE_HI    = QColor("#cccccc")   # ... and the light end
 GROOVE_LIP   = QColor("#ebebeb")   # the white lip under a groove
@@ -145,6 +146,52 @@ def button(p: QPainter, r: QRect, down=False):
     p.setPen(HI if down else BTN_LO)
     p.drawLine(inner.left(), inner.bottom(), inner.right(), inner.bottom())
     p.drawLine(inner.right(), inner.top(), inner.right(), inner.bottom())
+
+
+def shade(colour: QColor, delta: int) -> QColor:
+    """A colour lightened or darkened by `delta` on every channel.
+
+    Photon bevels a coloured block by shifting the fill rather than by
+    blending toward white and black, and the shift is exactly 40: the
+    reference's CPU fill #d6cdba carries #fef5e2 above it and #aea592 below,
+    and its MEM fill #b5c4b0 carries #ddecd8 and #8d9c88.  Same rule, two
+    hues, so it is the rule and not a pair of measurements.
+    """
+    return QColor(max(0, min(255, colour.red() + delta)),
+                  max(0, min(255, colour.green() + delta)),
+                  max(0, min(255, colour.blue() + delta)))
+
+
+def trough(p: QPainter, r: QRect):
+    """A meter's trough: #4b4b4b outline, #8d8d8d inner shadow along the top
+    and left, #bcbcbc interior.  Measured at x=1000, rows 499..514."""
+    outline = QRect(r.left(), r.top(), r.width() - 1, r.height() - 1)
+    p.fillRect(outline.adjusted(1, 1, 0, 0), TROUGH)
+    p.setPen(DARK)
+    p.drawRect(outline)
+    p.setPen(TROUGH_SH)
+    p.drawLine(outline.left() + 1, outline.top() + 1,
+               outline.right() - 1, outline.top() + 1)
+    p.drawLine(outline.left() + 1, outline.top() + 1,
+               outline.left() + 1, outline.bottom() - 1)
+
+
+def bar_fill(p: QPainter, r: QRect, colour: QColor):
+    """The filled part of a meter, drawn *inside* a trough.
+
+    Not a flat block: the reference's fill is bevelled in its own hue, a
+    lighter row and column above and left and a darker one below and right.
+    `r` is the whole filled area including that bevel.
+    """
+    if r.width() <= 0 or r.height() <= 0:
+        return
+    p.fillRect(r, colour)
+    p.setPen(shade(colour, 40))
+    p.drawLine(r.left(), r.top(), r.right(), r.top())
+    p.drawLine(r.left(), r.top(), r.left(), r.bottom())
+    p.setPen(shade(colour, -40))
+    p.drawLine(r.left(), r.bottom(), r.right(), r.bottom())
+    p.drawLine(r.right(), r.top(), r.right(), r.bottom())
 
 
 def divider(p: QPainter, y, x0, x1):
