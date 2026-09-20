@@ -23,6 +23,10 @@ InfoStoreAdd pager_scale 18
 InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
 
+# Taskbar row height. Cell widths come from taskbar.items via bin/mk-taskbar;
+# this is the one number the bar's height is derived from.
+InfoStoreAdd taskbar_height 40
+
 # FvwmPager width/height. Keep both divisible by DesktopSize so the generated
 # background tile lines up with the page cells (3x3 -> 128x72 per page).
 InfoStoreAdd pager_width 384
@@ -68,8 +72,11 @@ AddToFunc   StartFunction
 + I Module FvwmPager
 + I Module FvwmPerl
 #+ I Module FvwmAnimate
-#+ I Module FvwmButtons FvwmTaskBar
-+ I Test (Init) Exec exec lxqt-panel
++ I Module FvwmButtons FvwmTaskBar
+# Replaced by the FvwmButtons taskbar above; both sit full-width at the bottom
+# and would overlap. Its tray also blocks stalonetray from claiming the tray
+# selection.
+#+ I Test (Init) Exec exec lxqt-panel
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
 + I Test (Init) Exec exec lxqt-policykit-agent
@@ -482,7 +489,7 @@ Style * EdgeResizeDelay -1
 # EwmhBaseStruts [left] [right] [top] [bottom]
 # Reserves space along the edge(s) of the Screen that will not
 # be covered when maximizing or placing windows.
-EwmhBaseStruts 0 0 0 40
+EwmhBaseStruts 0 0 0 $[infostore.taskbar_height]
 
 ##                                                           }}}2
 ##   ├ Windows                                               {{{2
@@ -844,48 +851,19 @@ DestroyModuleConfig FvwmPager:*
 ##                                                           }}}2
 ##   ├ FvwmTaskBar                                           {{{2
 DestroyModuleConfig FvwmTaskBar:*
-*FvwmTaskBar: Geometry 2560x40+0-0
 *FvwmTaskBar: Colorset 10
 *FvwmTaskBar: ActiveColorset 10
 *FvwmTaskBar: Frame 0
 *FvwmTaskBar: Font "xft:P052:Italic:Bold:size=10:antialias=True"
-*FvwmTaskBar: Rows 1
-*FvwmTaskBar: Columns 256
 
-# Left side: app menu + quick launchers
-*FvwmTaskBar: (4x1, Icon "$[FVWM_ICON]/apps.png", \
-    Action(Mouse 1) Menu MenuFvwmRoot, \
-    Colorset 5, ActiveColorset 6, Frame 0)
-*FvwmTaskBar: (1x1, Frame 0)
-*FvwmTaskBar: (4x1, Icon "$[FVWM_ICON]/terminal.png", \
-    Action(Mouse 1) Exec exec $[infostore.terminal], \
-    Colorset 5, ActiveColorset 6, Frame 0)
-*FvwmTaskBar: (4x1, Icon "$[FVWM_ICON]/browser.png", \
-    Action(Mouse 1) Exec exec firefox, \
-    Colorset 5, ActiveColorset 6, Frame 0)
-*FvwmTaskBar: (4x1, Icon "$[FVWM_ICON]/files.png", \
-    Action(Mouse 1) Exec exec nemo, \
-    Colorset 5, ActiveColorset 6, Frame 0)
-*FvwmTaskBar: (1x1, Frame 0)
-# Center: window list
-*FvwmTaskBar: (170x1, Left, Swallow TaskBarIcons \
-    'Module FvwmIconMan TaskBarIcons', Frame 0)
-*FvwmTaskBar: (1x1, Frame 0)
-*FvwmTaskBar: (16x1, Swallow(NoClose,UseOld) stalonetray \
-    `Exec exec stalonetray --config "$[FVWM_USERDIR]/stalonetrayrc"`, \
-    Colorset 5, Frame 0)
-
-*FvwmTaskBar: (1x1, Frame 0)
-*FvwmTaskBar: (5x1, Title "VOL", \
-    Action(Mouse 1) Exec exec pavucontrol, \
-    Action(Mouse 4) Exec exec wpctl set-volume @DEFAULT_SINK@ 5%+, \
-    Action(Mouse 5) Exec exec wpctl set-volume @DEFAULT_SINK@ 5%-, \
-    Colorset 5, ActiveColorset 6, Frame 0)
-*FvwmTaskBar: (1x1, Frame 0)
-*FvwmTaskBar: (14x1, Swallow(NoClose,UseOld) DateTime \
-    'Module FvwmScript FvwmScript-DateTime', \
-    Colorset 5, Frame 0)
-*FvwmTaskBar: (1x1, Frame 0)
+###  The cells live in taskbar.items; mk-taskbar sizes them, spending every
+###  leftover pixel on the "flex" cell, and emits Geometry/Rows/Columns to
+###  match.  So adding a launcher costs no arithmetic here, and neither does a
+###  resolution change.  Geometry has to be generated rather than written as
+###  $[vp.width]: that expands in a command but not in a module config line,
+###  where it silently yields a 16px-wide bar.
+PipeRead "$[FVWM_USERDIR]/bin/mk-taskbar $[FVWM_USERDIR]/taskbar.items \
+    FvwmTaskBar $[vp.width] $[infostore.taskbar_height]"
 
 ##   │ ├ TaskBarIcons                                        {{{3
 DestroyModuleConfig TaskBarIcons: *
@@ -896,7 +874,7 @@ DestroyModuleConfig TaskBarIcons: *
 *TaskBarIcons: Font "xft:Cormorant:Bold:Italic:size=10:antialias=True"
 
 # Manager Size
-*TaskBarIcons: ButtonGeometry 120x40
+*TaskBarIcons: ButtonGeometry 120x$[infostore.taskbar_height]
 *TaskBarIcons: MaxButtonWidth 150
 *TaskBarIcons: ManagerGeometry 1x1
 
