@@ -29,7 +29,9 @@ from PyQt6.QtGui import (QColor, QFont, QFontMetrics, QLinearGradient,
 #  colorsets 30-33 in the fvwm config -- keep them in step; do not fork them.
 FACE         = QColor("#d9d9d9")   # shelf and button face          (cs 30)
 FACE_HI      = QColor("#e4e4e4")   # hover face                     (cs 31)
-HEADER       = QColor("#dbdbdb")   # group header face              (cs 32)
+HEADER       = QColor("#dbdbdb")   # group header face
+GUTTER       = QColor("#cccccc")   # the icon column of a launcher row
+FRAME_MID    = QColor("#a6a6a6")   # the inner shadow of the shelf's own frame              (cs 32)
 WELL         = QColor("#d2d2d2")   # sunken filler                  (cs 33)
 
 FACE_ALT     = QColor("#d8d8d8")   # widget-section face
@@ -57,9 +59,16 @@ FILL_MEM     = QColor("#b5c4b0")
 INK          = QColor("#000000")   # glyphs and labels
 INK_OFF      = QColor("#8c8c8c")   # a disabled glyph
 
-#  The shelf's inner width after FvwmButtons' 4px horizontal padding.  Matches
-#  infostore.shelf_inner in the config; a widget that disagrees gets clipped.
+#  The shelf's usable width inside its own frame.  A starting value only: the
+#  panel is resizable now, so nothing should assume it.
 SHELF_INNER = 152
+
+#  Geometry the reference fixes, and the panel reads rather than invents.
+FRAME_W = 7           # the shelf's left edge, the double bevel below
+HEADER_H = 20         # a group header, its divider included
+TOGGLE_W = 15         # the -/+ cell at the head of a group header
+ROW_H = 25            # a launcher row, its divider included
+GUTTER_W = 28         # the icon column of a launcher row
 
 
 def font(size=8, bold=False):
@@ -192,6 +201,67 @@ def bar_fill(p: QPainter, r: QRect, colour: QColor):
     p.setPen(shade(colour, -40))
     p.drawLine(r.left(), r.bottom(), r.right(), r.bottom())
     p.drawLine(r.right(), r.top(), r.right(), r.bottom())
+
+
+def frame(p: QPainter, r: QRect):
+    """The shelf's own left edge: **two nested bevels** with a face channel
+    between them, seven pixels wide.
+
+    Sampled at x=889..895 and identical at every height checked (y=2, 8, 16,
+    18, 19, 22, 40, 45, 300, 520, 590, 700):
+
+        #4b4b4b  outer dark      #a6a6a6  inner shadow
+        #ffffff  outer light     #4b4b4b  inner dark
+        #d8d8d8  channel         #ffffff  inner light
+        #d8d8d8  channel
+
+    FvwmButtons' `Frame N` draws *one* bevel N pixels wide out of a
+    colorset's hi/sh and cannot nest, which is why this could not be had
+    while the shelf was a module.  Only the left edge carries it -- the other
+    three sides of the reference shelf are screen edges.
+    """
+    rows = (DARK, HI, FACE_ALT, FACE_ALT, FRAME_MID, DARK, HI)
+    for i, colour in enumerate(rows):
+        p.setPen(colour)
+        p.drawLine(r.left() + i, r.top(), r.left() + i, r.bottom())
+
+
+def toggle_glyph(p: QPainter, r: QRect, collapsed):
+    """The `-` or `+` in a group header's own cell.
+
+    Both are 6x2 bars: the minus alone, the plus crossed with a 2x6.  Read
+    straight off the reference at x=896..911, rows 1..17 (Applications,
+    expanded) and 220..236 (Utilities, collapsed).
+    """
+    cx, cy = r.center().x(), r.center().y()
+    p.fillRect(QRect(cx - 2, cy, 6, 2), HEADER_GLYPH)
+    if collapsed:
+        p.fillRect(QRect(cx, cy - 2, 2, 6), HEADER_GLYPH)
+
+
+def group_header(p: QPainter, r: QRect, label, collapsed, fnt):
+    """A collapsible group's header: its own `#c7c7c7` toggle cell, the label
+    on a `#dbdbdb` face, and an etched divider along the bottom.
+
+    The toggle living in a *separate cell* rather than as a hyphen inline is
+    the visible difference the FvwmButtons version could not express -- a
+    Title cell is one colorset all the way across.
+    """
+    cell = QRect(r.left(), r.top(), TOGGLE_W, r.height() - 2)
+    face = QRect(r.left() + TOGGLE_W, r.top(),
+                 r.width() - TOGGLE_W, r.height() - 2)
+    p.fillRect(cell, HEADER_CELL)
+    p.fillRect(face, HEADER)
+    toggle_glyph(p, cell, collapsed)
+
+    p.setFont(fnt)
+    p.setPen(INK)
+    fm = QFontMetrics(fnt)
+    baseline = face.top() + (face.height() + fm.capHeight()) // 2
+    p.drawText(face.left() + 5, baseline,
+               elide(label, fnt, face.width() - 8))
+
+    divider(p, r.bottom() - 1, r.left(), r.right())
 
 
 def divider(p: QPainter, y, x0, x1):

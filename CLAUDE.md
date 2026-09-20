@@ -24,37 +24,54 @@ There is no build or test system. To apply changes:
 - Key & Mouse bindings (numpad tiling, page navigation, window ops)
 - Module configs (FvwmEvent, FvwmPager, FvwmPerl, Thumbnail)
 
-**Generated panels** — the QNX Photon shelf and taskbar. FvwmButtons has no
-flexible sizing and cannot hide a button or resize its grid at runtime, so
-their cell lists are generated from spec files rather than written by hand:
+**The shelf is one program** — `bin/shelf-panel`, a PyQt6 window down the
+right edge. It draws its own frame, group headers, launcher rows, pager,
+meters and media widget; reads its sections from `panel.items`; and keeps its
+width and collapse state in `.panel.state`. fvwm keeps the `Style` rule, the
+`EwmhBaseStruts` reservation and launching, and nothing else.
+
+It stopped being FvwmButtons because three things were out of reach there and
+all three are free here (`PANEL-DESIGN.md` has the measurements):
+
+- **The double bevel.** The reference's left edge is two nested bevels with a
+  2px face channel — `#4b4b4b #ffffff #d8d8d8 #d8d8d8 #a6a6a6 #4b4b4b
+  #ffffff`. `Frame N` draws *one* bevel N wide from a colorset's hi/sh and
+  cannot nest, at any N.
+- **Live resizing.** FvwmButtons cannot resize its grid, so a width change
+  meant regenerating and restarting the module.
+- **Collapsing without a flicker.** Same reason. A module restart is
+  asynchronous with no "I am mapped" signal to sequence against, so the
+  `Schedule 150 KillModule` swap was a race: measured at 60fps it dropped the
+  shelf to bare wallpaper on 2 toggles in 8. The same test on the panel is 0
+  in 8.
+
+`EwmhBaseStruts` **does** take effect at runtime — verified by maximising a
+window across a strut change — which is what lets the shelf be resizable at
+all. The panel re-issues it as you drag; `bin/shelf-panel --print-width` is
+how the config gets it right again after a Restart, which re-reads the config
+but leaves the running panel alone.
+
+**Generated panel** — the taskbar, still. FvwmButtons has no flexible sizing,
+so its cell list is generated from a spec rather than written by hand:
 
 | generator | spec | window |
 |---|---|---|
-| `bin/mk-shelf` | `shelf.items` | `ShelfMenu` — collapsible launcher accordion, right edge |
-| `bin/mk-shelf --static` | `shelfdock.items` | `ShelfDock` — pager, meters, media; holds every Swallow |
 | `bin/mk-taskbar` | `taskbar.items` | `FvwmTaskBar` — Launch, window list, tray, VOL, clock |
 
-Adding a row means adding a spec line; widths/heights are solved by the
-generator, which hands leftover pixels to a `flex` cell. **Never put a Swallow
-in `shelf.items`** — `ShelfMenu` swaps between two aliases on every toggle, and
-the outgoing instance still holds a swallowed window when the incoming one
-looks for it, so `UseOld` spawns a stranded duplicate. Swallowed things go in
-`shelfdock.items`, which is `--static` and kills before it starts. That
-constraint follows from the alias swap, which is a choice: FvwmButtons'
-`Panel` primitive hides a swallowed window instead of destroying it, so a
-panel-based accordion would not have the problem at all. Untried, and not a
-drop-in — a panel slides over the shelf rather than repacking it.
+Adding a cell means adding a spec line; widths are solved by the generator,
+which hands leftover pixels to a `flex` cell.
 
-**Shelf widgets (PyQt6)** — the dock's Media and System Monitor rows are
-standalone programs swallowed by `shelfdock.items`, not FvwmScript or conky.
-`PANEL-DESIGN.md` has the argument and the measurements; `docs/` has the
-working plan.
+**Shelf components** — everything the panel draws, split so each piece stays
+testable on its own. Run any of them directly and it comes up as an ordinary
+window.
 
 | file | what it is |
 |---|---|
 | `bin/photon.py` | the shared Photon look: palette, bevels, themed icons |
-| `bin/shelf-media-widget` | MPRIS transport, marquee title, volume slider |
-| `bin/shelf-meters-widget` | CPU / memory / filesystem meters, via `psutil` |
+| `bin/shelf-panel` | the window: frame, headers, launchers, resize, layout |
+| `bin/photon_media.py` | MPRIS transport, marquee title, volume slider |
+| `bin/photon_meters.py` | CPU / memory / filesystem meters, via `psutil` |
+| `bin/photon_pager.py` | World View, drawn from EWMH rather than swallowed |
 
 Three bevel vocabularies, one function each in `photon.py`: soft-bevelled
 chrome (`raised`), hard-outlined sunken wells (`sunken`, `trough`, `groove`),
@@ -62,13 +79,16 @@ and hard-outlined gradient-faced controls (`button`, `thumb`). Do not reach
 for the soft one on a control; that is the mistake the FvwmScript version
 made. Every painter's docstring names the pixel it was measured from.
 
-Neither widget polls. Media takes D-Bus `PropertiesChanged` (matched on the
+Almost nothing polls. Media takes D-Bus `PropertiesChanged` (matched on the
 sender's *unique* bus name, never the well-known `org.mpris.MediaPlayer2.*`
-one) and a long-lived `pactl subscribe`; the meters sample, because a CPU has
-no change signal, but repaint only when a bar lands on a different pixel.
-Both draw their own bevels, so their dock rows are `Frame 0` on the plain
-shelf face — a frame would double up. FvwmButtons' `Padding` does not reach a
-swallowed window, so a widget insets itself.
+one) and a long-lived `pactl subscribe`; the pager takes root-window
+`PropertyNotify` through a `QSocketNotifier` on Xlib's own connection. Only
+the meters sample, because a CPU has no change signal, and they repaint only
+when a bar lands on a different pixel.
+
+A component owns no geometry beyond a size hint and never talks to fvwm.
+That is the rule that let the media and meters widgets move from being
+swallowed windows to being child widgets without a line changing in either.
 
 **bin/fvwmscript-icontest** — regression check: FvwmScript's `Icon` property is
 broken in fvwm3 1.1.2, and a widget carrying one fails to draw *and takes every

@@ -1,0 +1,47 @@
+##  Sections of the QNX Photon shelf, top to bottom.
+##
+##  Read by bin/shelf-panel, which draws the whole sidebar in one window.
+##  There is no generator any more: the panel lays itself out at runtime, so
+##  a section's height is whatever its contents come to rather than a number
+##  someone has to solve in advance.  Adding a row means adding a line.
+##
+##  Format, one directive per line:
+##
+##    group <Label>        starts a collapsible group.  The label is also the
+##                         handle used in the state file, so keep it stable.
+##    item <Label> | <icon> | <command>
+##                         a launcher row.  <icon> is a file in icons/, or a
+##                         themed name looked up in the Haiku set.  <command>
+##                         is run through the shell.
+##    widget <name>        a drawn widget: worldview, meters or media.
+##    fixed                marks the group above as not collapsible.
+##
+##  $VARS in a command are expanded by the shell that runs it, so the
+##  terminal and friends come from the environment rather than from fvwm's
+##  InfoStore -- bin/shelf-panel is not an fvwm module and cannot read it.
+
+group Applications
+item Terminal     | 16x16-xterm-color.png                    | ${TERMINAL:-kitty}
+item Browser      | 16x16-firefox.png                        | firefox
+item File Manager | 16x16-Explorer++.png                     | ${FILEMANAGER:-dolphin}
+item Calculator   | 16x16-org.speedcrunch.SpeedCrunch.png    | ${CALCULATOR:-speedcrunch}
+item Editor       | 16x16-emacs.png                          | emacs
+
+group Utilities
+item Process Monitor | 16x16-qps.png                         | ${TERMINAL:-kitty} -e btop
+item Screenshot      | 16x16-org.flameshot.Flameshot.png     | flameshot gui
+item Clipboard       | 16x16-qlipper.png                     | qlipper
+
+group Configure
+item Graphics     | 16x16-nvidia-settings.png                | arandr
+item Screen Saver | 16x16-xscreensaver.png                   | xscreensaver-demo
+item Appearance   | 16x16-menulibre.png                      | ${TERMINAL:-kitty} -e ${EDITOR:-vi} $FVWM_USERDIR/config
+
+group World View
+widget worldview
+
+group System Monitor
+widget meters
+
+group Media
+widget media

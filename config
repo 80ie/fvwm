@@ -27,36 +27,21 @@ InfoStoreAdd border_width 5
 # this is the one number the bar's height is derived from.
 InfoStoreAdd taskbar_height 30
 
-# QNX Photon shelf, down the right edge above the taskbar.  shelf_inner is the
-# usable width after the 4px horizontal Padding each side; the pager and the
-# media widget are both sized from it.
-InfoStoreAdd shelf_width 160
-InfoStoreAdd shelf_inner 152
-InfoStoreAdd shelf_font        "xft:Sans:size=9:antialias=True"
-InfoStoreAdd shelf_header_font "xft:Sans:Bold:size=9:antialias=True"
-# Which groups are collapsed, and which of the accordion's two aliases is on
-# screen.  Runtime data, not config: gitignored, and safe to delete.
-InfoStoreAdd shelf_state $[FVWM_USERDIR]/.shelf.state
+# QNX Photon shelf, down the right edge above the taskbar.  It is one program
+# now -- bin/shelf-panel -- which owns its own width, its own section layout
+# and its own collapse state, so none of that lives here any more.  What fvwm
+# still needs to know is how much edge it is claiming, and that is read back
+# from the panel where EwmhBaseStruts is set below.
 
-# Colorset numbers by name, so the shelf's spec files and the taskbar's can
-# refer to them without hardcoding a number that would shift if the warm
-# brown sets below ever grow.
+# Colorset numbers by name, so the taskbar's spec file can refer to them
+# without hardcoding a number that would shift if the warm brown sets below
+# ever grow.  The pager's four (34-37) had no reader left once the shelf
+# stopped being a module and are gone; the colorsets themselves stay as the
+# palette's record.
 InfoStoreAdd cs_shelf        30
 InfoStoreAdd cs_shelf_hi     31
 InfoStoreAdd cs_shelf_header 32
 InfoStoreAdd cs_shelf_well   33
-InfoStoreAdd cs_pager        34
-InfoStoreAdd cs_pager_hi     35
-InfoStoreAdd cs_pager_win    36
-InfoStoreAdd cs_pager_focus  37
-
-# The shelf's pager is a 3x3 grid of screen-shaped cells, so its height is the
-# inner width scaled by the monitor's aspect ratio.  Computed once here because
-# two places must agree on it -- the pager's own Geometry and the height of the
-# dock row that swallows it -- and fvwm has no arithmetic, so the sum happens in
-# the shell PipeRead runs through.
-PipeRead "echo InfoStoreAdd shelf_pager_h \
-    $(( $[infostore.shelf_inner] * $[vp.height] / $[vp.width] ))"
 
 # FvwmPager width/height. Keep both divisible by DesktopSize so the generated
 # background tile lines up with the page cells (3x3 -> 128x72 per page).
@@ -111,11 +96,12 @@ AddToFunc   StartFunction
 + I Schedule 300 TaskbarClockTick
 + I Schedule 1200 TaskbarClockTick
 + I Schedule Periodic 30000 3010 TaskbarClockTick
-###  Shelf: dock first, because it publishes shelf_dock_h and the accordion's
-###  height is computed from it.  Both render functions start their own
-###  modules, so there is no "Module FvwmButtons ShelfX" line here.
-+ I ShelfDockRender
-+ I ShelfMenuRender
+###  Shelf.  Not a module, so fvwm neither kills it on Restart nor brings it
+###  back afterwards; the pgrep makes this line idempotent, so a Restart
+###  leaves a running panel alone and revives a dead one.  Test (Init) would
+###  do the first but not the second.
++ I Exec exec sh -c 'pgrep -f "bin/shelf-panel$" >/dev/null \
+      || exec "$FVWM_USERDIR/bin/shelf-panel"'
 # Replaced by the FvwmButtons taskbar above; both sit full-width at the bottom
 # and would overlap. Its tray also blocks stalonetray from claiming the tray
 # selection.
@@ -533,7 +519,14 @@ Style * EdgeResizeDelay -1
 # Reserves space along the edge(s) of the Screen that will not
 # be covered when maximizing or placing windows.
 # The shelf claims the right column, the taskbar the bottom row.
-EwmhBaseStruts 0 $[infostore.shelf_width] 0 $[infostore.taskbar_height]
+##  The shelf is resizable, so its width is whatever the panel last saved
+##  rather than a constant.  The panel re-issues this itself as you drag the
+##  edge -- EwmhBaseStruts does take effect at runtime -- and this line is
+##  what gets it right again after a Restart, which re-reads the config but
+##  leaves the running panel alone.
+PipeRead "echo EwmhBaseStruts 0 \
+    $($[FVWM_USERDIR]/bin/shelf-panel --print-width) 0 \
+    $[infostore.taskbar_height]"
 
 ##                                                           }}}2
 ##   ├ Windows                                               {{{2
@@ -692,11 +685,12 @@ Colorset 32 fg #000000, bg #dbdbdb, hi #ffffff, sh #a7a7a7, Plain, NoShape
 #~~~~~~~ 33 - Sunken well: shelf filler, meter trough, clock field
 Colorset 33 fg #000000, bg #d2d2d2, hi #ffffff, sh #a7a7a7, Plain, NoShape
 
-# World View pager.  fg is what SolidSeparators draws the page grid in, and the
-# screenshot's grid is white 1px; safe to claim for that because Font None
-# turns off the mini-window labels fg would otherwise colour.  The active page
-# is a lighter khaki rather than the screenshot's dark outline, because
-# FvwmPager styles the active page by background and has no border option.
+# World View pager.  No module reads these any more -- bin/shelf-panel draws
+# the pager itself -- but they stay as the palette's record alongside the rest
+# of the Photon greys, and bin/photon_pager.py mirrors them.  Note the active
+# page there is #e1e3d8 with a #4b4b4b outline, which is what the reference
+# actually does; the lighter khaki below was the closest FvwmPager could get,
+# having no border option.
 #~~~~~~~ 34 - Pager desk
 Colorset 34 fg #ffffff, bg #c3c7b1, hi #ffffff, sh #a7a7a7, Plain, NoShape
 #~~~~~~~ 35 - Pager active page
@@ -995,106 +989,28 @@ PipeRead "echo '*TaskBarIcons: ButtonGeometry 120x$[infostore.taskbar_height]'"
 ##                                                           }}}3
 ##                                                           }}}2
 ##   ├ Shelf                                                 {{{2
-##  The QNX Photon shelf: two FvwmButtons windows stacked down the right edge.
+##  The QNX Photon shelf is one program: bin/shelf-panel, over bin/photon.py.
+##  It draws its own frame, headers, launchers, pager, meters and media
+##  widget, reads its sections from panel.items and keeps its width and
+##  collapse state in .panel.state.
 ##
-##    ShelfMenu   the collapsible launcher accordion (shelf.items).  Swaps
-##                between ShelfMenuA and ShelfMenuB on every toggle, mapping
-##                the replacement before killing the old one, which keeps the
-##                swap under a frame.
-##    ShelfDock   the fixed widgets (shelfdock.items): pager, meters, media.
-##                Rendered --static, and it kills before it starts.
+##  It is not an fvwm module, and that is the point.  FvwmButtons cannot
+##  change its layout at runtime -- ChangeButton reaches a button's title,
+##  icon and colorset and nothing else -- so collapsing a group meant
+##  regenerating the module config and restarting the module, and resizing
+##  the shelf meant the same.  A module restart is asynchronous with no
+##  "I am mapped" signal to sequence against, so the swap was a timer race
+##  that dropped the shelf entirely on about one toggle in four.  And the
+##  reference's left edge is two nested bevels, which `Frame N` cannot draw
+##  at any N.  All three go away by drawing it ourselves.  PANEL-DESIGN.md
+##  is the long version.
 ##
-##  The division is not cosmetic.  Double-buffering and Swallow are
-##  incompatible: the outgoing instance still holds a swallowed window
-##  reparented inside it when the incoming one looks for it, so UseOld spawns a
-##  duplicate and strands it on the desktop.  So the window that swaps holds
-##  nothing swallowed, and the window holding the swallows kills before it
-##  starts.  Never put a Swallow in shelf.items.
-Style "ShelfMenu?" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
+##  FixedPosition and FixedSize ignore the *user's* attempts to move or
+##  resize, not the program's (fvwm3styles.html), so the panel can still
+##  move and resize itself as the edge is dragged while nothing else can.
+Style "ShelfPanel" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
     Sticky, WindowListSkip, CirculateSkip, NeverFocus, \
     FixedPosition, FixedSize, StaysOnTop
-Style "ShelfDock"  !Title, !Handles, BorderWidth 0, HandleWidth 0, \
-    Sticky, WindowListSkip, CirculateSkip, NeverFocus, \
-    FixedPosition, FixedSize, StaysOnTop
-
-##   │ ├ ShelfPager                                          {{{3
-##  Separate from the floating FvwmPager so the two can be sized and styled
-##  independently; named so the Swallow in shelfdock.items can hang on it.
-DestroyModuleConfig ShelfPager:*
-*ShelfPager: Colorset        $[infostore.cs_pager]
-*ShelfPager: HilightColorset $[infostore.cs_pager_hi]
-*ShelfPager: WindowColorset  $[infostore.cs_pager_win]
-*ShelfPager: FocusColorset   $[infostore.cs_pager_focus]
-*ShelfPager: Font None
-*ShelfPager: SmallFont None
-##  Solid rather than the default dashed page separators, matching the
-##  screenshot's clean 1px grid.
-*ShelfPager: SolidSeparators
-*ShelfPager: Window3DBorders
-*ShelfPager: WindowBorderWidth 1
-*ShelfPager: WindowMinSize 3
-*ShelfPager: UseSkipList
-##  No MiniIcons: the screenshot's mini windows are plain bevelled rectangles,
-##  and a 16x16 icon inside a ~50x30 page cell swamps it.
-##
-##  No Rows/Columns either.  Those lay out *desks*, not pages -- with
-##  EwmhNumberOfDesktops 1, asking for 3x3 penned the one desk into a ninth of
-##  the window and drew the 3x3 page grid inside that.  The pages come from
-##  DesktopSize and need no pager option at all.
-##
-##  Geometry goes through PipeRead because a "*Module: option" line does not
-##  expand $[...]; written literally it came out 48px wide instead of 152.
-##  Both dimensions, not the aspect-deriving "152x0" form: FvwmButtons resizes
-##  a swallowed window to its cell, but FvwmPager lays its grid out once at
-##  startup and does not rescale, so a pager that starts small stays a small
-##  grid in a correctly-sized window.
-PipeRead "echo '*ShelfPager: Geometry \
-    $[infostore.shelf_inner]x$[infostore.shelf_pager_h]'"
-##                                                           }}}3
-
-##  ShelfDockRender builds the static lower window.  Deliberately NOT called
-##  from ShelfToggle: re-rendering it restarts the module, which restarts
-##  everything swallowed in it -- the pager and both shelf widgets -- with it.  mk-shelf --static emits its own KillModule and
-##  Module in that order, so a re-render never overlaps two instances and
-##  UseOld always finds the widgets it left behind.
-##
-##  --height auto makes the window as tall as its rows and publishes the total
-##  as $[infostore.shelf_dock_h], which ShelfMenuRender subtracts, so the two
-##  windows meet exactly and adding a dock row costs no arithmetic elsewhere.
-DestroyFunc ShelfDockRender
-AddToFunc   ShelfDockRender
-+ I PipeRead "$[FVWM_USERDIR]/bin/mk-shelf \
-      --spec '$[FVWM_USERDIR]/shelfdock.items' \
-      --alias ShelfDock \
-      --static \
-      --width $[infostore.shelf_width] \
-      --height auto \
-      --height-var shelf_dock_h \
-      --position -0-$[infostore.taskbar_height] \
-      --define pager_h=$[infostore.shelf_pager_h]"
-
-##  ShelfMenuRender regenerates the accordion and swaps it.  mk-shelf emits the
-##  Module/KillModule pair itself, so there is nothing to sequence here.  $0 is
-##  the group to toggle, or "" to just re-render.  Its height is the screen less
-##  the taskbar less the dock; fvwm has no arithmetic, so the subtraction
-##  happens in the shell PipeRead runs through.
-DestroyFunc ShelfMenuRender
-AddToFunc   ShelfMenuRender
-+ I PipeRead "$[FVWM_USERDIR]/bin/mk-shelf \
-      --spec '$[FVWM_USERDIR]/shelf.items' \
-      --alias ShelfMenu \
-      --state '$[infostore.shelf_state]' \
-      --width $[infostore.shelf_width] \
-      --height $(( $[vp.height] - $[infostore.taskbar_height] \
-                   - $[infostore.shelf_dock_h] )) \
-      --position -0+0 \
-      --toggle '$0'"
-
-##  The generated header rows bind to this name, so the binding in the
-##  generated config reads as an intention rather than a PipeRead.
-DestroyFunc ShelfToggle
-AddToFunc   ShelfToggle
-+ I ShelfMenuRender $0
 ##                                                           }}}2
 ##                                                           }}}1
 

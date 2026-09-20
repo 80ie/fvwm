@@ -1,10 +1,12 @@
 # Panel design note: why the shelf and taskbar get a new rendering layer
 
-Status: **option B implemented for the Media widget and the System Monitor
-meters.** Written 2026-09-20, after the `fold-in-protos` branch landed the
-generated shelf and taskbar; the widgets followed on `panel-widgets` the same
-day. The accordion, the taskbar and the pager are untouched, and option C
-remains the deliberate end state.
+Status: **option C implemented for the sidebar.** Written 2026-09-20 after the
+`fold-in-protos` branch landed the generated shelf and taskbar. Option B — the
+Media widget and the System Monitor meters — followed on `panel-widgets` the
+same day, and option C followed B once it turned out that the two things
+wanted next, a double bevel and a resizable shelf, were both things
+FvwmButtons cannot do at all. The sidebar is now `bin/shelf-panel`. The
+taskbar along the bottom is still FvwmButtons and still generated.
 
 This note records why the QNX Photon panel stops being rendered by fvwm's own
 module toolkit, what replaces it, and what was measured rather than assumed.
@@ -191,11 +193,31 @@ Geometry, x measured from the shelf's inner left edge:
   marks below, ~8px raised thumb. This is a *separate sub-section* of the CD
   Player group, divided by a rule — groups have internal dividers.
 - **World View**: 3x3, ~28px cells, white 1px grid, current page outlined in
-  **black**, in a sunken trough.
+  **black**, in a sunken trough. Measured since: the current page is *also*
+  filled lighter, `#e1e3d8` against `#c3c7b1`, and the outline sits inside the
+  white rule rather than over it (y=651: `…#ffffff #4b4b4b #e1e3d8…`). It does
+  both, not one or the other.
+- **The shelf's own left edge is a double bevel**, seven pixels wide and
+  identical at every height sampled (y=2, 8, 16, 18, 19, 22, 40, 45, 300, 520,
+  590, 700): `#4b4b4b #ffffff #d8d8d8 #d8d8d8 #a6a6a6 #4b4b4b #ffffff` — two
+  nested bevels with a 2px face channel between them. Only the left edge
+  carries it; the other three sides of the reference shelf are screen edges.
+- **A group header's toggle is its own cell**: `#c7c7c7`, 15px wide, against a
+  `#dbdbdb` header face, with a 6x2 `#606060` bar for `-` and a 2x6 crossing it
+  for `+` (x=896..911, rows 1..17 expanded and 220..236 collapsed). A
+  FvwmButtons Title cell is one colorset all the way across and cannot do this.
+- **A launcher row** is a `#cccccc` icon gutter 28px wide, then the label on
+  `#d9d9d9`, on a 25px pitch with an etched divider along the bottom.
 
-That last one is its own small wall: `FvwmPager` styles the active page by
-background colour and has no border option, which is why `config` settles for a
-lighter khaki instead of the reference's outline.
+`FvwmPager` styles the active page by background colour and has no border
+option, which is why `config` settled for a lighter khaki instead of the
+reference's outline. Drawing the pager removed that wall rather than working
+around it.
+
+`FvwmButtons`' `Frame N` draws **one** bevel N pixels wide out of a colorset's
+hi/sh. It cannot nest, at any N, so the double bevel was not reachable while
+the shelf was a module. That, more than anything else, is what moved the
+sidebar to option C.
 
 ## Options considered
 
@@ -231,6 +253,14 @@ The Media widget and the System Monitor meters are done, as
 `bin/shelf-media-widget` and `bin/shelf-meters-widget` over `bin/photon.py`.
 `FvwmScript-ShelfMedia`, `bin/shelf-media` and `conkyrc-shelf` are gone with
 them.
+
+**The sidebar followed.** `bin/shelf-panel` draws the whole right edge in one
+window over `bin/photon.py`, reading its sections from `panel.items` and
+keeping its width and collapse state in `.panel.state`. `bin/mk-shelf`,
+`shelf.items`, `shelfdock.items`, the ShelfMenuA/B alias swap and
+`.shelf.state` are all gone, and with them the "never Swallow in
+`shelf.items`" rule, the stranded-duplicate case and the toggle race. The
+taskbar along the bottom is untouched.
 
 The meters went to Qt rather than to the Lua/cairo hook this note offered as
 the cheaper route, and the reason is the measurements above: conky's
@@ -325,6 +355,35 @@ from documentation prose.
   module, so the timer lives in fvwm's event loop, not a Perl `select()`.
   Handlers must return fast — fvwm kills a module after `ModuleTimeout` — so
   anything slow needs `detach()`.
+- **The 150ms alias swap is a race, and it loses about a quarter of the time.**
+  `Module FvwmButtons ShelfMenuB` returns when fvwm forks the module; the new
+  shelf is not on screen until it has connected, read its config, loaded every
+  row's icon and mapped. `Schedule 150 KillModule ShelfMenuA` fires on a wall
+  clock regardless. Recorded at 60fps over eight toggles, two of them dropped
+  the shelf to bare wallpaper for 16-33ms. There is no wait-for-window
+  primitive to sequence against, so raising the 150 makes it rarer and never
+  zero. The same recording against `bin/shelf-panel` is zero in eight, because
+  a collapse is a relayout and nothing restarts. Two instances of one alias
+  were also observed alive at once, with `.shelf.state` naming the other —
+  `KillModule` targets the alias, so once state and reality diverge it kills
+  the wrong one.
+- **`EwmhBaseStruts` takes effect at runtime.** Set to `0 400 0 30` on a live
+  session and re-maximised, a window went from 1750px wide to 1510px, then
+  back. This is what makes a resizable shelf possible at all: the panel
+  re-issues the command as the edge is dragged. Note `_NET_WORKAREA` stays at
+  the full screen either way, so do not use it to check this.
+- **Parse-time geometry goes stale and nothing recomputes it.** The 29px gap
+  that opened between the accordion and the dock was `shelf_pager_h` frozen at
+  114 while the formula yields 85 at 1920x1080 — 152 x 768 / 1024 = 114.0
+  exactly, i.e. fvwm had started while the VM was still at 1024x768. `PipeRead`
+  runs when the line is parsed; a `Restart` recomputes it and a RandR resize
+  does not. FvwmEvent has a `monitor_changed` event that would have been the
+  hook. Moot for the sidebar now that it sizes itself, and still true of
+  anything else computed that way.
+- **`FixedPosition` and `FixedSize` ignore the *user's* attempts only**, not
+  the program's (`fvwm3styles.html`). `FixedPPosition`/`FixedPSize` are the
+  ones that block the program. So a panel can carry `FixedPosition, FixedSize`
+  and still move and resize itself.
 - **FvwmMFL is a real event socket.** JSON over a unix socket at
   `$TMPDIR/fvwmmfl/fvwm_mfl_$DISPLAY.sock`, with subscribable `new_window`,
   `map`, `configure_window`, `destroy_window`, `new_page`, `new_desk`,

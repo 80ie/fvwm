@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Media widget for the QNX Photon shelf's dock.
+"""Media widget for the QNX Photon shelf: MPRIS transport and sink volume.
 
-Replaces FvwmScript-ShelfMedia and bin/shelf-media.  Swallowed by FvwmButtons
-from the Media group in shelfdock.items, which hangs on the window title set
-at the bottom of this file -- it must stay exactly "ShelfMedia".
+A component of bin/shelf-panel, and a window of its own when run directly so
+it can be looked at without the panel around it.  It owns no geometry beyond
+a size hint and it never talks to fvwm, which is what lets the panel host it
+unchanged.
 
 Why this is a program and not an FvwmScript any more is in PANEL-DESIGN.md.
 The short of it: FvwmScript clears before it draws with no double buffering,
@@ -32,8 +33,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import (QObject, QProcess, QRect, Qt, QTimer, pyqtSignal,
-                          pyqtSlot)
+from PyQt6.QtCore import (QObject, QProcess, QRect, QSize, Qt, QTimer,
+                          pyqtSignal, pyqtSlot)
 from PyQt6.QtGui import QFontMetrics, QPainter, QPalette, QPolygon
 from PyQt6.QtCore import QPoint
 from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
@@ -323,6 +324,9 @@ class Sink(QObject):
 
 PREV, STOP, PLAY, NEXT = range(4)
 
+#  The reference's CD Player body, header excluded.
+NATURAL_H = 70
+
 #  Everything below is measured off ~/Desktop/qnx621-1-1.png rather than
 #  guessed, columns at x=900/920 and rows at y=589.  The reference shelf is
 #  134px inner against our 152, so heights transfer 1:1 and only the widths
@@ -336,9 +340,8 @@ GROOVE_DROP = 6       # groove top below thumb top
 
 class MediaWidget(QWidget):
 
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("ShelfMedia")
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, photon.FACE)
@@ -371,10 +374,9 @@ class MediaWidget(QWidget):
         self._flush.setInterval(40)
         self._flush.timeout.connect(self._flush_volume)
 
-        #  70 is what the Media row in shelfdock.items reserves, and it is
-        #  what the reference's CD Player body measures.  Keep the two in
-        #  step: FvwmButtons resizes a swallowed window to its cell.
-        self.resize(photon.SHELF_INNER, 70)
+        #  70 is the reference's CD Player body.  A hint, not a claim: the
+        #  panel is resizable and this reflows to whatever it is given.
+        self.resize(photon.SHELF_INNER, NATURAL_H)
         self.setMinimumSize(110, 60)
         self._relayout()
 
@@ -423,6 +425,9 @@ class MediaWidget(QWidget):
         self.r_ticks_y = thumb_top + THUMB_H - 1
 
         self._measure_title()
+
+    def sizeHint(self):
+        return QSize(photon.SHELF_INNER, NATURAL_H)
 
     def resizeEvent(self, event):
         self._relayout()

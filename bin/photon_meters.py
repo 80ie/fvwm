@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""System Monitor meters for the QNX Photon shelf's dock.
+"""System Monitor meters for the QNX Photon shelf.
 
-Replaces conkyrc-shelf.  Swallowed by FvwmButtons from the SysMon group in
-shelfdock.items, which hangs on the window title set at the bottom -- it must
-stay exactly "ShelfMeters".
+A component of bin/shelf-panel, and a window of its own when run directly.
+Like the Media widget it owns no geometry beyond a size hint and never talks
+to fvwm.
 
 conky was doing its job; what it cannot do is draw what the reference has.
 `${cpubar}` paints a bar's outline and its fill in one colour, so a per-bar
@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import QRect, QTimer
+from PyQt6.QtCore import QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QPainter, QPalette
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -80,9 +80,8 @@ def filesystems():
 
 class MetersWidget(QWidget):
 
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("ShelfMeters")
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, photon.FACE)
@@ -107,6 +106,9 @@ class MetersWidget(QWidget):
         self._timer.timeout.connect(self._sample)
         self._timer.start()
         self._sample()
+
+    def sizeHint(self):
+        return QSize(photon.SHELF_INNER, self.natural_height())
 
     def natural_height(self):
         rows = GAP + BAR_H + GAP + BAR_H + GAP
