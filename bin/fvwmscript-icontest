@@ -1,0 +1,144 @@
+#!/bin/bash
+
+##  Does this fvwm's FvwmScript render an Icon on a widget?
+##
+##  On the VM (fvwm3 1.1.2) it does not: any widget carrying an Icon property
+##  fails to draw, and every widget after it in the script fails too.  That
+##  rules FvwmScript out for an icon+label shelf, so it is worth knowing
+##  whether the host behaves the same way before designing around it.
+##
+##  The test is three ItemDraw widgets at known offsets -- plain, icon, plain.
+##  Each should paint dark text on the light background, so "did it render"
+##  is just "is there a dark pixel in that band".  That makes the verdict
+##  automatic rather than something to eyeball.
+##
+##  Run it on the host with fvwm already running:  bin/fvwmscript-icontest
+
+set -u
+
+die() { printf '%s: %s\n' "${0##*/}" "$1" >&2 ; exit 1 ; }
+
+for t in FvwmCommand xdotool ; do
+    command -v "$t" >/dev/null || die "need $t"
+done
+##  ImageMagick 7 is "magick", 6 is "convert"/"import".
+if command -v magick >/dev/null ; then IM=magick ; GRAB="magick import"
+elif command -v convert >/dev/null ; then IM=convert ; GRAB=import
+else die "need ImageMagick" ; fi
+
+USERDIR=${FVWM_USERDIR:-$HOME/.fvwm}
+ICONDIR=$USERDIR/images/icons
+
+##  Any genuinely 16x16 PNG will do, but restrict the search to plain
+##  [A-Za-z0-9_-] names: images/icons holds files with '~', '+' and '.' in
+##  them, and an odd filename would leave a failure ambiguous between "Icon is
+##  broken" and "that path confused the parser".
+ICON=$(for f in "$ICONDIR"/16x16-*.png ; do
+           [ -e "$f" ] || continue
+           b=${f##*/} ; b=${b#16x16-} ; b=${b%.png}
+           case $b in *[!A-Za-z0-9_-]*) continue ;; esac
+           [ "$($IM identify -format '%wx%h' "$f" 2>/dev/null)" = 16x16 ] && { echo "$f" ; break ; }
+       done)
+[ -n "$ICON" ] || die "no 16x16 png found under $ICONDIR"
+
+SCRIPT=$(mktemp /tmp/FvwmScript-IconTest.XXXXXX)
+SHOT=$(mktemp /tmp/icontest.XXXXXX.png)
+trap 'rm -f "$SCRIPT" "$SHOT"' EXIT
+
+##  Widgets sit at y=0/30/60, each 28 tall, so the bands below cannot overlap.
+cat > "$SCRIPT" <<EOF
+WindowTitle {IconTest}
+WindowSize  220 90
+Font "xft:Sans:size=10:antialias=True"
+ForeColor {black}
+BackColor {#d9d9d9}
+
+Widget 1
+Property
+ Position 0 0
+ Size 220 28
+ Type ItemDraw
+ Flags Left NoReliefString
+ Title {1 before the icon}
+Main
+ Case message of
+  SingleClic :
+  Begin
+  End
+ End
+
+Widget 2
+Property
+ Position 0 30
+ Size 220 28
+ Type ItemDraw
+ Flags Left NoReliefString
+ Icon {$ICON}
+ Title {2 has an icon}
+Main
+ Case message of
+  SingleClic :
+  Begin
+  End
+ End
+
+Widget 3
+Property
+ Position 0 60
+ Size 220 28
+ Type ItemDraw
+ Flags Left NoReliefString
+ Title {3 after the icon}
+Main
+ Case message of
+  SingleClic :
+  Begin
+  End
+ End
+EOF
+
+printf 'fvwm:  %s\n' "$(fvwm3 --version 2>/dev/null | head -1 || echo unknown)"
+printf 'icon:  %s\n\n' "$ICON"
+
+FvwmCommand "KillModule FvwmScript $SCRIPT" >/dev/null 2>&1
+FvwmCommand "ImagePath $ICONDIR" >/dev/null 2>&1
+FvwmCommand "Module FvwmScript $SCRIPT" >/dev/null 2>&1 || die "could not start FvwmScript"
+sleep 2
+
+WIN=$(xdotool search --name '^IconTest$' 2>/dev/null | head -1)
+[ -n "$WIN" ] || { FvwmCommand "KillModule FvwmScript $SCRIPT" >/dev/null 2>&1
+                   die "FvwmScript never mapped a window -- it may not be installed" ; }
+
+eval "$(xdotool getwindowgeometry --shell "$WIN")"
+$GRAB -window root "$SHOT" 2>/dev/null || die "screenshot failed"
+
+##  A band counts as drawn if its darkest pixel is clearly darker than the
+##  #d9d9d9 background; antialiased black text takes it near 0.
+drawn() {
+    local min
+    min=$($IM "$SHOT" -crop "220x28+$X+$((Y + $1))" +repage \
+              -format '%[fx:minima]' info: 2>/dev/null)
+    awk -v m="${min:-1}" 'BEGIN { exit !(m < 0.5) }'
+}
+
+drawn 0  && W1=yes || W1=no
+drawn 30 && W2=yes || W2=no
+drawn 60 && W3=yes || W3=no
+
+FvwmCommand "KillModule FvwmScript $SCRIPT" >/dev/null 2>&1
+
+printf 'widget 1 (no icon, before) rendered: %s\n' "$W1"
+printf 'widget 2 (HAS ICON)        rendered: %s\n' "$W2"
+printf 'widget 3 (no icon, after)  rendered: %s\n\n' "$W3"
+
+if [ "$W1$W2$W3" = yesyesyes ] ; then
+    echo "VERDICT: Icon WORKS on this fvwm -- FvwmScript is usable for an icon+label shelf."
+    exit 0
+elif [ "$W1" = yes ] && [ "$W2$W3" = nono ] ; then
+    echo "VERDICT: Icon is BROKEN, same as the VM -- a widget with an Icon kills"
+    echo "         itself and every widget after it."
+    exit 1
+else
+    echo "VERDICT: inconclusive -- an unexpected mix, look at the window by hand."
+    exit 2
+fi
