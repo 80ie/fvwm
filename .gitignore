@@ -21,8 +21,11 @@ bindings.bak
 
 archive
 
-# Agent-session planning docs, not meant to be committed
-docs/
+# Vendored upstream fvwm documentation lives in doc/ (singular), ignored above.
+# docs/ (plural) is ours and is tracked -- except for the copy of that same
+# upstream manual and wiki that also sits under it.
+docs/Man/
+docs/Wiki/
 
 # Runtime shelf collapse/live-alias state, written by bin/mk-shelf
 .shelf.state
