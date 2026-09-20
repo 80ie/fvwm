@@ -665,8 +665,8 @@ PipeRead "fvwm-menu-desktop -e --enable-mini-icons --size 16 -t Programs"
 
 DestroyMenu SessionMenu
 AddToMenu   SessionMenu "Leave Session" Title
-+ "Lock Screen%$[FVWM_ICON]/quit.png%" Exec exec ~/.fvwm/onLock.sh
-+ "Suspend%$[FVWM_ICON]/quit.png%" Exec exec ~/.fvwm/onSuspend.sh
++ "Lock Screen%$[FVWM_ICON]/quit.png%" Exec exec ~/.fvwm/scripts/onLock.sh
++ "Suspend%$[FVWM_ICON]/quit.png%" Exec exec ~/.fvwm/scripts/onSuspend.sh
 + "Exit X%$[FVWM_ICON]/quit.png%" Module FvwmScript FvwmScript-ConfirmQuit
 + "Reboot%$[FVWM_ICON]/quit.png%" Module FvwmScript FvwmScript-ConfirmReboot
 + "Power Off%$[FVWM_ICON]/quit.png%" Module FvwmScript FvwmScript-ConfirmShutdown

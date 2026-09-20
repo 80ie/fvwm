@@ -28,7 +28,7 @@ There is no build or test system. To apply changes:
 
 **FvwmScript-\*** — small UI dialogs (DateTime widget, Confirm{Quit,Reboot,Shutdown}).
 
-**Shell scripts** — `onLock.sh` (xsecurelock), `onSuspend.sh`, `onReboot.sh`, `onShutdown.sh`, `toggle_whiskermenu.sh` (xdotool-based).
+**scripts/** — shell scripts: `onLock.sh` (xsecurelock), `onSuspend.sh`, `onReboot.sh`, `onShutdown.sh`, `toggle_whiskermenu.sh` (xdotool-based).
 
 ## Key Conventions
 
