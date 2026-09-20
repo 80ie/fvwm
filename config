@@ -571,7 +571,6 @@ Style "TouchDesigner*" !Title, !Borders
 Style "Snippets" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
 Style "Component Editor" WindowListHit, !WindowListSkip, DecorateTransient, CirculateHit, DontRaiseTransient, DontLowerTransient, Title, !NoTitle
 Style comfyui-desktop-2 !Title, !Borders
-Style looking-glass-client !Title, !Borders
 Style com.anthropic.claude !Title, !Borders
 Style audacious !Title, !Borders
 ##                                                           }}}2
