@@ -1,0 +1,717 @@
+#!/usr/bin/env python3
+"""Media widget for the QNX Photon shelf: MPRIS transport and sink volume.
+
+A component of bin/shelf-panel, and a window of its own when run directly so
+it can be looked at without the panel around it.  It owns no geometry beyond
+a size hint and it never talks to fvwm, which is what lets the panel host it
+unchanged.
+
+Why this is a program and not an FvwmScript any more is in PANEL-DESIGN.md.
+The short of it: FvwmScript clears before it draws with no double buffering,
+so every repaint flashes; its Icon property is broken on fvwm3 1.1.2, so the
+transport had to be ASCII; and it has no way to scroll a title.  All three are
+properties of the module, not of how we used it.
+
+Nothing here polls.  Track and playback state arrive as D-Bus
+PropertiesChanged signals, and the sink volume arrives on `pactl subscribe`.
+The only timer in the file drives the marquee, and it stops when the title
+fits.  That is what removes the once-a-second white flash: there is no
+once-a-second anything left.
+
+Run it standalone to look at it -- it is an ordinary window until something
+swallows it.
+"""
+
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+#  qt6ct prints a line per palette lookup at startup and would have us adopt
+#  a session theme we then paint over anyway.  Both are noise in a panel.
+os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
+os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
+
+from PyQt6.QtCore import (QObject, QProcess, QRect, QSize, Qt, QTimer,
+                          pyqtSignal, pyqtSlot)
+from PyQt6.QtGui import QFontMetrics, QPainter, QPalette, QPolygon
+from PyQt6.QtCore import QPoint
+from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
+from PyQt6.QtWidgets import QApplication, QWidget
+
+import photon
+
+MPRIS_PREFIX = "org.mpris.MediaPlayer2."
+MPRIS_PATH = "/org/mpris/MediaPlayer2"
+PLAYER_IFACE = "org.mpris.MediaPlayer2.Player"
+PROPS_IFACE = "org.freedesktop.DBus.Properties"
+
+#  What separates the end of a scrolling title from its own beginning.  The
+#  reference screenshot caught the CD Player mid-wrap ("er ... CD Playe"), so
+#  this is a continuous wrap-around, not a ping-pong.
+MARQUEE_SEP = "   ...   "
+MARQUEE_MS = 60
+
+
+#  ---- MPRIS ----------------------------------------------------------------
+
+class Mpris(QObject):
+    """One player's worth of state, kept current by signals.
+
+    Which player is "the" player is decided on every rescan: a playing one
+    wins, otherwise the first the bus lists.  Rescans happen on
+    NameOwnerChanged, so a player that starts or quits is picked up without
+    anyone asking the bus on a timer.
+    """
+
+    changed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.service = None
+        #  The unique bus name (":1.42") behind self.service.  Signals arrive
+        #  stamped with that, never with the well-known org.mpris name, so
+        #  without it every PropertiesChanged looks like it came from some
+        #  other player.
+        self.owner = None
+        self.title = ""
+        self.status = "Stopped"
+        self.can_next = False
+        self.can_prev = False
+        self.can_control = False
+
+        self.bus = QDBusConnection.sessionBus()
+        #  An empty sender matches any, which is what we want: one match rule
+        #  covers every player on the bus, present and future.
+        self.bus.connect("", MPRIS_PATH, PROPS_IFACE, "PropertiesChanged",
+                         self._on_props)
+        self.bus.connect("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                         "org.freedesktop.DBus", "NameOwnerChanged",
+                         self._on_name_owner)
+        self.rescan()
+
+    #  -- discovery --
+
+    def _names(self):
+        dbus = QDBusInterface("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                              "org.freedesktop.DBus", self.bus)
+        reply = dbus.call("ListNames")
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            return []
+        args = reply.arguments()
+        if not args:
+            return []
+        return [n for n in args[0] if n.startswith(MPRIS_PREFIX)]
+
+    def rescan(self):
+        candidates = self._names()
+        chosen = None
+        for name in candidates:
+            if self._get(name, "PlaybackStatus") == "Playing":
+                chosen = name
+                break
+        if chosen is None and candidates:
+            chosen = candidates[0]
+        self.service = chosen
+        self.owner = self._owner_of(chosen) if chosen else None
+        self.refresh()
+
+    def _owner_of(self, service):
+        dbus = QDBusInterface("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                              "org.freedesktop.DBus", self.bus)
+        reply = dbus.call("GetNameOwner", service)
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            return None
+        args = reply.arguments()
+        return args[0] if args else None
+
+    #  -- reading --
+
+    def _props(self, service):
+        return QDBusInterface(service, MPRIS_PATH, PROPS_IFACE, self.bus)
+
+    def _get(self, service, name):
+        reply = self._props(service).call("Get", PLAYER_IFACE, name)
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            return None
+        args = reply.arguments()
+        return args[0] if args else None
+
+    def refresh(self):
+        if not self.service:
+            self._clear()
+            return
+        reply = self._props(self.service).call("GetAll", PLAYER_IFACE)
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            self._clear()
+            return
+        args = reply.arguments()
+        self._apply(args[0] if args and isinstance(args[0], dict) else {})
+
+    def _clear(self):
+        self.owner = None
+        self.title = ""
+        self.status = "Stopped"
+        self.can_next = self.can_prev = self.can_control = False
+        self.changed.emit()
+
+    def _apply(self, props):
+        if "Metadata" in props:
+            self.title = self._format(props.get("Metadata"))
+        if "PlaybackStatus" in props:
+            self.status = props["PlaybackStatus"] or "Stopped"
+        for key, attr in (("CanGoNext", "can_next"),
+                          ("CanGoPrevious", "can_prev"),
+                          ("CanControl", "can_control")):
+            if key in props:
+                setattr(self, attr, bool(props[key]))
+        self.changed.emit()
+
+    @staticmethod
+    def _format(meta):
+        """"Artist - Title", or whatever subset of it exists.  Not truncated:
+        the widget scrolls what does not fit rather than cutting it, which is
+        the whole reason the old shell backend's `printf '%.24s'` is gone."""
+        if not isinstance(meta, dict):
+            return ""
+        title = meta.get("xesam:title") or ""
+        artist = meta.get("xesam:artist") or ""
+        if isinstance(artist, (list, tuple)):
+            artist = ", ".join(str(a) for a in artist if a)
+        title, artist = str(title).strip(), str(artist).strip()
+        if title and artist:
+            return "%s - %s" % (artist, title)
+        if title:
+            return title
+        url = meta.get("xesam:url") or ""
+        if url:
+            return os.path.basename(str(url))
+        return ""
+
+    #  -- signals in --
+
+    @pyqtSlot(QDBusMessage)
+    def _on_props(self, msg):
+        args = msg.arguments()
+        if len(args) < 2 or args[0] != PLAYER_IFACE:
+            return
+        changed = args[1] if isinstance(args[1], dict) else {}
+        if self.owner and msg.service() == self.owner:
+            self._apply(changed)
+            return
+        #  Somebody else on the bus.  Hand over only if they have started
+        #  playing while ours is idle, or if we had nobody at all -- rescan
+        #  rather than trusting the sender, because it decides by status.
+        if self.service is None or (changed.get("PlaybackStatus") == "Playing"
+                                    and self.status != "Playing"):
+            self.rescan()
+
+    @pyqtSlot(QDBusMessage)
+    def _on_name_owner(self, msg):
+        args = msg.arguments()
+        if not args or not str(args[0]).startswith(MPRIS_PREFIX):
+            return
+        self.rescan()
+
+    #  -- transport out --
+
+    def _call(self, method):
+        if not self.service:
+            return
+        QDBusInterface(self.service, MPRIS_PATH, PLAYER_IFACE,
+                       self.bus).asyncCall(method)
+
+    def play_pause(self):
+        self._call("PlayPause")
+
+    def stop(self):
+        self._call("Stop")
+
+    def next(self):
+        self._call("Next")
+
+    def previous(self):
+        self._call("Previous")
+
+
+#  ---- Sink volume ----------------------------------------------------------
+
+class Sink(QObject):
+    """Default sink volume, event-driven.
+
+    `pactl subscribe` is a long-lived stream, not a poll: it says nothing
+    until something on the server actually changes, and only then do we ask
+    wpctl what the new value is.  That is the difference that matters -- the
+    old widget asked once a second whether anything had happened.
+
+    libpulse's own pa_context_subscribe() through python3-pulsectl would drop
+    the two subprocesses, but pulsectl is not installed here and there is no
+    compiler on this box to build anything that needs one.  pactl and wpctl
+    are already hard dependencies of the shelf.
+    """
+
+    changed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.volume = 0.0
+        self.muted = False
+
+        #  Coalesces a burst of server events into one read: changing the
+        #  volume emits several in a row and they all want the same answer.
+        self._coalesce = QTimer(self)
+        self._coalesce.setSingleShot(True)
+        self._coalesce.setInterval(30)
+        self._coalesce.timeout.connect(self._read)
+
+        self._reader = QProcess(self)
+        self._reader.finished.connect(self._reader_done)
+
+        self._stopping = False
+        self._sub = QProcess(self)
+        self._sub.readyReadStandardOutput.connect(self._on_events)
+        self._sub.finished.connect(self._sub_died)
+        self._start_sub()
+        self._read()
+
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self.stop)
+
+    def _start_sub(self):
+        self._sub.start("pactl", ["subscribe"])
+
+    def _sub_died(self):
+        if self._stopping:
+            return
+        #  pipewire-pulse restarting takes the subscription with it.  Come
+        #  back for it rather than going silently deaf.
+        QTimer.singleShot(2000, self._start_sub)
+
+    def stop(self):
+        """Reap the children before the panel goes.
+
+        config restarts the panel on every fvwm Restart, so this is now the
+        ordinary exit path rather than a rare one, and a subscription left
+        running is a subscription left running *per restart* -- there were
+        three orphaned `pactl subscribe` processes in ps when this was
+        written.  The _stopping flag is what stops _sub_died reading its own
+        termination as pipewire dying and resurrecting it."""
+        self._stopping = True
+        for proc in (self._sub, self._reader):
+            if proc.state() == QProcess.ProcessState.NotRunning:
+                continue
+            proc.terminate()
+            if not proc.waitForFinished(300):
+                proc.kill()
+
+    def _on_events(self):
+        data = bytes(self._sub.readAllStandardOutput()).decode("utf-8", "replace")
+        for line in data.splitlines():
+            if "on sink" in line or "on server" in line:
+                self._coalesce.start()
+                return
+
+    def _read(self):
+        if self._reader.state() != QProcess.ProcessState.NotRunning:
+            #  A read is already in flight; its result will be current enough,
+            #  and another event will re-arm us if it is not.
+            return
+        self._reader.start("wpctl", ["get-volume", "@DEFAULT_SINK@"])
+
+    def _reader_done(self):
+        out = bytes(self._reader.readAllStandardOutput()).decode("utf-8", "replace")
+        m = re.search(r"Volume:\s*([0-9.]+)", out)
+        if not m:
+            return
+        volume = float(m.group(1))
+        muted = "MUTED" in out
+        if volume != self.volume or muted != self.muted:
+            self.volume, self.muted = volume, muted
+            self.changed.emit()
+
+    #  -- writing --
+
+    def set_volume(self, fraction):
+        #  -l 1.0 caps it: pipewire will happily amplify past 100% and it
+        #  sounds terrible.
+        QProcess.startDetached("wpctl", ["set-volume", "-l", "1.0",
+                                         "@DEFAULT_SINK@",
+                                         "%.2f" % max(0.0, min(1.0, fraction))])
+
+    def toggle_mute(self):
+        QProcess.startDetached("wpctl", ["set-mute", "@DEFAULT_SINK@", "toggle"])
+
+
+#  ---- The widget -----------------------------------------------------------
+
+PREV, STOP, PLAY, NEXT = range(4)
+
+#  The reference's CD Player body, header excluded.
+NATURAL_H = 70
+
+#  Everything below is measured off ~/Desktop/qnx621-1-1.png rather than
+#  guessed, columns at x=900/920 and rows at y=589.  The reference shelf is
+#  134px inner against our 152, so heights transfer 1:1 and only the widths
+#  that span the shelf grow.
+FIELD_H = 19          # title field, 16px interior inside its bevel
+BTN_W, BTN_H, BTN_PITCH = 21, 15, 23
+GAP = 3               # field to buttons, buttons to divider, divider to volume
+THUMB_W, THUMB_H = 10, 17
+GROOVE_DROP = 6       # groove top below thumb top
+
+
+class MediaWidget(QWidget):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        pal = self.palette()
+        pal.setColor(QPalette.ColorRole.Window, photon.FACE)
+        self.setPalette(pal)
+        self.setAutoFillBackground(True)
+
+        self.font_title = photon.font(8)
+        self.font_glyph = photon.font(8)
+
+        self.mpris = Mpris(self)
+        self.mpris.changed.connect(self._on_mpris)
+        self.sink = Sink(self)
+        self.sink.changed.connect(self._on_sink)
+
+        self._pressed = None          # transport button held down
+        self._dragging = False        # slider thumb held
+        self._drag_value = 0.0
+        self._scroll = 0              # marquee offset, pixels
+        self._scroll_span = 0         # width of one title+separator cycle
+
+        self._marquee = QTimer(self)
+        self._marquee.setInterval(MARQUEE_MS)
+        self._marquee.timeout.connect(self._tick)
+
+        #  Volume writes are coalesced: a drag crosses a hundred pixels and
+        #  each one would otherwise be a wpctl spawn.
+        self._pending = None
+        self._flush = QTimer(self)
+        self._flush.setSingleShot(True)
+        self._flush.setInterval(40)
+        self._flush.timeout.connect(self._flush_volume)
+
+        #  70 is the reference's CD Player body.  A hint, not a claim: the
+        #  panel is resizable and this reflows to whatever it is given.
+        self.resize(photon.SHELF_INNER, NATURAL_H)
+        self.setMinimumSize(110, 60)
+        self._relayout()
+
+    #  -- geometry --
+    #
+    #  Recomputed from the current size rather than baked in, because
+    #  FvwmButtons resizes a swallowed window to its cell and a widget laid
+    #  out at fixed positions clips instead of reflowing.
+
+    def _relayout(self):
+        w, h = self.width(), self.height()
+        #  FvwmButtons' module-wide `Padding 4 0` does not reach a swallowed
+        #  window -- it resizes the child to the whole cell -- so the inset
+        #  that keeps this row in line with the meters above it has to come
+        #  from here.  The reference's field is inset 3px from its group's
+        #  content edge; 4 matches what the rest of the dock does.
+        pad = 4
+
+        self.r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
+
+        row_w = 3 * BTN_PITCH + BTN_W
+        bx = max(pad, (w - row_w) // 2)
+        by = self.r_title.bottom() + 1 + GAP
+        self.r_buttons = [QRect(bx + i * BTN_PITCH, by, BTN_W, BTN_H)
+                          for i in range(4)]
+
+        self.div_y = by + BTN_H + GAP
+
+        #  The volume sub-section hangs off the divider at the reference's
+        #  spacing and the slack, if the cell is taller than the spec, falls
+        #  to the bottom.  A cell a few pixels off changes the gap rather
+        #  than the layout, which is what keeps a swallowed widget from
+        #  clipping.
+        thumb_top = self.div_y + 2 + GAP
+        #  16px, which is a size the Haiku theme stocks: its 16x16 speaker is
+        #  a clean grey wedge, where the 24x24 one is a busier yellow drawing
+        #  from a different generation of the set.  Asking for the stocked
+        #  size also means no scaling.
+        self.r_speaker = QRect(6, thumb_top + 1, 16, 16)
+        groove_x = 32
+        groove_right = w - 28
+        self.r_groove = QRect(groove_x, thumb_top + GROOVE_DROP,
+                              max(20, groove_right - groove_x), 5)
+        self.r_thumb_top = thumb_top
+        #  The reference's scale marks sit on the thumb's bottom row.
+        self.r_ticks_y = thumb_top + THUMB_H - 1
+
+        self._measure_title()
+
+    def sizeHint(self):
+        return QSize(photon.SHELF_INNER, NATURAL_H)
+
+    def resizeEvent(self, event):
+        self._relayout()
+
+    #  -- state in --
+
+    def _on_mpris(self):
+        self._measure_title()
+        self.update()
+
+    def _on_sink(self):
+        if not self._dragging:
+            self.update(self._vol_band())
+
+    def _vol_band(self):
+        top = self.r_thumb_top - 1
+        return QRect(0, top, self.width(), THUMB_H + 4)
+
+    #  -- marquee --
+
+    def _title_text(self):
+        return self.mpris.title or ("No player" if not self.mpris.service
+                                    else "—")
+
+    def _measure_title(self):
+        fm = QFontMetrics(self.font_title)
+        avail = photon.sunken_interior(self.r_title).width() - 6
+        text = self._title_text()
+        if fm.horizontalAdvance(text) <= avail:
+            self._scroll_span = 0
+            self._scroll = 0
+            self._marquee.stop()
+        else:
+            self._scroll_span = fm.horizontalAdvance(text + MARQUEE_SEP)
+            self._scroll = 0
+            self._marquee.start()
+
+    def _tick(self):
+        self._scroll = (self._scroll + 1) % max(1, self._scroll_span)
+        #  Only the field repaints.  Qt double-buffers, so this is a blit, not
+        #  a clear-then-draw -- the thing FvwmScript could not do.
+        self.update(self.r_title)
+
+    #  -- painting --
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.fillRect(self.rect(), photon.FACE)
+        self._paint_title(p)
+        self._paint_transport(p)
+        photon.divider(p, self.div_y, 2, self.width() - 3)
+        self._paint_volume(p)
+
+    def _paint_title(self, p):
+        photon.sunken(p, self.r_title, photon.FIELD)
+        inner = photon.sunken_interior(self.r_title)
+        p.save()
+        p.setClipRect(inner)
+        p.setFont(self.font_title)
+        p.setPen(photon.INK if self.mpris.title else photon.INK_OFF)
+        fm = QFontMetrics(self.font_title)
+        baseline = inner.top() + (inner.height() + fm.capHeight()) // 2
+        text = self._title_text()
+        if self._scroll_span:
+            x = inner.left() + 3 - self._scroll
+            p.drawText(x, baseline, text + MARQUEE_SEP)
+            p.drawText(x + self._scroll_span, baseline, text + MARQUEE_SEP)
+        else:
+            p.drawText(inner.left() + 3, baseline, text)
+        p.restore()
+
+    def _paint_transport(self, p):
+        live = self.mpris.service is not None
+        enabled = (live and self.mpris.can_prev, live, live,
+                   live and self.mpris.can_next)
+        playing = self.mpris.status == "Playing"
+        for i, r in enumerate(self.r_buttons):
+            down = self._pressed == i
+            photon.button(p, r, down)
+            #  A held button moves its glyph one pixel down and right, which
+            #  is the whole of Photon's press animation.
+            g = r.translated(1, 1) if down else r
+            self._glyph(p, i, g, enabled[i], playing)
+
+    def _glyph(self, p, which, r, enabled, playing):
+        c = photon.INK if enabled else photon.INK_OFF
+        p.save()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(c)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        cx, cy = r.center().x(), r.center().y()
+
+        #  Sizes taken off the reference rather than chosen: the stop is a
+        #  7px square and a triangle is 5 wide by 7 tall, both measured at
+        #  x=948 and x=962, rows 586..592.  Photon's transport glyphs are
+        #  much smaller than a 21x15 button invites, and drawing them bigger
+        #  is what makes an imitation look clumsy.
+        def tri(x, left):
+            if left:
+                pts = [QPoint(x + 5, cy - 3), QPoint(x + 5, cy + 4), QPoint(x, cy)]
+            else:
+                pts = [QPoint(x, cy - 3), QPoint(x, cy + 4), QPoint(x + 5, cy)]
+            p.drawPolygon(QPolygon(pts))
+
+        #  Rewind and fast-forward, not skip-to-start and skip-to-end: the
+        #  reference's outer buttons are bare double triangles with no bar
+        #  against them.
+        if which == PREV:
+            tri(cx - 6, True)
+            tri(cx - 1, True)
+        elif which == STOP:
+            p.drawRect(QRect(cx - 3, cy - 3, 7, 7))
+        elif which == PLAY:
+            if playing:
+                p.drawRect(QRect(cx - 3, cy - 3, 2, 7))
+                p.drawRect(QRect(cx + 1, cy - 3, 2, 7))
+            else:
+                p.drawPolygon(QPolygon([QPoint(cx - 2, cy - 3),
+                                        QPoint(cx - 2, cy + 4),
+                                        QPoint(cx + 3, cy)]))
+        elif which == NEXT:
+            tri(cx - 4, False)
+            tri(cx + 1, False)
+        p.restore()
+
+    def _paint_volume(self, p):
+        value = self._value()
+        muted = self.sink.muted
+        name = ("audio-volume-muted" if muted or value <= 0.001 else
+                "audio-volume-low" if value < 0.34 else
+                "audio-volume-medium" if value < 0.67 else
+                "audio-volume-high")
+        if not photon.draw_icon(p, name, self.r_speaker, not muted):
+            #  No icon theme: a filled wedge is better than an empty hole.
+            p.save()
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(photon.INK if not muted else photon.INK_OFF)
+            r = self.r_speaker
+            p.drawPolygon(QPolygon([
+                QPoint(r.left() + 2, r.center().y() - 3),
+                QPoint(r.left() + 6, r.center().y() - 3),
+                QPoint(r.left() + 11, r.top() + 2),
+                QPoint(r.left() + 11, r.bottom() - 2),
+                QPoint(r.left() + 6, r.center().y() + 3),
+                QPoint(r.left() + 2, r.center().y() + 3)]))
+            p.restore()
+
+        photon.groove(p, self.r_groove)
+
+        #  Five marks under the groove, ends included.  The reference's are
+        #  spaced ~18.5px across an 86px groove, which is this same rule at
+        #  its width rather than a fixed pitch.
+        travel = self.r_groove.width() - THUMB_W
+        for i in range(5):
+            x = self.r_groove.left() + THUMB_W // 2 + round(travel * i / 4)
+            photon.tick(p, x, self.r_ticks_y)
+
+        thumb_x = self.r_groove.left() + round(travel * value)
+        photon.thumb(p, QRect(thumb_x, self.r_thumb_top, THUMB_W, THUMB_H))
+
+    def _value(self):
+        return self._drag_value if self._dragging else self.sink.volume
+
+    #  -- input --
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        pos = event.position().toPoint()
+
+        for i, r in enumerate(self.r_buttons):
+            if r.contains(pos):
+                self._pressed = i
+                self.update(r)
+                return
+
+        if self.r_speaker.contains(pos):
+            self.sink.toggle_mute()
+            return
+
+        band = QRect(self.r_groove.left() - 6, self.r_thumb_top - 2,
+                     self.r_groove.width() + 12, THUMB_H + 4)
+        if band.contains(pos):
+            self._dragging = True
+            self._drag_value = self.sink.volume
+            self._set_from_x(pos.x())
+
+    def mouseMoveEvent(self, event):
+        if self._dragging:
+            self._set_from_x(event.position().toPoint().x())
+        elif self._pressed is not None:
+            inside = self.r_buttons[self._pressed].contains(
+                event.position().toPoint())
+            if not inside:
+                r = self.r_buttons[self._pressed]
+                self._pressed = None
+                self.update(r)
+
+    def mouseReleaseEvent(self, event):
+        if self._dragging:
+            self._dragging = False
+            self._flush_volume()
+            self.update(self._vol_band())
+            return
+        if self._pressed is None:
+            return
+        which, self._pressed = self._pressed, None
+        r = self.r_buttons[which]
+        self.update(r)
+        if not r.contains(event.position().toPoint()):
+            return
+        if which == PREV and self.mpris.can_prev:
+            self.mpris.previous()
+        elif which == STOP:
+            self.mpris.stop()
+        elif which == PLAY:
+            self.mpris.play_pause()
+        elif which == NEXT and self.mpris.can_next:
+            self.mpris.next()
+
+    def wheelEvent(self, event):
+        step = 0.05 if event.angleDelta().y() > 0 else -0.05
+        target = max(0.0, min(1.0, self.sink.volume + step))
+        self.sink.set_volume(target)
+
+    def _set_from_x(self, x):
+        travel = self.r_groove.width() - THUMB_W
+        value = (x - self.r_groove.left() - THUMB_W / 2.0) / float(max(1, travel))
+        value = max(0.0, min(1.0, value))
+        if abs(value - self._drag_value) < 0.005:
+            return
+        self._drag_value = value
+        self._pending = value
+        if not self._flush.isActive():
+            self._flush.start()
+        self.update(self._vol_band())
+
+    def _flush_volume(self):
+        if self._pending is None:
+            return
+        self.sink.set_volume(self._pending)
+        self._pending = None
+
+
+def main():
+    app = QApplication(sys.argv)
+    #  WM_CLASS: instance comes from argv[0], class from here.  Handy for
+    #  xdotool and for a Style rule, and harmless to the Swallow, which hangs
+    #  on the title.
+    app.setApplicationName("ShelfMedia")
+    app.setDesktopFileName("ShelfMedia")
+
+    w = MediaWidget()
+    #  Title before show(): FvwmButtons' UseOld looks for the name at map
+    #  time, and a window that renames itself afterwards is a window it has
+    #  already decided about.
+    w.setWindowTitle("ShelfMedia")
+    w.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
