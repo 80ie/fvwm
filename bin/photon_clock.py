@@ -14,10 +14,9 @@ The reference does *not* put this in a sunken field, which is the mistake
 worth naming because every other value on the shelf is in one.  Sampled
 down the reference's bottom strip at x=150, y=292..314 is a flat run of
 #d9d9d9 with the glyphs straight on it -- the shelf's own face, no bevel, no
-#f4f4f4.  The only rule is the etched separator above it at y=290,291, and
-the strip is noticeably taller than a field would be: 23 rows against the
-19 the CD title field gets.  No group header either; `panel.items` names
-this section `bare`.
+#f4f4f4.  The only rule is the etched separator above it at y=290,291.  The
+strip is enlarged beyond the reference for readability.  No group header
+either; `panel.items` names this section `bare`.
 
 A QTimer, but armed to the next minute boundary rather than ticking every
 second and throwing most of the ticks away -- CLAUDE.md's "almost nothing
@@ -41,7 +40,8 @@ import photon
 
 FORMAT = "%a-%d %I:%M%p"   # TaskbarClockTick's tokens: "Fri-19 11:33PM"
 
-STRIP_H = 23    # the reference's bottom strip, y=292..314 at x=150
+CLOCK_PT = 10
+STRIP_H = 30
 
 
 class ClockWidget(QWidget):
@@ -54,7 +54,7 @@ class ClockWidget(QWidget):
         self.setPalette(pal)
         self.setAutoFillBackground(True)
 
-        self.font_clock = photon.font(8)
+        self.font_clock = photon.font(CLOCK_PT)
         self._text = self._now_text()
 
         self.resize(photon.SHELF_INNER, self.natural_height())
