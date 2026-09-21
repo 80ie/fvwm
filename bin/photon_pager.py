@@ -105,8 +105,7 @@ class WorldView(QWidget):
         wanted = set(self.atoms[n] for n in WATCH)
         dirty = False
         try:
-            for _ in range(self.dpy.pending_events()):
-                ev = self.dpy.next_event()
+            for ev in photon.x_events(self.dpy):
                 if ev.type == X.PropertyNotify and ev.atom in wanted:
                     dirty = True
         except Exception:

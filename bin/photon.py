@@ -311,6 +311,28 @@ def tick(p: QPainter, x, y):
     p.drawLine(x + 1, y, x + 1, y + 1)
 
 
+def x_events(dpy):
+    """Every event readable on `dpy` right now, drained until it is empty.
+
+    `pending_events()` reports only what Xlib has already parsed, so one pass
+    over it can leave events sitting in the buffer -- and a QSocketNotifier
+    fires on *fd* readability, so nothing ever wakes us to collect them.
+
+    fvwm updating `_NET_CLIENT_LIST_STACKING` and `_NET_ACTIVE_WINDOW` for
+    the same raise arrives as one readable fd and two events.  Draining once
+    took the stacking change and stranded the focus change until some
+    unrelated event happened along, which left the window list believing a
+    window it had just raised was not focused -- and so its click toggle
+    raised again instead of minimising.  Caller iterates; this yields.
+    """
+    while True:
+        count = dpy.pending_events()
+        if not count:
+            return
+        for _ in range(count):
+            yield dpy.next_event()
+
+
 def sunken_interior(r: QRect) -> QRect:
     """The part of a sunken rect that is safe to draw into: inside the
     outline, inside the inner shadow, and clear of the outer lip."""

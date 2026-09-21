@@ -108,8 +108,7 @@ class TasksWidget(QWidget):
         #  way, and refresh() is cheap enough not to need per-atom triage.
         dirty = False
         try:
-            for _ in range(self.dpy.pending_events()):
-                ev = self.dpy.next_event()
+            for ev in photon.x_events(self.dpy):
                 if ev.type in (X.PropertyNotify, X.ConfigureNotify,
                                X.DestroyNotify, X.UnmapNotify):
                     dirty = True

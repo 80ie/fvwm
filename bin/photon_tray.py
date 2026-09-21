@@ -182,8 +182,7 @@ class TrayWidget(QWidget):
 
     def _drain_x(self):
         try:
-            for _ in range(self.dpy.pending_events()):
-                ev = self.dpy.next_event()
+            for ev in photon.x_events(self.dpy):
                 if (ev.type == X.ConfigureNotify
                         and getattr(ev.window, "id", None) == self.tray_xid):
                     self._sync_tray_height()
