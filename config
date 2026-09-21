@@ -96,12 +96,12 @@ AddToFunc   StartFunction
 + I Schedule 300 TaskbarClockTick
 + I Schedule 1200 TaskbarClockTick
 + I Schedule Periodic 30000 3010 TaskbarClockTick
-###  Shelf.  Not a module, so fvwm neither kills it on Restart nor brings it
-###  back afterwards; the pgrep makes this line idempotent, so a Restart
-###  leaves a running panel alone and revives a dead one.  Test (Init) would
-###  do the first but not the second.
-+ I Exec exec sh -c 'pgrep -f "bin/shelf-panel$" >/dev/null \
-      || exec "$FVWM_USERDIR/bin/shelf-panel"'
+###  Shelf.  Not a module, so fvwm won't restart it on its own; kill any
+###  running instance and launch a fresh one so a Restart picks up changes
+###  to bin/shelf-panel, photon.py, or panel.items, same as everything else
+###  StartFunction brings up.  Width/collapse state survives in
+###  .panel.state, so the restart is invisible beyond a brief redraw.
++ I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
 # Replaced by the FvwmButtons taskbar above; both sit full-width at the bottom
 # and would overlap. Its tray also blocks stalonetray from claiming the tray
 # selection.
