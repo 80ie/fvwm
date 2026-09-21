@@ -348,15 +348,15 @@ class Sink(QObject):
 
 PREV, STOP, PLAY, NEXT = range(4)
 
-#  The reference's CD Player body, header excluded.
-NATURAL_H = 70
+#  Media body, header excluded.
+NATURAL_H = 73
 
 #  Everything below is measured off ~/Desktop/qnx621-1-1.png rather than
 #  guessed, columns at x=900/920 and rows at y=589.  The reference shelf is
 #  134px inner against our 152, so heights transfer 1:1 and only the widths
 #  that span the shelf grow.
 FIELD_H = 19          # title field, 16px interior inside its bevel
-BTN_H, BTN_GAP = 15, 2
+BTN_H, BTN_GAP = 18, 2
 GAP = 3               # field to buttons, buttons to divider, divider to volume
 THUMB_W, THUMB_H = 10, 17
 GROOVE_DROP = 6       # groove top below thumb top
@@ -398,8 +398,7 @@ class MediaWidget(QWidget):
         self._flush.setInterval(40)
         self._flush.timeout.connect(self._flush_volume)
 
-        #  70 is the reference's CD Player body.  A hint, not a claim: the
-        #  panel is resizable and this reflows to whatever it is given.
+        #  The panel is resizable and this reflows to whatever it is given.
         self.resize(photon.SHELF_INNER, NATURAL_H)
         self.setMinimumSize(110, 60)
         self._relayout()
