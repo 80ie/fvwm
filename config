@@ -30,16 +30,6 @@ InfoStoreAdd border_width 5
 # it is claiming, and that is read back from the panel where EwmhBaseStruts
 # is set below.
 
-# Colorset numbers by name, so the taskbar's spec file can refer to them
-# without hardcoding a number that would shift if the warm brown sets below
-# ever grow.  The pager's four (34-37) had no reader left once the shelf
-# stopped being a module and are gone; the colorsets themselves stay as the
-# palette's record.
-InfoStoreAdd cs_shelf        30
-InfoStoreAdd cs_shelf_hi     31
-InfoStoreAdd cs_shelf_header 32
-InfoStoreAdd cs_shelf_well   33
-
 # FvwmPager width/height. Keep both divisible by DesktopSize so the generated
 # background tile lines up with the page cells (3x3 -> 128x72 per page).
 InfoStoreAdd pager_width 384
@@ -610,92 +600,7 @@ Style audacious !Title, !Borders
 ##                                                           }}}2
 ##                                                           }}}1
 ##  Colorsets                                                {{{1
-#~~~~~~~ 0 - Default
-Colorset 0 fg #ffc996, bg #432727, hi, sh, Plain, NoShape
-#~~~~~~~ 1 - Inactive Windows
-Colorset 1 fg #aa8664, bg #2C2A21, hi, sh, Plain, NoShape
-#~~~~~~~ 2 - Active Window
-Colorset 2 fg #ffa733, bg #68352D, hi, sh, Plain, NoShape
-#~~~~~~~ 3 - Inactive Windows Borders
-Colorset 3 fg white, bg #2C2A21, hi, sh, Plain, NoShape
-#~~~~~~~ 4 - Active Windows Borders
-Colorset 4 fg white, bg #532a24, hi, sh, Plain, NoShape
-#~~~~~~~ 5 - Menu - Inactive Item
-Colorset 5 fg #aa4d50, bg #432727, hi, sh, Plain, NoShape
-#~~~~~~~ 6 - Menu - Active Item
-Colorset 6 fg white, bg #aa8664, hi, sh, Plain, NoShape
-#~~~~~~~ 7 - Menu - Grayed Item
-Colorset 7 fg white, bg #9d9592, hi, sh, Plain, NoShape
-#~~~~~~~ 8 - Menu - Title
-Colorset 8 fg white, bg #412222, hi, sh, Plain, NoShape
-
-#~~ Modules ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#~~~~~~~ 10 - Module Default [PlainColorset]
-Colorset 10 fg #aa4d50, bg #3a2222, hi, sh, Plain, NoShape
-#~~~~~~~ 11 - Module Hilight
-Colorset 11 fg #ffa733, bg #68352d, hi, sh, Plain, NoShape
-#~~~~~~~ 12 - Module ActiveButton (Mouse Hover)
-Colorset 12 fg #aa4d50, bg #532e12, hi, sh, Plain, NoShape
-#~~~~~~~ 13 - FvwmPager Active Page
-Colorset 13 fg #aa4d50, bg #432727, hi, sh, Plain, NoShape
-#~~~~~~~ 14 - FvwmIconMan Iconified Button
-Colorset 14 fg #aa4d50, bg #3a2222, hi, sh, Plain, NoShape
-
-#~~ Custom ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#~~~~~~~ 15 - Window Close Button
-Colorset 15 fg white, bg #ff7300, hi, sh, Plain, NoShape
-#~~~~~~~ 16 - FvwmPager Default
-Colorset 16 fg #aa8664, bg #68352d, hi, sh, Plain, NoShape
-#~~~~~~~ 17 - FvwmPager Page Highlight
-Colorset 17 fg #b76b43, bg #aa4d50, hi, sh, Plain, NoShape
-#~~~~~~~ 18 - FvwmPager Window Highlight
-Colorset 18 fg #b76b43, bg #5c3b1c, hi, sh, Plain, NoShape
-#~~~~~~~ 19 - FvwmPager Window Default
-Colorset 19 fg #463900, bg #96724f, hi, sh, Plain, NoShape
-
-
-# Cut the pager tile to one page cell first, so TiledPixmap repeats the
-# wallpaper once per page. PipeRead blocks, so the tile exists by Colorset time.
-PipeRead "$[FVWM_USERDIR]/bin/mk-pager-bg.sh $[infostore.bg] $[infostore.pager_bg] $[desk.pagesx] $[desk.pagesy] $[infostore.pager_width] $[infostore.pager_height] >/dev/null 2>&1; echo Nop"
-
-Colorset 20 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint #b76b43 35, Dither
-Colorset 21 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint #472828 10, Dither
-
-
-# QNX Photon greys, sampled from the reference screenshots.  The shadow is a
-# soft #a7a7a7 rather than black, which is what makes Photon read as gentler
-# than Win95 at the same 1px bevel width.  Referred to by name through the
-# cs_* InfoStore keys, never by number.
-#~~~~~~~ 30 - Shelf face
-Colorset 30 fg #000000, bg #d9d9d9, hi #ffffff, sh #a7a7a7, Plain, NoShape
-#~~~~~~~ 31 - Shelf hover
-Colorset 31 fg #000000, bg #e4e4e4, hi #ffffff, sh #a7a7a7, Plain, NoShape
-#~~~~~~~ 32 - Shelf group header
-Colorset 32 fg #000000, bg #dbdbdb, hi #ffffff, sh #a7a7a7, Plain, NoShape
-#~~~~~~~ 33 - Sunken well: shelf filler, meter trough, clock field
-Colorset 33 fg #000000, bg #d2d2d2, hi #ffffff, sh #a7a7a7, Plain, NoShape
-
-# World View pager.  No module reads these any more -- bin/shelf-panel draws
-# the pager itself -- but they stay as the palette's record alongside the rest
-# of the Photon greys, and bin/photon_pager.py mirrors them.  Note the active
-# page there is #e1e3d8 with a #4b4b4b outline, which is what the reference
-# actually does; the lighter khaki below was the closest FvwmPager could get,
-# having no border option.
-#~~~~~~~ 34 - Pager desk
-Colorset 34 fg #ffffff, bg #c3c7b1, hi #ffffff, sh #a7a7a7, Plain, NoShape
-#~~~~~~~ 35 - Pager active page
-Colorset 35 fg #ffffff, bg #d5d8c6, hi #ffffff, sh #a7a7a7, Plain, NoShape
-#~~~~~~~ 36 - Pager mini window
-Colorset 36 fg #000000, bg #bec1c3, hi #ffffff, sh #7f8285, Plain, NoShape
-#~~~~~~~ 37 - Pager focused mini window
-Colorset 37 fg #000000, bg #b4b4ff, hi #ffffff, sh #7676aa, Plain, NoShape
-
-#
-#~~~~~~~ 18 - FvwmWindowList
-#Colorset 20 fg #845252, bg #3f0c00, hi, sh, Plain, NoShape
-
-## NEW
-#Colorset 20 fg white, bg #94293e, hi, sh, Plain, NoShape
+Read $[FVWM_USERDIR]/colorsets
 ##                                                           }}}1
 ##  Menus                                                    {{{1
 ##   ├ Root Menu                                             {{{2
@@ -932,7 +837,6 @@ Style "ShelfPanel" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
     FixedPosition, FixedSize, StaysOnTop
 ##                                                           }}}2
 ##                                                           }}}1
-
 
 
 

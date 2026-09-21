@@ -348,15 +348,15 @@ class Sink(QObject):
 
 PREV, STOP, PLAY, NEXT = range(4)
 
-#  The reference's CD Player body, header excluded.
-NATURAL_H = 70
+#  Media body, header excluded.
+NATURAL_H = 77
 
 #  Everything below is measured off ~/Desktop/qnx621-1-1.png rather than
 #  guessed, columns at x=900/920 and rows at y=589.  The reference shelf is
 #  134px inner against our 152, so heights transfer 1:1 and only the widths
 #  that span the shelf grow.
 FIELD_H = 19          # title field, 16px interior inside its bevel
-BTN_W, BTN_H, BTN_PITCH = 21, 15, 23
+BTN_H, BTN_GAP = 22, 2
 GAP = 3               # field to buttons, buttons to divider, divider to volume
 THUMB_W, THUMB_H = 10, 17
 GROOVE_DROP = 6       # groove top below thumb top
@@ -398,8 +398,7 @@ class MediaWidget(QWidget):
         self._flush.setInterval(40)
         self._flush.timeout.connect(self._flush_volume)
 
-        #  70 is the reference's CD Player body.  A hint, not a claim: the
-        #  panel is resizable and this reflows to whatever it is given.
+        #  The panel is resizable and this reflows to whatever it is given.
         self.resize(photon.SHELF_INNER, NATURAL_H)
         self.setMinimumSize(110, 60)
         self._relayout()
@@ -411,7 +410,7 @@ class MediaWidget(QWidget):
     #  out at fixed positions clips instead of reflowing.
 
     def _relayout(self):
-        w, h = self.width(), self.height()
+        w = self.width()
         #  FvwmButtons' module-wide `Padding 4 0` does not reach a swallowed
         #  window -- it resizes the child to the whole cell -- so the inset
         #  that keeps this row in line with the meters above it has to come
@@ -421,11 +420,15 @@ class MediaWidget(QWidget):
 
         self.r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
 
-        row_w = 3 * BTN_PITCH + BTN_W
-        bx = max(pad, (w - row_w) // 2)
         by = self.r_title.bottom() + 1 + GAP
-        self.r_buttons = [QRect(bx + i * BTN_PITCH, by, BTN_W, BTN_H)
-                          for i in range(4)]
+        row_w = max(4, w - 2 * pad - 3 * BTN_GAP)
+        button_w, extra = divmod(row_w, 4)
+        self.r_buttons = []
+        bx = pad
+        for i in range(4):
+            bw = button_w + (1 if i < extra else 0)
+            self.r_buttons.append(QRect(bx, by, bw, BTN_H))
+            bx += bw + BTN_GAP
 
         self.div_y = by + BTN_H + GAP
 
@@ -545,10 +548,8 @@ class MediaWidget(QWidget):
         cx, cy = r.center().x(), r.center().y()
 
         #  Sizes taken off the reference rather than chosen: the stop is a
-        #  7px square and a triangle is 5 wide by 7 tall, both measured at
-        #  x=948 and x=962, rows 586..592.  Photon's transport glyphs are
-        #  much smaller than a 21x15 button invites, and drawing them bigger
-        #  is what makes an imitation look clumsy.
+        #  7px square and a triangle is 5 wide by 7 tall.  The glyphs stay
+        #  compact even though their buttons expand to fill the shelf.
         def tri(x, left):
             if left:
                 pts = [QPoint(x + 5, cy - 3), QPoint(x + 5, cy + 4), QPoint(x, cy)]

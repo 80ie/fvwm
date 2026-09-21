@@ -7,17 +7,16 @@ a string into via SendToModule/ChangeButton -- there is no taskbar left to
 send to, so this widget keeps its own clock instead of waiting on fvwm for
 one.
 
-"%a-%d %I:%M%p" is TaskbarClockTick's own format, carried over unchanged:
-"Fri-19 11:33PM".
+TaskbarClockTick's date and time formats are carried over unchanged, but
+placed at opposite edges of the strip: "Fri-19" and "11:33PM".
 
 The reference does *not* put this in a sunken field, which is the mistake
 worth naming because every other value on the shelf is in one.  Sampled
 down the reference's bottom strip at x=150, y=292..314 is a flat run of
 #d9d9d9 with the glyphs straight on it -- the shelf's own face, no bevel, no
-#f4f4f4.  The only rule is the etched separator above it at y=290,291, and
-the strip is noticeably taller than a field would be: 23 rows against the
-19 the CD title field gets.  No group header either; `panel.items` names
-this section `bare`.
+#f4f4f4.  The only rule is the etched separator above it at y=290,291.  The
+strip is enlarged beyond the reference for readability.  No group header
+either; `panel.items` names this section `bare`.
 
 A QTimer, but armed to the next minute boundary rather than ticking every
 second and throwing most of the ticks away -- CLAUDE.md's "almost nothing
@@ -39,9 +38,11 @@ from PyQt6.QtWidgets import QApplication, QWidget
 
 import photon
 
-FORMAT = "%a-%d %I:%M%p"   # TaskbarClockTick's tokens: "Fri-19 11:33PM"
+DATE_FORMAT = "%a-%d"
+TIME_FORMAT = "%I:%M%p"
 
-STRIP_H = 23    # the reference's bottom strip, y=292..314 at x=150
+CLOCK_PT = 12
+STRIP_H = 30
 
 
 class ClockWidget(QWidget):
@@ -54,7 +55,7 @@ class ClockWidget(QWidget):
         self.setPalette(pal)
         self.setAutoFillBackground(True)
 
-        self.font_clock = photon.font(8)
+        self.font_clock = photon.font(CLOCK_PT)
         self._text = self._now_text()
 
         self.resize(photon.SHELF_INNER, self.natural_height())
@@ -75,7 +76,8 @@ class ClockWidget(QWidget):
 
     @staticmethod
     def _now_text():
-        return datetime.now().strftime(FORMAT)
+        now = datetime.now()
+        return now.strftime(DATE_FORMAT), now.strftime(TIME_FORMAT)
 
     def _arm(self):
         #  The delay to the next :00, not a 1000ms repeat -- so the widget
@@ -98,10 +100,13 @@ class ClockWidget(QWidget):
         p.setFont(self.font_clock)
         p.setPen(photon.INK)
         fm = QFontMetrics(self.font_clock)
-        text = photon.elide(self._text, self.font_clock, r.width() - 8)
+        date, time = self._text
+        field_w = max(1, (r.width() - 12) // 2)
+        date = photon.elide(date, self.font_clock, field_w)
+        time = photon.elide(time, self.font_clock, field_w)
         baseline = r.top() + (r.height() + fm.capHeight()) // 2
-        p.drawText(r.left() + (r.width() - fm.horizontalAdvance(text)) // 2,
-                   baseline, text)
+        p.drawText(r.left() + 4, baseline, date)
+        p.drawText(r.right() - 3 - fm.horizontalAdvance(time), baseline, time)
 
 
 def main():

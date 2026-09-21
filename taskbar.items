@@ -15,7 +15,7 @@
 ##  flex cell shrinks to pay for it and the bar still spans the screen exactly.
 ##
 ##  Colorsets are named through infostore (cs_shelf / cs_shelf_hi / cs_shelf_well,
-##  set up in shelf.proto) rather than raw numbers, so the taskbar and the
+##  set up in colorsets) rather than raw numbers, so the taskbar and the
 ##  shelf can never drift into two different greys by accident.
 
 ##  Left: Launch.  Photon's own icon is a house/gear glyph; the closest

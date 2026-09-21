@@ -34,7 +34,7 @@ os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
 from PyQt6.QtCore import QRect, QSize, QSocketNotifier, Qt, QTimer
-from PyQt6.QtGui import QColor, QPainter, QPalette
+from PyQt6.QtGui import QPainter, QPalette
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from Xlib import X, display, protocol, error as xerror
@@ -52,17 +52,17 @@ import photon
 #  #c0c0c0 rather than showing shelf face, this section takes the panel's
 #  full body width and does its own right-hand padding -- see PAD_R and
 #  `full_width` in bin/shelf-panel.
-SECTION   = QColor("#c0c0c0")
+SECTION   = photon.PAGER_SECTION
 MARGIN_TL = 2
 MARGIN_BR = 3
 
-DESK      = QColor("#c3c7b1")   # a page's background
-DESK_HI   = QColor("#e1e3d8")   # ... and the current page's, lighter
-WIN       = QColor("#bec1c3")   # a mini window
-WIN_EDGE  = QColor("#7f8285")
-FOCUS     = QColor("#b4b4ff")   # the focused window's mini
-FOCUS_EDGE = QColor("#7676aa")
-GRID      = QColor("#ffffff")   # the 1px rules between pages
+DESK       = photon.PAGER_DESK
+DESK_HI    = photon.PAGER_DESK_HI
+WIN        = photon.PAGER_WIN
+WIN_EDGE   = photon.PAGER_WIN_EDGE
+FOCUS      = photon.PAGER_FOCUS
+FOCUS_EDGE = photon.PAGER_FOCUS_EDGE
+GRID       = photon.PAGER_GRID
 
 WATCH = ("_NET_DESKTOP_VIEWPORT", "_NET_DESKTOP_GEOMETRY", "_NET_CLIENT_LIST",
          "_NET_ACTIVE_WINDOW", "_NET_CURRENT_DESKTOP")

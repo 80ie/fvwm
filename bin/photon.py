@@ -25,39 +25,55 @@ from PyQt6.QtCore import QRect, Qt
 from PyQt6.QtGui import (QColor, QFont, QFontMetrics, QLinearGradient,
                          QPainter, QPixmap)
 
-#  Palette, measured from ~/Desktop/qnx621-1-1.png.  The first four mirror
-#  colorsets 30-33 in the fvwm config -- keep them in step; do not fork them.
-FACE         = QColor("#d9d9d9")   # shelf and button face          (cs 30)
-FACE_HI      = QColor("#e4e4e4")   # hover face                     (cs 31)
-HEADER       = QColor("#dbdbdb")   # group header face
-GUTTER       = QColor("#cccccc")   # the icon column of a launcher row
-FRAME_MID    = QColor("#a6a6a6")   # the inner shadow of the shelf's own frame              (cs 32)
-WELL         = QColor("#d2d2d2")   # sunken filler                  (cs 33)
+from photon_palette import load_palette
 
-FACE_ALT     = QColor("#d8d8d8")   # widget-section face
-BTN_HI       = QColor("#ebebeb")   # button face, top of its gradient
-BTN_LO       = QColor("#b0b0b0")   # ... and bottom, and its inner shadow
-WELL_SH      = QColor("#c0c0c0")   # inner shadow along a sunken top/left
-WELL_LIP     = QColor("#dddddd")   # the lip along a sunken outer bottom/right
-HI           = QColor("#ffffff")   # raised highlight
-SH           = QColor("#a7a7a7")   # raised shadow, soft
-DARK         = QColor("#4b4b4b")   # sunken outline, hard
-HEADER_CELL  = QColor("#c7c7c7")   # the -/+ cell
-HEADER_GLYPH = QColor("#606060")   # the -/+ mark
-FIELD        = QColor("#f4f4f4")   # data field interior
-TROUGH       = QColor("#bcbcbc")   # meter trough, unfilled
-TROUGH_SH    = QColor("#8d8d8d")   # ... and its inner shadow, top and left
-GROOVE       = QColor("#8c8c8c")   # slider groove, the dark end of its fill
-GROOVE_HI    = QColor("#cccccc")   # ... and the light end
-GROOVE_LIP   = QColor("#ebebeb")   # the white lip under a groove
-THUMB_HI     = QColor("#f0f0f0")   # slider thumb, top of its gradient
-THUMB_LO     = QColor("#c7c7c7")   # ... and bottom
-TICK_HI      = QColor("#b0b0b0")   # a scale mark: two pixels, light then dark
-TICK_LO      = QColor("#6c6c6c")
-FILL_CPU     = QColor("#d6cdba")
-FILL_MEM     = QColor("#b5c4b0")
-INK          = QColor("#000000")   # glyphs and labels
-INK_OFF      = QColor("#8c8c8c")   # a disabled glyph
+_PALETTE = load_palette()
+
+
+def colour(name):
+    return QColor(_PALETTE[name])
+
+
+FACE         = colour("FACE")
+FACE_HI      = colour("FACE_HI")
+HEADER       = colour("HEADER")
+GUTTER       = colour("GUTTER")
+FRAME_MID    = colour("FRAME_MID")
+WELL         = colour("WELL")
+FACE_ALT     = colour("FACE_ALT")
+BTN_HI       = colour("BTN_HI")
+BTN_LO       = colour("BTN_LO")
+WELL_SH      = colour("WELL_SH")
+WELL_LIP     = colour("WELL_LIP")
+HI           = colour("HI")
+SH           = colour("SH")
+DARK         = colour("DARK")
+HEADER_CELL  = colour("HEADER_CELL")
+HEADER_GLYPH = colour("HEADER_GLYPH")
+FIELD        = colour("FIELD")
+TROUGH       = colour("TROUGH")
+TROUGH_SH    = colour("TROUGH_SH")
+GROOVE       = colour("GROOVE")
+GROOVE_MID   = colour("GROOVE_MID")
+GROOVE_HI    = colour("GROOVE_HI")
+GROOVE_LIP   = colour("GROOVE_LIP")
+THUMB_HI     = colour("THUMB_HI")
+THUMB_LO     = colour("THUMB_LO")
+TICK_HI      = colour("TICK_HI")
+TICK_LO      = colour("TICK_LO")
+FILL_CPU     = colour("FILL_CPU")
+FILL_MEM     = colour("FILL_MEM")
+FILL_DISK    = colour("FILL_DISK")
+INK          = colour("INK")
+INK_OFF      = colour("INK_OFF")
+PAGER_SECTION = colour("PAGER_SECTION")
+PAGER_DESK    = colour("PAGER_DESK")
+PAGER_DESK_HI = colour("PAGER_DESK_HI")
+PAGER_WIN     = colour("PAGER_WIN")
+PAGER_WIN_EDGE = colour("PAGER_WIN_EDGE")
+PAGER_FOCUS    = colour("PAGER_FOCUS")
+PAGER_FOCUS_EDGE = colour("PAGER_FOCUS_EDGE")
+PAGER_GRID       = colour("PAGER_GRID")
 
 #  The shelf's usable width inside its own frame.  A starting value only: the
 #  panel is resizable now, so nothing should assume it.
@@ -282,7 +298,7 @@ def groove(p: QPainter, r: QRect):
     Pt_ARG_DARK_FILL_COLOR to Pt_ARG_DARK_BEVEL_COLOR transition, and drawing
     it as a plain sunken rect is what makes an imitation look flat.
     """
-    rows = [GROOVE_HI, QColor("#acacac"), GROOVE, DARK, GROOVE_LIP]
+    rows = [GROOVE_HI, GROOVE_MID, GROOVE, DARK, GROOVE_LIP]
     for i, colour in enumerate(rows):
         y = r.top() + i
         if y > r.bottom():

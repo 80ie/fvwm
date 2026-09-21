@@ -1,0 +1,87 @@
+## vim: sts=0:noet:syntax=fvwm
+
+InfoStoreAdd cs_shelf        30
+InfoStoreAdd cs_shelf_hi     31
+InfoStoreAdd cs_shelf_header 32
+InfoStoreAdd cs_shelf_well   33
+
+SetEnv FVWM_PHOTON_FACE         "#d9d9d9"
+SetEnv FVWM_PHOTON_FACE_HI      "#e4e4e4"
+SetEnv FVWM_PHOTON_HEADER       "#dbdbdb"
+SetEnv FVWM_PHOTON_GUTTER       "#cccccc"
+SetEnv FVWM_PHOTON_FRAME_MID    "#a6a6a6"
+SetEnv FVWM_PHOTON_WELL         "#d2d2d2"
+SetEnv FVWM_PHOTON_FACE_ALT     "#d8d8d8"
+SetEnv FVWM_PHOTON_BTN_HI       "#ebebeb"
+SetEnv FVWM_PHOTON_BTN_LO       "#b0b0b0"
+SetEnv FVWM_PHOTON_WELL_SH      "#c0c0c0"
+SetEnv FVWM_PHOTON_WELL_LIP     "#dddddd"
+SetEnv FVWM_PHOTON_HI           "#ffffff"
+SetEnv FVWM_PHOTON_SH           "#a7a7a7"
+SetEnv FVWM_PHOTON_DARK         "#4b4b4b"
+SetEnv FVWM_PHOTON_HEADER_CELL  "#c7c7c7"
+SetEnv FVWM_PHOTON_HEADER_GLYPH "#606060"
+SetEnv FVWM_PHOTON_FIELD        "#f4f4f4"
+SetEnv FVWM_PHOTON_TROUGH       "#bcbcbc"
+SetEnv FVWM_PHOTON_TROUGH_SH    "#8d8d8d"
+SetEnv FVWM_PHOTON_GROOVE       "#8c8c8c"
+SetEnv FVWM_PHOTON_GROOVE_MID   "#acacac"
+SetEnv FVWM_PHOTON_GROOVE_HI    "$[FVWM_PHOTON_GUTTER]"
+SetEnv FVWM_PHOTON_GROOVE_LIP   "$[FVWM_PHOTON_BTN_HI]"
+SetEnv FVWM_PHOTON_THUMB_HI     "#f0f0f0"
+SetEnv FVWM_PHOTON_THUMB_LO     "$[FVWM_PHOTON_HEADER_CELL]"
+SetEnv FVWM_PHOTON_TICK_HI      "$[FVWM_PHOTON_BTN_LO]"
+SetEnv FVWM_PHOTON_TICK_LO      "#6c6c6c"
+SetEnv FVWM_PHOTON_FILL_CPU     "#d6cdba"
+SetEnv FVWM_PHOTON_FILL_MEM     "#b5c4b0"
+SetEnv FVWM_PHOTON_INK          "#000000"
+SetEnv FVWM_PHOTON_INK_OFF      "$[FVWM_PHOTON_GROOVE]"
+SetEnv FVWM_PHOTON_PAGER_SECTION "$[FVWM_PHOTON_WELL_SH]"
+SetEnv FVWM_PHOTON_PAGER_DESK    "#c3c7b1"
+SetEnv FVWM_PHOTON_PAGER_DESK_HI "#e1e3d8"
+SetEnv FVWM_PHOTON_PAGER_WIN     "#bec1c3"
+SetEnv FVWM_PHOTON_PAGER_WIN_EDGE "#7f8285"
+SetEnv FVWM_PHOTON_PAGER_FOCUS    "#b4b4ff"
+SetEnv FVWM_PHOTON_PAGER_FOCUS_EDGE "#7676aa"
+SetEnv FVWM_PHOTON_PAGER_GRID       "$[FVWM_PHOTON_HI]"
+SetEnv FVWM_PHOTON_FILL_DISK        "$[FVWM_PHOTON_PAGER_DESK]"
+
+# 0-8: window decorations and menus
+Colorset 0 fg #ffc996, bg #432727, hi, sh, Plain, NoShape
+Colorset 1 fg #aa8664, bg #2c2a21, hi, sh, Plain, NoShape
+Colorset 2 fg #ffa733, bg #68352d, hi, sh, Plain, NoShape
+Colorset 3 fg white, bg #2c2a21, hi, sh, Plain, NoShape
+Colorset 4 fg white, bg #532a24, hi, sh, Plain, NoShape
+Colorset 5 fg #aa4d50, bg #432727, hi, sh, Plain, NoShape
+Colorset 6 fg white, bg #aa8664, hi, sh, Plain, NoShape
+Colorset 7 fg white, bg #9d9592, hi, sh, Plain, NoShape
+Colorset 8 fg white, bg #412222, hi, sh, Plain, NoShape
+
+# 10-14: module defaults
+Colorset 10 fg #aa4d50, bg #3a2222, hi, sh, Plain, NoShape
+Colorset 11 fg #ffa733, bg #68352d, hi, sh, Plain, NoShape
+Colorset 12 fg #aa4d50, bg #532e12, hi, sh, Plain, NoShape
+Colorset 13 fg #aa4d50, bg #432727, hi, sh, Plain, NoShape
+Colorset 14 fg #aa4d50, bg #3a2222, hi, sh, Plain, NoShape
+
+# 15-19: custom and pager colors
+Colorset 15 fg white, bg #ff7300, hi, sh, Plain, NoShape
+Colorset 16 fg #aa8664, bg #68352d, hi, sh, Plain, NoShape
+Colorset 17 fg #b76b43, bg #aa4d50, hi, sh, Plain, NoShape
+Colorset 18 fg #b76b43, bg #5c3b1c, hi, sh, Plain, NoShape
+Colorset 19 fg #463900, bg #96724f, hi, sh, Plain, NoShape
+
+PipeRead "$[FVWM_USERDIR]/bin/mk-pager-bg.sh $[infostore.bg] $[infostore.pager_bg] $[desk.pagesx] $[desk.pagesy] $[infostore.pager_width] $[infostore.pager_height] >/dev/null 2>&1; echo Nop"
+
+Colorset 20 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint #b76b43 35, Dither
+Colorset 21 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint #472828 10, Dither
+
+# 30-37: QNX Photon shelf and pager
+Colorset 30 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
+Colorset 31 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE_HI], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
+Colorset 32 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_HEADER], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
+Colorset 33 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_WELL], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
+Colorset 34 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_DESK], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
+Colorset 35 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_DESK_HI], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
+Colorset 36 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_WIN], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_WIN_EDGE], Plain, NoShape
+Colorset 37 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_FOCUS], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_FOCUS_EDGE], Plain, NoShape
