@@ -109,6 +109,16 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
 + I Test (Init) Exec exec lxqt-policykit-agent
+###  fvwm doesn't implement XDG autostart, so spice-vdagent's autostart
+###  .desktop entry (/etc/xdg/autostart/spice-vdagent.desktop) never runs on
+###  its own. Without it, virt-manager window resizes never reach the guest,
+###  so the display stays stuck at the QXL default (1024x768) after every
+###  restart. spice-vdagentd (system service) is already running via its
+###  socket unit; this just starts the per-session client that talks to it.
+###  This config is shared with a bare-metal host, so it's guarded: only
+###  fires when the SPICE virtio-serial channel actually exists (i.e. we're
+###  really inside a QEMU/SPICE guest) and the binary is installed.
++ I Test (Init) Exec exec sh -c 'test -e /dev/virtio-ports/com.redhat.spice.0 && command -v spice-vdagent >/dev/null && exec spice-vdagent'
 + I Test (Init) Exec exec flameshot
 + I Test (Init) Exec exec easyeffects --gapplication-service
 + I Test (Init) Exec exec nicotine -s
