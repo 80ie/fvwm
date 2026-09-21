@@ -27,7 +27,7 @@ os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
 from PyQt6.QtCore import QRect, QSize, QTimer
-from PyQt6.QtGui import QColor, QPainter, QPalette
+from PyQt6.QtGui import QPainter, QPalette
 from PyQt6.QtWidgets import QApplication, QWidget
 
 import psutil
@@ -52,7 +52,7 @@ ICON = 16
 #  them.  The pager's khaki is the nearest thing in the sampled palette; it
 #  is a choice, not a measurement, and it is the one colour on this widget
 #  that the screenshot cannot settle.
-FILL_DISK = QColor("#c3c7b1")
+FILL_DISK = photon.FILL_DISK
 
 
 def filesystems():

@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Overview
 
-FVWM3 window manager configuration. `~/.fvwm` is a symlink to `dotfiles/.fvwm`. The main config is a single monolithic file (`config`) with vim fold markers (`{{{`/`}}}`) for section organization.
+FVWM3 window manager configuration. `~/.fvwm` is a symlink to `dotfiles/.fvwm`. The main `config` uses vim fold markers (`{{{`/`}}}`) for section organization and reads the separate `colorsets` file.
 
 ## Testing Changes
 
@@ -15,14 +15,16 @@ There is no build or test system. To apply changes:
 
 ## Architecture
 
-**config** — the single source of truth (~1200 lines), organized into sections:
+**config** — the main configuration, organized into sections:
 - Environment variables & paths (terminals, dirs, layers)
 - Functions (StartFunction, tiling, window ops, thumbnails)
 - Menus (root Toolchest, window ops, session control, SendTo)
 - Styles (global defaults + per-application overrides)
-- Colorsets (18 colorsets, warm brown/rust palette)
+- Colorset loading
 - Key & Mouse bindings (numpad tiling, page navigation, window ops)
 - Module configs (FvwmEvent, FvwmPager, FvwmPerl, Thumbnail)
+
+**colorsets** — all FVWM colorsets plus the exported QNX Photon palette used by the sidebar.
 
 **lib/Thumbnail** — custom Perl module using Image::Magick for window thumbnail generation (200x180px, cached in `.thumbs/` with 100s expiry). Loaded via `ModulePath` and recycled every 300s.
 
@@ -38,6 +40,7 @@ There is no build or test system. To apply changes:
 - Desktop layout is 4x2 pages with 5 layers (1/2/4/6/11)
 - Default terminal: kitty (`$[infostore.terminal]`)
 - Paths use `$[FVWM_USERDIR]` env var pointing to `~/.fvwm`
+- Photon colors belong in `colorsets`; sidebar code reads the exported `FVWM_PHOTON_*` values
 - Icons are 16x16 PNGs in `icons/`; backgrounds in `images/background/`
 - Sounds (MP3) in `sounds/` triggered by FvwmEvent modules
 

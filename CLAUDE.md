@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-FVWM3 window manager configuration. `~/.fvwm` is a symlink to `dotfiles/.fvwm`. The main config is a single monolithic file (`config`) with vim fold markers (`{{{`/`}}}`) for section organization.
+FVWM3 window manager configuration. `~/.fvwm` is a symlink to `dotfiles/.fvwm`. The main `config` uses vim fold markers (`{{{`/`}}}`) for section organization and reads the separate `colorsets` file.
 
 ## Testing Changes
 
@@ -15,14 +15,18 @@ There is no build or test system. To apply changes:
 
 ## Architecture
 
-**config** — the single source of truth (~1200 lines), organized into sections:
+**config** — the main configuration, organized into sections:
 - Environment variables & paths (terminals, dirs, layers)
 - Functions (StartFunction, tiling, window ops, thumbnails)
 - Menus (root Toolchest, window ops, session control, SendTo)
 - Styles (global defaults + per-application overrides)
-- Colorsets (warm brown/rust 0-21, QNX Photon greys 30-37)
+- Colorset loading
 - Key & Mouse bindings (numpad tiling, page navigation, window ops)
 - Module configs (FvwmEvent, FvwmPager, FvwmPerl, Thumbnail)
+
+**colorsets** — FVWM colorsets 0-37 and the canonical QNX Photon palette. The
+palette is exported as `FVWM_PHOTON_*` values inherited by the shelf; direct
+component launches fall back to reading the same file.
 
 **The shelf is one program** — `bin/shelf-panel`, a PyQt6 window down the
 right edge. It draws its own frame, group headers, launcher rows, pager,
@@ -118,8 +122,8 @@ to a comment that used to live in `FvwmScript-ShelfMedia`.)
 - A `*Module: option` config line does **not** expand `$[...]`; anything needing
   a computed value (Geometry, ButtonGeometry) goes through `PipeRead "echo ..."`
 - `InfoStoreAdd` on an existing key replaces it, so re-reads recompute cleanly
-- Colorsets 0-21 are the warm brown/rust set; 30-37 are the Photon greys and are
-  referred to by the `cs_*` InfoStore keys, never by number
+- Colorsets 0-21 are the warm brown/rust set; 30-37 are the Photon greys
+- Photon colors are defined only in `colorsets`, never as literal `QColor` values
 - Icons are 16x16 PNGs in `icons/`; backgrounds in `images/background/`
 - Sounds (MP3) in `sounds/` triggered by FvwmEvent modules
 
