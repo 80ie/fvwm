@@ -13,11 +13,16 @@ Resolution page`) reparented into a taskbar cell.  Two things that cost:
     the same module-restart problem the pager and the frame bevel solved by
     not being modules any more.
 
-`config`'s `*TaskBarIcons:` block fixed three button faces -- `PlainButton
-up`, `IconButton sunkedge`, `IconAndSelectButton down` -- which map onto
-`photon.py`'s hard-outlined vocabulary (`button`, `sunken`): a normal window
-is a raised button, the focused window is a pressed one, an iconified window
-is a sunken edge, in that priority.
+This is a *list in a well*, not a column of push buttons.  The button
+vocabulary was tried first, mapping `config`'s old `*TaskBarIcons:` faces
+(`PlainButton up`, `IconAndSelectButton down`) onto `photon.button`, and it
+reads badly: that painter's #ebebeb-to-#b0b0b0 gradient is measured off a
+16px CD transport key, and stretched down a 23px row the length of the
+shelf it turns every entry into a lozenge.  So the section is one
+`photon.sunken` well and the rows are flat inside it, with the focused
+window marked by a #4b4b4b outline -- the same idiom photon_pager.py uses
+for the current page, and for the same reason: an outline says "this one"
+without changing the surface it sits on.
 
 Event-driven like the pager: `PropertyChangeMask` on the root for the client
 list and active window, plus `PropertyChangeMask | StructureNotifyMask` on
@@ -36,7 +41,7 @@ os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
 from PyQt6.QtCore import QRect, QSize, QSocketNotifier, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFontMetrics, QImage, QPainter, QPalette
+from PyQt6.QtGui import QFontMetrics, QImage, QPainter, QPalette
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from Xlib import X, display, protocol, error as xerror
@@ -48,10 +53,13 @@ import photon
 #  window directly.
 ICONIC_STATE = 3
 
-_ROOT_ATOMS = ("_NET_CLIENT_LIST", "_NET_ACTIVE_WINDOW", "_NET_DESKTOP_VIEWPORT")
+_ROOT_ATOMS = ("_NET_CLIENT_LIST", "_NET_CLIENT_LIST_STACKING",
+               "_NET_ACTIVE_WINDOW", "_NET_DESKTOP_VIEWPORT")
 _EXTRA_ATOMS = ("_NET_WM_STATE", "_NET_WM_STATE_SKIP_TASKBAR",
                 "_NET_WM_STATE_HIDDEN", "_NET_WM_NAME", "_NET_WM_ICON",
                 "UTF8_STRING", "WM_CHANGE_STATE")
+
+WELL_PAD = 2      # what photon.sunken_interior eats off each edge
 
 _Task = namedtuple("_Task", "wid win title focused iconified icon cls")
 
@@ -71,6 +79,7 @@ class TasksWidget(QWidget):
         self.font_row = photon.font(8)
         self.tasks = []
         self._hover = -1
+        self._top = 0           # the topmost listed window, see mouseRelease
         #  Decoding one 128x128 _NET_WM_ICON is 16k iterations of Python, and
         #  refresh() runs on every property event a listed window emits -- a
         #  terminal rewriting its title is enough.  Measured at 10ms a refresh
@@ -95,10 +104,13 @@ class TasksWidget(QWidget):
     #  -- size --
 
     def natural_height(self):
-        return len(self.tasks) * photon.ROW_H
+        return len(self.tasks) * photon.ROW_H + 2 * WELL_PAD
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER, self.natural_height())
+
+    def _interior(self):
+        return photon.sunken_interior(self.rect())
 
     #  -- X: reading --
 
@@ -211,6 +223,12 @@ class TasksWidget(QWidget):
 
         live = {t.wid for t in found}
         self._icons = {w: i for w, i in self._icons.items() if w in live}
+
+        #  _NET_CLIENT_LIST_STACKING is bottom-to-top, so the last entry that
+        #  we actually list is the window sitting on top of the others.
+        stack = self._prop(self.root, "_NET_CLIENT_LIST_STACKING") or []
+        self._top = next((w for w in reversed(stack) if w in live), 0)
+
         self.dpy.flush()
         resized = len(found) != len(self.tasks)
         self.tasks = found
@@ -242,12 +260,15 @@ class TasksWidget(QWidget):
     #  -- painting --
 
     def _row_rect(self, i):
-        return QRect(0, i * photon.ROW_H, self.width(), photon.ROW_H)
+        inner = self._interior()
+        return QRect(inner.left(), inner.top() + i * photon.ROW_H,
+                     inner.width(), photon.ROW_H)
 
     def _row_at(self, pos):
-        if pos.x() < 0 or pos.x() >= self.width():
+        inner = self._interior()
+        if not inner.contains(pos):
             return -1
-        i = pos.y() // photon.ROW_H
+        i = (pos.y() - inner.top()) // photon.ROW_H
         return i if 0 <= i < len(self.tasks) else -1
 
     def _draw_icon(self, p, task, box):
@@ -272,30 +293,44 @@ class TasksWidget(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.fillRect(self.rect(), photon.FACE)
+        photon.sunken(p, self.rect(), photon.WELL)
         p.setFont(self.font_row)
         fm = QFontMetrics(self.font_row)
+        inner = self._interior()
+        p.setClipRect(inner)
 
         for i, t in enumerate(self.tasks):
-            outer = self._row_rect(i)
-            r = QRect(outer.left(), outer.top() + 1,
-                      outer.width(), outer.height() - 2)
+            r = self._row_rect(i)
+            if r.top() > inner.bottom():
+                break
 
             if t.iconified:
-                photon.sunken(p, r, photon.WELL)
+                face = photon.WELL
+            elif i == self._hover:
+                face = photon.FACE_HI
             else:
-                photon.button(p, r, down=t.focused)
-            if i == self._hover:
-                p.fillRect(r.adjusted(1, 1, -1, -1), QColor(255, 255, 255, 40))
+                face = photon.FACE
+            p.fillRect(r, face)
+            photon.divider(p, r.bottom() - 1, r.left(), r.right())
 
             box = QRect(r.left() + 6, r.top() + (r.height() - 16) // 2, 16, 16)
             self._draw_icon(p, t, box)
 
             text_x = box.right() + 7
-            p.setPen(photon.INK)
+            p.setPen(photon.INK_OFF if t.iconified else photon.INK)
             baseline = r.top() + (r.height() + fm.capHeight()) // 2
             p.drawText(text_x, baseline,
                        photon.elide(t.title or "(untitled)", self.font_row,
                                     r.right() - text_x - 4))
+
+            #  The focused window is outlined rather than re-surfaced, so the
+            #  mark survives whatever face the row already has -- iconified
+            #  and focused is a real combination while a window is on its way
+            #  back up.
+            if t.focused:
+                p.setPen(photon.DARK)
+                p.drawRect(QRect(r.left(), r.top(),
+                                 r.width() - 1, r.height() - 2))
 
     #  -- input --
 
@@ -317,7 +352,13 @@ class TasksWidget(QWidget):
         if i < 0:
             return
         t = self.tasks[i]
-        if t.focused and not t.iconified:
+        #  Iconify only a window that is focused *and* already on top.  Focus
+        #  and stacking come apart under this config's ClickToFocus -- a
+        #  window can hold the focus while buried -- and keying the toggle on
+        #  focus alone made a click on a buried window minimise it when what
+        #  was obviously wanted was to raise it.  One click raises, the next
+        #  one puts it away.
+        if t.focused and not t.iconified and t.wid == self._top:
             self._iconify(t.win)
         else:
             self._activate(t.win)

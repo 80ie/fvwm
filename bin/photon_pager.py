@@ -41,6 +41,21 @@ from Xlib import X, display, protocol, error as xerror
 
 import photon
 
+#  The World View section does not sit on the shelf's own face.  Sampled
+#  either side of the grid in the reference -- x=73,74 and x=197,198,199 on
+#  every row of the section -- the surround is #c0c0c0, a good deal darker
+#  than the #d9d9d9 the meters and the clock sit on.  It is what makes the
+#  pager read as recessed into the shelf rather than laid on top of it.
+#  The surround is not even: 2px before the well and 3px after it, on both
+#  axes.  x=73,74 then x=197,198,199 across the section; y=193,194 above the
+#  grid then y=287,288,289 below it.  Because that trailing 3px has to stay
+#  #c0c0c0 rather than showing shelf face, this section takes the panel's
+#  full body width and does its own right-hand padding -- see PAD_R and
+#  `full_width` in bin/shelf-panel.
+SECTION   = QColor("#c0c0c0")
+MARGIN_TL = 2
+MARGIN_BR = 3
+
 DESK      = QColor("#c3c7b1")   # a page's background
 DESK_HI   = QColor("#e1e3d8")   # ... and the current page's, lighter
 WIN       = QColor("#bec1c3")   # a mini window
@@ -55,10 +70,12 @@ WATCH = ("_NET_DESKTOP_VIEWPORT", "_NET_DESKTOP_GEOMETRY", "_NET_CLIENT_LIST",
 
 class WorldView(QWidget):
 
+    full_width = True
+
     def __init__(self, parent=None):
         super().__init__(parent)
         pal = self.palette()
-        pal.setColor(QPalette.ColorRole.Window, photon.FACE)
+        pal.setColor(QPalette.ColorRole.Window, SECTION)
         self.setPalette(pal)
 
         self.pages = (3, 3)
@@ -90,10 +107,11 @@ class WorldView(QWidget):
         """A page cell is screen-shaped, so the grid's height follows the
         width.  This is the sum the panel asks for when it lays out."""
         width = self.width() if width is None else width
-        inner = max(1, width - 2)
+        chrome = 2 + MARGIN_TL + MARGIN_BR   # the sunken bevel, then the surround
+        inner = max(1, width - chrome)
         cols, rows = self.pages
         cell = inner / float(cols)
-        return int(round(cell * rows * self.screen_h / self.screen_w)) + 2
+        return int(round(cell * rows * self.screen_h / self.screen_w)) + chrome
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER,
@@ -166,14 +184,16 @@ class WorldView(QWidget):
 
     def _grid(self):
         """The trough's interior and one page cell, in widget coordinates."""
-        well = QRect(0, 0, self.width(), self.height())
+        pad = MARGIN_TL + MARGIN_BR
+        well = QRect(MARGIN_TL, MARGIN_TL,
+                     self.width() - pad, self.height() - pad)
         inner = photon.sunken_interior(well)
         cols, rows = self.pages
         return well, inner, inner.width() / float(cols), inner.height() / float(rows)
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(), photon.FACE)
+        p.fillRect(self.rect(), SECTION)
         well, inner, cw, ch = self._grid()
         photon.sunken(p, well, DESK)
 

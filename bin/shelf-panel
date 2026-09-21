@@ -65,6 +65,17 @@ ICONS = os.path.join(USERDIR, "icons")
 MIN_W, MAX_W = 110, 420
 DEFAULT_W = 160
 
+#  The reference does not run its widgets into the screen edge: sampled along
+#  the System Monitor's meters, the trough's outline stops at x=196 and the
+#  three columns after it are shelf face before the shelf's own last column.
+#  Headers and the clock strip are the exception -- both go the full width.
+PAD_R = 3
+
+#  And it separates every section from the next with an etched rule, #a7a7a7
+#  over #ffffff, which is photon.divider: at y=4,85,172 in the reference,
+#  above System Monitor, above CD Player and above World View respectively.
+SEP_H = 2
+
 
 #  ---- Spec ------------------------------------------------------------
 
@@ -79,6 +90,7 @@ class Group:
         #  Filled in at layout time.
         self.header = QRect()
         self.body = QRect()
+        self.sep_y = None     # the etched rule below it, or None for the last
 
 
 def read_spec(path):
@@ -314,13 +326,28 @@ class Panel(QWidget):
             return widget.natural_height()
         return widget.sizeHint().height()
 
+    def _body_w(self, g, w):
+        """The width a section's *body* gets.
+
+        Bare sections -- the clock -- run the full width, as do widgets that
+        declare `full_width` because their own background has to continue
+        through the padding rather than giving way to shelf face.  Everything
+        else keeps PAD_R clear on the right.
+        """
+        if g.bare or getattr(g.body_widget, "full_width", False):
+            return w
+        return w - PAD_R
+
+    def _sep(self, g):
+        return g is not self.groups[-1]
+
     def _group_height(self, g, w):
         """A group's total height at its natural size, without placing it --
         used to size the bottom-pinned block before laying it out."""
         h = 0 if g.bare else photon.HEADER_H
         if g.body_widget is not None and not g.collapsed:
-            h += self._natural_height(g.body_widget, w)
-        return h
+            h += self._natural_height(g.body_widget, self._body_w(g, w))
+        return h + (SEP_H if self._sep(g) else 0)
 
     def _place_group(self, g, x, y, w, height=None):
         """Position one group at `y` and return the y just past it.  `height`
@@ -331,17 +358,24 @@ class Panel(QWidget):
         else:
             g.header = QRect(x, y, w, photon.HEADER_H)
             y += photon.HEADER_H
+        bw = self._body_w(g, w)
         widget = g.body_widget
         if widget is None or g.collapsed:
-            g.body = QRect(x, y, w, 0)
+            g.body = QRect(x, y, bw, 0)
             if widget is not None:
                 widget.hide()
-            return y
-        h = height if height is not None else self._natural_height(widget, w)
-        g.body = QRect(x, y, w, h)
-        widget.setGeometry(g.body)
-        widget.show()
-        return y + h
+        else:
+            h = height if height is not None else self._natural_height(widget, bw)
+            g.body = QRect(x, y, bw, h)
+            widget.setGeometry(g.body)
+            widget.show()
+            y += h
+        if self._sep(g):
+            g.sep_y = y
+            y += SEP_H
+        else:
+            g.sep_y = None
+        return y
 
     def relayout(self):
         """Stack the sections.
@@ -382,11 +416,13 @@ class Panel(QWidget):
         bottom_h = sum(self._group_height(g, w) for g in bottom)
         bottom_y = self.height() - bottom_h
 
-        header_h = 0 if flex.bare else photon.HEADER_H
-        flex_natural = (self._natural_height(flex.body_widget, w)
+        chrome = (0 if flex.bare else photon.HEADER_H) \
+            + (SEP_H if self._sep(flex) else 0)
+        flex_natural = (self._natural_height(flex.body_widget,
+                                             self._body_w(flex, w))
                         if flex.body_widget is not None and not flex.collapsed
                         else 0)
-        flex_h = max(flex_natural, bottom_y - top_y - header_h)
+        flex_h = max(flex_natural, bottom_y - top_y - chrome)
         self._place_group(flex, x, top_y, w, height=flex_h)
 
         y = bottom_y
@@ -407,10 +443,11 @@ class Panel(QWidget):
         p.fillRect(self.rect(), photon.FACE)
         photon.frame(p, self.rect())
         for g in self.groups:
-            if g.bare:
-                continue
-            photon.group_header(p, g.header, g.label, g.collapsed,
-                                self.font_header)
+            if not g.bare:
+                photon.group_header(p, g.header, g.label, g.collapsed,
+                                    self.font_header)
+            if g.sep_y is not None:
+                photon.divider(p, g.sep_y, photon.FRAME_W, self.width() - 1)
         if self.filler.height() > 0:
             photon.sunken(p, self.filler, photon.WELL)
 

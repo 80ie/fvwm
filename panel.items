@@ -64,14 +64,16 @@ flex
 group System Tray
 widget tray
 
-group World View
-widget worldview
-
+##  System Monitor, then the player, then World View immediately above the
+##  clock -- the order the reference shelf uses, reading down its right edge.
 group System Monitor
 widget meters
 
 group Media
 widget media
+
+group World View
+widget worldview
 
 ##  No header: flush against the bottom of the panel, the last thing in the
 ##  stack.  Format and position both carried over from TaskbarClockTick.

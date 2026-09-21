@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""The shelf's clock: a single sunken field, flush against the bottom of the
-panel.
+"""The shelf's clock: the bottom strip of the panel, edge to edge.
 
 A component of bin/shelf-panel, and a window of its own when run directly.
 It replaces the FvwmTaskBar cell that config's TaskbarClockTick used to push
@@ -9,11 +8,16 @@ send to, so this widget keeps its own clock instead of waiting on fvwm for
 one.
 
 "%a-%d %I:%M%p" is TaskbarClockTick's own format, carried over unchanged:
-"Fri-19 11:33PM".  The well is the same `photon.sunken`/`photon.FIELD`
-construction the media widget's title field uses, at the same 4px inset --
-see photon_media.py's `_relayout`, where the comment explains why 4 rather
-than some other number.  No group header: `panel.items` names this section
-`bare`, so the field is the whole of it.
+"Fri-19 11:33PM".
+
+The reference does *not* put this in a sunken field, which is the mistake
+worth naming because every other value on the shelf is in one.  Sampled
+down the reference's bottom strip at x=150, y=292..314 is a flat run of
+#d9d9d9 with the glyphs straight on it -- the shelf's own face, no bevel, no
+#f4f4f4.  The only rule is the etched separator above it at y=290,291, and
+the strip is noticeably taller than a field would be: 23 rows against the
+19 the CD title field gets.  No group header either; `panel.items` names
+this section `bare`.
 
 A QTimer, but armed to the next minute boundary rather than ticking every
 second and throwing most of the ticks away -- CLAUDE.md's "almost nothing
@@ -29,7 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import QRect, QSize, QTimer
+from PyQt6.QtCore import QSize, QTimer
 from PyQt6.QtGui import QFontMetrics, QPainter, QPalette
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -37,8 +41,7 @@ import photon
 
 FORMAT = "%a-%d %I:%M%p"   # TaskbarClockTick's tokens: "Fri-19 11:33PM"
 
-PAD = 4         # the inset the rest of the dock uses -- see photon_media.py
-FIELD_H = 19    # a data field's height, measured for the media title field
+STRIP_H = 23    # the reference's bottom strip, y=292..314 at x=150
 
 
 class ClockWidget(QWidget):
@@ -56,7 +59,6 @@ class ClockWidget(QWidget):
 
         self.resize(photon.SHELF_INNER, self.natural_height())
         self.setMinimumSize(80, self.natural_height())
-        self._relayout()
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -64,18 +66,10 @@ class ClockWidget(QWidget):
         self._arm()
 
     def natural_height(self):
-        return 2 * PAD + FIELD_H
+        return STRIP_H
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER, self.natural_height())
-
-    #  -- geometry --
-
-    def _relayout(self):
-        self.r_field = QRect(PAD, PAD, max(0, self.width() - 2 * PAD), FIELD_H)
-
-    def resizeEvent(self, event):
-        self._relayout()
 
     #  -- clock --
 
@@ -92,22 +86,22 @@ class ClockWidget(QWidget):
 
     def _tick(self):
         self._text = self._now_text()
-        self.update(self.r_field)
+        self.update()
         self._arm()
 
     #  -- painting --
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(), photon.FACE)
-        photon.sunken(p, self.r_field, photon.FIELD)
-        inner = photon.sunken_interior(self.r_field)
+        r = self.rect()
+        p.fillRect(r, photon.FACE)
         p.setFont(self.font_clock)
         p.setPen(photon.INK)
         fm = QFontMetrics(self.font_clock)
-        baseline = inner.top() + (inner.height() + fm.capHeight()) // 2
-        p.drawText(inner.left() + 3, baseline,
-                   photon.elide(self._text, self.font_clock, inner.width() - 6))
+        text = photon.elide(self._text, self.font_clock, r.width() - 8)
+        baseline = r.top() + (r.height() + fm.capHeight()) // 2
+        p.drawText(r.left() + (r.width() - fm.horizontalAdvance(text)) // 2,
+                   baseline, text)
 
 
 def main():
