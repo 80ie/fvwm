@@ -349,14 +349,14 @@ class Sink(QObject):
 PREV, STOP, PLAY, NEXT = range(4)
 
 #  Media body, header excluded.
-NATURAL_H = 73
+NATURAL_H = 77
 
 #  Everything below is measured off ~/Desktop/qnx621-1-1.png rather than
 #  guessed, columns at x=900/920 and rows at y=589.  The reference shelf is
 #  134px inner against our 152, so heights transfer 1:1 and only the widths
 #  that span the shelf grow.
 FIELD_H = 19          # title field, 16px interior inside its bevel
-BTN_H, BTN_GAP = 18, 2
+BTN_H, BTN_GAP = 22, 2
 GAP = 3               # field to buttons, buttons to divider, divider to volume
 THUMB_W, THUMB_H = 10, 17
 GROOVE_DROP = 6       # groove top below thumb top
