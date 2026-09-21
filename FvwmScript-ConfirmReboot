@@ -45,7 +45,7 @@ Main
  Case message of
   SingleClic :
   Begin
-   Do {Exec ~/.fvwm/onReboot.sh}
+   Do {Exec ~/.fvwm/scripts/onReboot.sh}
   End
 End
 

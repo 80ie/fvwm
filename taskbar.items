@@ -1,0 +1,58 @@
+##  Taskbar cells, left to right.  Rendered by bin/mk-taskbar, which is called
+##  from taskbar.proto (the QNX Photon restyle -- see that file for the
+##  height/colorset/struts overrides it layers on top of config's own,
+##  now-superseded FvwmTaskBar block).
+##
+##  Format:  <width>  <FvwmButtons button options>
+##
+##    <width>       cell width in pixels
+##    flex          take an equal share of whatever pixels are left over
+##    flex:N        take an N-times larger share than a plain flex cell
+##    \             at end of line, continues onto the next
+##
+##  Everything after the width is passed through to FvwmButtons untouched, so
+##  the full button syntax is available.  To add a launcher, add a line: the
+##  flex cell shrinks to pay for it and the bar still spans the screen exactly.
+##
+##  Colorsets are named through infostore (cs_shelf / cs_shelf_hi / cs_shelf_well,
+##  set up in shelf.proto) rather than raw numbers, so the taskbar and the
+##  shelf can never drift into two different greys by accident.
+
+##  Left: Launch.  Photon's own icon is a house/gear glyph; the closest
+##  genuinely-16x16 file under images/icons is 16x16-wrench.png, a real
+##  16x16 PNG made by pre-resizing the 18x18 wrench.png -- not FvwmButtons
+##  scaling it at render time, which it cannot do anyway.
+82   Icon "$[FVWM_ICON]/16x16-wrench.png", Title(Side,Left) "Launch", \
+     Action(Mouse 1) Menu MenuFvwmRoot, Frame 0
+6    Frame 0
+
+##  Middle: window list.  FvwmIconMan is resized to whatever cell swallows it,
+##  so this is the one cell that should absorb the slack.  Its own colours
+##  (Photon grey, same 30/31 as everything else) are set on TaskBarIcons in
+##  taskbar.proto, not here -- this cell just frames it.
+flex Left, Swallow TaskBarIcons 'Module FvwmIconMan TaskBarIcons', Frame 0
+
+##  Right: tray, volume, clock
+6    Frame 0
+##  10 slots of 26px, matching max_geometry/slot_size in stalonetrayrc after
+##  its Photon-height shrink.  The tray never shrinks (no_shrink), so the
+##  cell has to fit it at full size.
+260  Swallow(NoClose,UseOld) stalonetray \
+     `Exec exec stalonetray --config "$[FVWM_USERDIR]/stalonetrayrc"`, \
+     Frame 0
+6    Frame 0
+50   Title "VOL", Action(Mouse 1) Exec exec pavucontrol, \
+     Action(Mouse 4) Exec exec wpctl set-volume @DEFAULT_SINK@ 5%+, \
+     Action(Mouse 5) Exec exec wpctl set-volume @DEFAULT_SINK@ 5%-, \
+     Frame 0
+6    Frame 0
+##  Clock: a plain button, not a Swallow.  Its text is pushed in from outside
+##  by TaskbarClockTick in taskbar.proto (SendToModule ... ChangeButton),
+##  which is what lets it read as one sunken field, "Fri-19 11:33PM" -- the
+##  swallowed FvwmScript-DateTime this replaced drew its own two-line HH:MM /
+##  date pair inside its own window chrome, which does not sit flush the way
+##  Photon's single field does.  Id names it for ChangeButton to find; the
+##  starting empty Title is filled within a few hundred ms of the module
+##  coming up, see the Schedule calls at the end of taskbar.proto.
+120  Id TaskbarClock, Title "", Frame -1, Colorset $[infostore.cs_shelf_well]
+6    Frame 0

@@ -33,7 +33,7 @@ fuzzy_edges 0
 
 # geometry <geometry>        # tray's geometry in standard X notation; width and
                              # height are specified in slot_size multiples
-geometry 6x1
+geometry 10x1
 
 # grow_gravity <gravity>     # one of N, S, E, W, NW, NE, SW, SE; tray will grow
                              # in the direction opposite to one specified by
@@ -46,13 +46,19 @@ geometry 6x1
 icon_gravity SE
 
 # icon_size <int>            # specifies dimensions of an icon
-icon_size 24
+# Shrunk from 24 to fit the Photon taskbar's 30px row (see taskbar.proto);
+# slot_size below shrinks to match.
+icon_size 22
 
 # slot_size <w>[x<h>]        # specifies width and hight of an icon slot that
                              # contains icon; must be larger than icon size;
                              # height is set to width if it is omitted;
                              # defaults to icon size
-slot_size 28x40
+# This build only accepts an integer here, despite the WxH form documented
+# above; "28x40" made stalonetray exit at startup with a parse error.
+# 26 (was 28) to fit the Photon taskbar's 30px row; taskbar.items' tray cell
+# width (10 slots) is sized to match.
+slot_size 26
 
 # log_level <level>          # controls the amount of logging output, level can
                              # be err (default), info, or trace (enabled only
@@ -74,7 +80,7 @@ kludges force_icons_size
 
 # max_geometry <geometry>    # maximal tray dimensions; 0 in width/height means
                              # no limit
-max_geometry 6x1
+max_geometry 10x1
 
 # monitor <int>              # specifies which monitor to draw the tray in
 # monitor 0

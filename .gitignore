@@ -23,3 +23,6 @@ archive
 
 # Agent-session planning docs, not meant to be committed
 docs/
+
+# Runtime shelf collapse/live-alias state, written by bin/mk-shelf
+.shelf.state

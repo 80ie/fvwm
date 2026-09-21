@@ -45,7 +45,7 @@ Main
  Case message of
   SingleClic :
   Begin
-   Do {Exec ~/.fvwm/onShutdown.sh}
+   Do {Exec ~/.fvwm/scripts/onShutdown.sh}
   End
 End
 

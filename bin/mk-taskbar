@@ -1,0 +1,96 @@
+#!/usr/bin/perl
+
+# vim: syntax=perl:
+
+##  Emit the cell list for a single-row FvwmButtons taskbar.
+##
+##  FvwmButtons has no flexible sizing: every cell width is a literal, so a bar
+##  that spans the screen only adds up if the widths are summed by hand.  The
+##  stock example in doc/Wiki/Panels/FvwmTaskBar does exactly that ("1200 -
+##  55*2 - 25*3 = 1015") and the numbers go stale the moment an item is added
+##  or the screen changes size.
+##
+##  This reads a spec of "<width> <button options>" lines, where <width> is a
+##  pixel count or "flex[:weight]", and hands every leftover pixel to the flex
+##  cells.  Adding a launcher means adding a line; no other number moves.
+##
+##  Geometry, Rows and Columns are emitted here too.  They have to be literal
+##  numbers: $[vp.width] expands in a command but not in a "*Module: option"
+##  config line, so a bar sized from it silently comes up 16px wide.
+##
+##  usage: mk-taskbar <spec> <module-alias> <bar-width-px> <bar-height-px> [position]
+
+use strict ;
+use warnings ;
+use v5.40.1 ;
+
+my ( $spec, $alias, $total, $height, $position ) = @ARGV ;
+$position //= '+0-0' ;
+die "usage: $0 <spec> <module-alias> <bar-width-px> <bar-height-px> [position]\n"
+    unless defined $height and $alias
+    and $total  =~ /^[0-9]+$/ and $total > 0
+    and $height =~ /^[0-9]+$/ and $height > 0 ;
+
+open my $fh, '<', $spec or die "$0: $spec: $!\n" ;
+my $text = do { local $/ ; <$fh> } ;
+close $fh ;
+
+##  Fold continuation lines first, so a wrapped cell stays one cell.
+$text =~ s/\s*\\\n\s*/ /g ;
+
+my @cells ;
+for my $line ( split /\n/, $text ) {
+    ##  Only a leading '#' is a comment: '#rrggbb' is legal inside options.
+    next if $line =~ /^\s*(?:#|$)/ ;
+    my ( $size, $opts ) = $line =~ /^\s*(\S+)\s*(.*?)\s*$/ ;
+    if ( $size =~ /^[0-9]+$/ ) {
+        push @cells, { px => 0 + $size, opts => $opts } ;
+    }
+    elsif ( $size =~ /^flex(?::([0-9]+))?$/ ) {
+        push @cells, { weight => $1 // 1, opts => $opts } ;
+    }
+    else {
+        die "$0: $spec: bad width '$size'\n" ;
+    }
+}
+
+my @flex = grep { $_->{weight} } @cells ;
+my $fixed = 0 ;
+$fixed += $_->{px} for grep { !$_->{weight} } @cells ;
+
+if ( @flex ) {
+    my $avail = $total - $fixed ;
+    ##  If the fixed cells already overflow there is no honest answer, so give
+    ##  each flex cell a pixel and complain.  PipeRead only reads stdout, so a
+    ##  warning cannot corrupt the emitted config.
+    if ( $avail < @flex ) {
+        warn "$0: fixed cells need ${fixed}px of ${total}px, flex cells squeezed\n" ;
+        $avail = scalar @flex ;
+    }
+    my $wsum = 0 ;
+    $wsum += $_->{weight} for @flex ;
+    ##  Split on the running weight total rather than per cell, so rounding is
+    ##  spread across the flex cells instead of accumulating, and the widths
+    ##  add up to exactly $avail.
+    my ( $wacc, $pacc ) = ( 0, 0 ) ;
+    for my $cell ( @flex ) {
+        $wacc += $cell->{weight} ;
+        my $upto = int( $avail * $wacc / $wsum ) ;
+        $cell->{px} = $upto - $pacc ;
+        $pacc = $upto ;
+    }
+}
+elsif ( $fixed != $total ) {
+    warn "$0: cells total ${fixed}px, bar is ${total}px, and no flex cell\n" ;
+}
+
+##  One row of single-pixel cells, so a cell's grid width is its pixel width.
+printf "*%s: Geometry %dx%d%s\n", $alias, $total, $height, $position ;
+printf "*%s: Rows 1\n",           $alias ;
+printf "*%s: Columns %d\n",       $alias, $total ;
+
+##  Contents wider than their cell are clipped rather than widening the grid,
+##  because the emitted Geometry pins the window size.
+printf "*%s: (%dx1%s)\n", $alias, $_->{px},
+    length $_->{opts} ? ", $_->{opts}" : ''
+    for @cells ;

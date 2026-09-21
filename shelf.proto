@@ -1,0 +1,157 @@
+##  QNX Photon shelf -- prototype fragment.
+##
+##  Read into a running fvwm with
+##      FvwmCommand 'Read $[FVWM_USERDIR]/shelf.proto'
+##  so the shelf can be evaluated without touching config.  Folds into the
+##  main config once the look and the toggle behaviour are settled.
+
+##  Palette sampled from the Photon screenshots: face #d9d9d9, highlight pure
+##  white, shadow a soft #a7a7a7 rather than black -- that soft shadow is what
+##  makes Photon read as softer than Win95 at the same 1px bevel width.
+InfoStoreAdd cs_shelf        30
+InfoStoreAdd cs_shelf_hi     31
+InfoStoreAdd cs_shelf_header 32
+InfoStoreAdd cs_shelf_well   33
+
+Colorset 30 fg #000000, bg #d9d9d9, hi #ffffff, sh #a7a7a7, Plain, NoShape
+Colorset 31 fg #000000, bg #e4e4e4, hi #ffffff, sh #a7a7a7, Plain, NoShape
+Colorset 32 fg #000000, bg #dbdbdb, hi #ffffff, sh #a7a7a7, Plain, NoShape
+Colorset 33 fg #000000, bg #d2d2d2, hi #ffffff, sh #a7a7a7, Plain, NoShape
+
+##  World View pager, sampled from the same screenshot: khaki desk, grey mini
+##  windows, periwinkle for the focused one.  The active page is a lighter
+##  khaki rather than the screenshot's dark outline, because FvwmPager styles
+##  the active page by background and has no border option for it.
+InfoStoreAdd cs_pager       34
+InfoStoreAdd cs_pager_hi    35
+InfoStoreAdd cs_pager_win   36
+InfoStoreAdd cs_pager_focus 37
+
+##  fg is what SolidSeparators draws the page grid in, and the screenshot's
+##  grid is white 1px.  Safe to claim for that here because Font None turns
+##  off the mini-window labels fg would otherwise colour.
+Colorset 34 fg #ffffff, bg #c3c7b1, hi #ffffff, sh #a7a7a7, Plain, NoShape
+Colorset 35 fg #ffffff, bg #d5d8c6, hi #ffffff, sh #a7a7a7, Plain, NoShape
+Colorset 36 fg #000000, bg #bec1c3, hi #ffffff, sh #7f8285, Plain, NoShape
+Colorset 37 fg #000000, bg #b4b4ff, hi #ffffff, sh #7676aa, Plain, NoShape
+
+InfoStoreAdd shelf_width 160
+InfoStoreAdd shelf_font        "xft:Sans:size=9:antialias=True"
+InfoStoreAdd shelf_header_font "xft:Sans:Bold:size=9:antialias=True"
+##  Usable width inside the shelf, after the 4px horizontal Padding each side.
+InfoStoreAdd shelf_inner 152
+
+##  The pager is a 3x3 grid of screen-shaped cells, so its height is the inner
+##  width scaled by the monitor's aspect ratio.  Computed once into infostore
+##  because two places need it -- the pager's own Geometry and the height of
+##  the shelf row that swallows it -- and they must agree.  fvwm has no
+##  arithmetic, so the sum happens in the shell PipeRead runs.
+PipeRead "echo InfoStoreAdd shelf_pager_h \
+    $(( $[infostore.shelf_inner] * $[vp.height] / $[vp.width] ))"
+InfoStoreAdd shelf_state $[FVWM_USERDIR]/.shelf.state
+
+##  Reserve the shelf's column so maximised windows stop at it, the way the
+##  bottom bar's height is already reserved.
+EwmhBaseStruts 0 $[infostore.shelf_width] 0 $[infostore.taskbar_height]
+
+##  Two windows, styled alike.  "ShelfMenu?" matches ShelfMenuA and
+##  ShelfMenuB, the aliases the accordion's double-buffered swap alternates
+##  between; "?" is exactly one character, so neither pattern can catch an
+##  application window that merely starts with the same prefix.
+Style "ShelfMenu?" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
+    Sticky, WindowListSkip, CirculateSkip, NeverFocus, \
+    FixedPosition, FixedSize, StaysOnTop
+Style "ShelfDock"  !Title, !Handles, BorderWidth 0, HandleWidth 0, \
+    Sticky, WindowListSkip, CirculateSkip, NeverFocus, \
+    FixedPosition, FixedSize, StaysOnTop
+
+##  The shelf's own pager instance.  Separate from the floating FvwmPager so
+##  the two can be sized and styled independently; this one is named so the
+##  Swallow in shelfdock.items can hang on it.
+DestroyModuleConfig ShelfPager:*
+*ShelfPager: Colorset      $[infostore.cs_pager]
+*ShelfPager: HilightColorset $[infostore.cs_pager_hi]
+*ShelfPager: WindowColorset  $[infostore.cs_pager_win]
+*ShelfPager: FocusColorset   $[infostore.cs_pager_focus]
+*ShelfPager: Font None
+*ShelfPager: SmallFont None
+##  Solid rather than the default dashed page separators, matching the
+##  screenshot's clean 1px grid.
+*ShelfPager: SolidSeparators
+*ShelfPager: Window3DBorders
+*ShelfPager: WindowBorderWidth 1
+*ShelfPager: WindowMinSize 3
+*ShelfPager: UseSkipList
+##  No MiniIcons: the screenshot's mini windows are plain bevelled rectangles,
+##  and a 16x16 icon inside a ~50x30 page cell swamps it.
+##
+##  No Rows/Columns here.  Those lay out *desks*, not pages -- with
+##  EwmhNumberOfDesktops 1, asking for 3x3 penned the one desk into a ninth of
+##  the window and drew the 3x3 page grid inside that.  The pages come from
+##  DesktopSize and need no pager option at all.
+##  Width only, with height 0: FvwmPager then derives the height from the
+##  monitor's aspect ratio, so this follows the VM's 16:10 and the host's
+##  1440p without a number changing.
+##
+##  Emitted through PipeRead because a "*Module: option" line does not expand
+##  $[...] -- the same trap mk-taskbar documents for Geometry.  Written as a
+##  literal it silently came out 48px wide instead of 152.
+##
+##  Both dimensions, not the "152x0" form that derives height from the aspect
+##  ratio: FvwmButtons resizes a swallowed window to its cell, but FvwmPager
+##  lays its grid out once at startup and does not rescale afterwards, so a
+##  pager that starts small stays a small grid in a correctly-sized window.
+PipeRead "echo '*ShelfPager: Geometry \
+    $[infostore.shelf_inner]x$[infostore.shelf_pager_h]'"
+
+##  ShelfDockRender builds the static lower window: the pager, the meters and
+##  the media strip.  It runs once, at startup, and deliberately NOT from
+##  ShelfToggle -- re-rendering it restarts the module, which restarts the
+##  pager and conky with it.  mk-shelf --static emits its own KillModule and
+##  Module in that order, so a re-render never overlaps two instances and
+##  Swallow's UseOld always finds the widgets it left behind.
+##
+##  --height auto makes the window as tall as its rows, and publishes that
+##  total as $[infostore.shelf_dock_h].  ShelfMenuRender below subtracts it,
+##  so the two windows meet exactly and adding a dock row costs no arithmetic
+##  anywhere else.
+DestroyFunc ShelfDockRender
+AddToFunc   ShelfDockRender
++ I PipeRead "$[FVWM_USERDIR]/bin/mk-shelf \
+      --spec '$[FVWM_USERDIR]/shelfdock.items' \
+      --alias ShelfDock \
+      --static \
+      --width $[infostore.shelf_width] \
+      --height auto \
+      --height-var shelf_dock_h \
+      --position -0-$[infostore.taskbar_height] \
+      --define pager_h=$[infostore.shelf_pager_h]"
+
+##  ShelfMenuRender regenerates the accordion and swaps it.  mk-shelf emits
+##  the Module/KillModule pair itself, so there is nothing to sequence here.
+##  $0 is the group to toggle, or "" to just re-render.
+##
+##  Its height is the screen less the taskbar less the dock, so the accordion
+##  is a fixed size whose rows rearrange inside it.  fvwm has no arithmetic,
+##  so the subtraction happens in the shell PipeRead runs through.
+DestroyFunc ShelfMenuRender
+AddToFunc   ShelfMenuRender
++ I PipeRead "$[FVWM_USERDIR]/bin/mk-shelf \
+      --spec '$[FVWM_USERDIR]/shelf.items' \
+      --alias ShelfMenu \
+      --state '$[infostore.shelf_state]' \
+      --width $[infostore.shelf_width] \
+      --height $(( $[vp.height] - $[infostore.taskbar_height] \
+                   - $[infostore.shelf_dock_h] )) \
+      --position -0+0 \
+      --toggle '$0'"
+
+##  The header rows bind to this name; it exists only so that the binding in
+##  the generated config reads as an intention rather than a PipeRead.
+DestroyFunc ShelfToggle
+AddToFunc   ShelfToggle
++ I ShelfMenuRender $0
+
+##  Dock first: it publishes shelf_dock_h, which the menu's height depends on.
+ShelfDockRender
+ShelfMenuRender
