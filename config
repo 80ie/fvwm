@@ -25,7 +25,7 @@ InfoStoreAdd border_width 5
 SetEnv TILE_MASTER_PERCENT 55
 SetEnv TILING_0-0-0 on
 
-# QNX Photon shelf, down the full right edge -- there is no taskbar row
+# QNX Photon shelf, down either screen edge -- there is no taskbar row
 # below it any more.  It is one program -- bin/shelf-panel -- which owns its
 # own width, its own section layout and its own collapse state, so none of
 # that lives here any more.  What fvwm still needs to know is how much edge
@@ -81,7 +81,7 @@ AddToFunc   StartFunction
 ###  Shelf.  Not a module, so fvwm won't restart it on its own; kill any
 ###  running instance and launch a fresh one so a Restart picks up changes
 ###  to bin/shelf-panel, photon.py, or panel.items, same as everything else
-###  StartFunction brings up.  Width/collapse state survives in
+###  StartFunction brings up.  Width/side/collapse state survives in
 ###  .panel.state, so the restart is invisible beyond a brief redraw.
 + I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
 # Replaced by the shelf panel above, which now carries the window list, tray
@@ -508,6 +508,15 @@ AddToFunc TileMasterNarrower
 + I PipeRead "echo SetEnv TILE_MASTER_PERCENT $$(( $[TILE_MASTER_PERCENT] - 5 ))"
 + I TileArrange
 
+DestroyFunc ShelfToLeft
+AddToFunc ShelfToLeft
++ I EwmhBaseStruts $0 0 0 0
++ I TileArrange
+
+DestroyFunc ShelfToRight
+AddToFunc ShelfToRight
++ I EwmhBaseStruts 0 $0 0 0
++ I TileArrange
 ##                                                           }}}3
 ##   │ ├ Tile                                                {{{3
 ##
@@ -647,7 +656,7 @@ Style * EdgeResizeDelay -1
 # EwmhBaseStruts [left] [right] [top] [bottom]
 # Reserves space along the edge(s) of the Screen that will not
 # be covered when maximizing or placing windows.
-# The shelf claims the right column; there is no bottom row any more.
+# The shelf claims one side column; there is no bottom row any more.
 ##  The shelf is resizable, so its width is whatever the panel last saved
 ##  rather than a constant.  The panel re-issues this itself as you drag the
 ##  edge -- EwmhBaseStruts does take effect at runtime -- and this line is
@@ -655,8 +664,7 @@ Style * EdgeResizeDelay -1
 ##  panel itself is restarted along with fvwm (see the StartFunction line
 ##  above that pkills and relaunches it), so this is only for the moment
 ##  between the config re-read and the panel coming back up.
-PipeRead "echo EwmhBaseStruts 0 \
-    $($[FVWM_USERDIR]/bin/shelf-panel --print-width) 0 0"
+PipeRead "$[FVWM_USERDIR]/bin/shelf-panel --print-struts"
 
 ##                                                           }}}2
 ##   ├ Windows                                               {{{2
@@ -961,11 +969,11 @@ DestroyModuleConfig FvwmPager:*
 ##                                                           }}}2
 ##   ├ Shelf                                                 {{{2
 ##  The QNX Photon shelf is one program: bin/shelf-panel, over bin/photon.py.
-##  It runs the full height of the right edge -- there is no taskbar row
+##  It runs the full height of either edge -- there is no taskbar row
 ##  below it any more, and it carries the window list, tray and clock that
 ##  row used to hold.  It draws its own frame, headers, launchers, pager,
 ##  meters and media widget, reads its sections from panel.items and keeps
-##  its width and collapse state in .panel.state.
+##  its width, side and collapse state in .panel.state.
 ##
 ##  It is not an fvwm module, and that is the point.  FvwmButtons cannot
 ##  change its layout at runtime -- ChangeButton reaches a button's title,
@@ -986,12 +994,3 @@ Style "ShelfPanel" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
     FixedPosition, FixedSize, StaysOnTop
 ##                                                           }}}2
 ##                                                           }}}1
-
-
-
-
-
-
-
-
-

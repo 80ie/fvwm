@@ -32,7 +32,7 @@ Silent Key T A 4 Exec exec $[infostore.terminal] -1
 Silent Key XF86Calculator A N Exec exec $[infostore.calculator]
 Silent Key W A 4 Exec exec firefox
 Silent Key E A 4 Exec exec $[infostore.filemanager]
-Silent Key R A 4 Exec exec kitten quick-access-terminal
+Silent Key R A 4 Exec exec rofi -show drun
 #Silent Key . A 14 Exec exec kcharselect
 ##                                                           }}}3
 ##   │ ├ Window controls                                     {{{3
@@ -55,6 +55,7 @@ Silent Key slash A 4 Exec exec $[FVWM_USERDIR]/bin/fvwm-keys
 
 Silent Key F A 4 FullscreenToggle
 Silent Key F W S4 Maximize 100 100 ewmhiwa
+Silent Key A A S4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-side
 Silent Key space A 4 TileToggle
 Silent Key space A S4 TileToggleFloating
 Silent Key Return A C4 TileSetMaster

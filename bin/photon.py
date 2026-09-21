@@ -219,9 +219,8 @@ def bar_fill(p: QPainter, r: QRect, colour: QColor):
     p.drawLine(r.right(), r.top(), r.right(), r.bottom())
 
 
-def frame(p: QPainter, r: QRect):
-    """The shelf's own left edge: **two nested bevels** with a face channel
-    between them, seven pixels wide.
+def frame(p: QPainter, r: QRect, edge="left"):
+    """The shelf's inner edge: two nested bevels, seven pixels wide.
 
     Sampled at x=889..895 and identical at every height checked (y=2, 8, 16,
     18, 19, 22, 40, 45, 300, 520, 590, 700):
@@ -233,10 +232,12 @@ def frame(p: QPainter, r: QRect):
 
     FvwmButtons' `Frame N` draws *one* bevel N pixels wide out of a
     colorset's hi/sh and cannot nest, which is why this could not be had
-    while the shelf was a module.  Only the left edge carries it -- the other
-    three sides of the reference shelf are screen edges.
+    while the shelf was a module.  The reference carries it on the left; a
+    left-docked shelf mirrors it onto the right.
     """
     rows = (DARK, HI, FACE_ALT, FACE_ALT, FRAME_MID, DARK, HI)
+    if edge == "right":
+        rows = reversed(rows)
     for i, colour in enumerate(rows):
         p.setPen(colour)
         p.drawLine(r.left() + i, r.top(), r.left() + i, r.bottom())
