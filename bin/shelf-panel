@@ -3,7 +3,10 @@
 
 This is option C from PANEL-DESIGN.md, for the sidebar.  It replaces
 bin/mk-shelf, shelf.items, shelfdock.items, the ShelfMenuA/B alias swap and
-.shelf.state with a single program that lays itself out at runtime.
+.shelf.state with a single program that lays itself out at runtime.  It also
+absorbs FvwmTaskBar now that that has been retired: the panel is full screen
+height, and Windows/System Tray/clock sit in the stack alongside what used
+to be swallowed widgets.
 
 Three things become possible by leaving FvwmButtons behind, and they are the
 reasons for doing it rather than side effects:
@@ -30,6 +33,8 @@ were written for.
 import json
 import os
 import shlex
+import signal
+import socket
 import subprocess
 import sys
 
@@ -38,15 +43,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import QPoint, QProcess, QRect, Qt, QTimer
+from PyQt6.QtCore import (QPoint, QProcess, QRect, QSocketNotifier, Qt,
+                          QTimer)
 from PyQt6.QtGui import (QCursor, QFontMetrics, QPainter, QPalette,
                          QPixmap)
 from PyQt6.QtWidgets import QApplication, QWidget
 
 import photon
+from photon_clock import ClockWidget
 from photon_media import MediaWidget
 from photon_meters import MetersWidget
 from photon_pager import WorldView
+from photon_tasks import TasksWidget
+from photon_tray import TrayWidget
 
 USERDIR = os.environ.get("FVWM_USERDIR", os.path.expanduser("~/.fvwm"))
 SPEC = os.path.join(USERDIR, "panel.items")
@@ -55,7 +64,6 @@ ICONS = os.path.join(USERDIR, "icons")
 
 MIN_W, MAX_W = 110, 420
 DEFAULT_W = 160
-TASKBAR_H = 30          # what config reserves at the bottom for FvwmTaskBar
 
 
 #  ---- Spec ------------------------------------------------------------
@@ -66,6 +74,8 @@ class Group:
         self.items = []       # (label, icon, command)
         self.widget = None    # name, for a drawn section
         self.collapsed = False
+        self.bare = False     # no header at all -- see `bare` in panel.items
+        self.flex = False     # absorbs the panel's leftover height
         #  Filled in at layout time.
         self.header = QRect()
         self.body = QRect()
@@ -85,6 +95,11 @@ def read_spec(path):
         rest = rest.strip()
         if head == "group":
             groups.append(Group(rest))
+        elif head == "bare":
+            g = Group(None)
+            g.bare = True
+            g.widget = rest
+            groups.append(g)
         elif head == "item" and groups:
             parts = [f.strip() for f in rest.split("|")]
             while len(parts) < 3:
@@ -92,6 +107,8 @@ def read_spec(path):
             groups[-1].items.append(tuple(parts[:3]))
         elif head == "widget" and groups:
             groups[-1].widget = rest
+        elif head == "flex" and groups:
+            groups[-1].flex = True
     return groups
 
 
@@ -232,17 +249,30 @@ class Panel(QWidget):
         self.groups = read_spec(SPEC)
 
         for g in self.groups:
-            g.collapsed = bool(self.state.get("collapsed", {}).get(g.label))
+            if not g.bare:
+                g.collapsed = bool(self.state.get("collapsed", {}).get(g.label))
             if g.widget == "worldview":
                 g.body_widget = WorldView(self)
             elif g.widget == "meters":
                 g.body_widget = MetersWidget(self)
             elif g.widget == "media":
                 g.body_widget = MediaWidget(self)
+            elif g.widget == "tasks":
+                g.body_widget = TasksWidget(self)
+            elif g.widget == "tray":
+                g.body_widget = TrayWidget(self)
+            elif g.widget == "clock":
+                g.body_widget = ClockWidget(self)
             elif g.items:
                 g.body_widget = LauncherBody(g.items, self)
             else:
                 g.body_widget = None
+            #  hasattr rather than isinstance: the tray grows and shrinks
+            #  with the icon count and has to trigger a relayout on its own,
+            #  but nothing here should need to import TrayWidget just to
+            #  check for it.
+            if hasattr(g.body_widget, "natural_height_changed"):
+                g.body_widget.natural_height_changed.connect(self.relayout)
 
         self._drag_from = None      # left-edge resize in progress
         self._drag_w = 0
@@ -265,38 +295,106 @@ class Panel(QWidget):
         return scr.geometry() if scr else QRect(0, 0, 1920, 1080)
 
     def place(self):
-        """Dock to the right edge, full height above the taskbar."""
+        """Dock to the right edge, full screen height.
+
+        FvwmTaskBar is gone, so there is no strip at the bottom to leave
+        room for any more -- the panel now claims the whole edge, and
+        Windows (the flex group) is what expands into the space a taskbar
+        used to occupy.
+        """
         s = self.screen_rect()
-        h = s.height() - TASKBAR_H
-        self.setGeometry(s.right() + 1 - self.width(), s.top(), self.width(), h)
+        self.setGeometry(s.right() + 1 - self.width(), s.top(),
+                         self.width(), s.height())
         self.relayout()
 
-    def relayout(self):
-        """Stack the sections.  A collapsed group is its header alone; the
-        slack, if any, falls to the filler at the bottom."""
-        x = photon.FRAME_W
-        w = self.width() - photon.FRAME_W
-        y = 0
-        for g in self.groups:
+    def _natural_height(self, widget, w):
+        if isinstance(widget, WorldView):
+            return widget.natural_height(w)
+        if hasattr(widget, "natural_height"):
+            return widget.natural_height()
+        return widget.sizeHint().height()
+
+    def _group_height(self, g, w):
+        """A group's total height at its natural size, without placing it --
+        used to size the bottom-pinned block before laying it out."""
+        h = 0 if g.bare else photon.HEADER_H
+        if g.body_widget is not None and not g.collapsed:
+            h += self._natural_height(g.body_widget, w)
+        return h
+
+    def _place_group(self, g, x, y, w, height=None):
+        """Position one group at `y` and return the y just past it.  `height`
+        overrides the widget's own natural height, which is how the flex
+        group is handed its share of the leftover space."""
+        if g.bare:
+            g.header = QRect(x, y, w, 0)
+        else:
             g.header = QRect(x, y, w, photon.HEADER_H)
             y += photon.HEADER_H
-            widget = g.body_widget
-            if widget is None or g.collapsed:
-                g.body = QRect(x, y, w, 0)
-                if widget is not None:
-                    widget.hide()
-                continue
-            if isinstance(widget, WorldView):
-                h = widget.natural_height(w)
-            elif hasattr(widget, "natural_height"):
-                h = widget.natural_height()
-            else:
-                h = widget.sizeHint().height()
-            g.body = QRect(x, y, w, h)
-            widget.setGeometry(g.body)
-            widget.show()
-            y += h
-        self.filler = QRect(x, y, w, max(0, self.height() - y))
+        widget = g.body_widget
+        if widget is None or g.collapsed:
+            g.body = QRect(x, y, w, 0)
+            if widget is not None:
+                widget.hide()
+            return y
+        h = height if height is not None else self._natural_height(widget, w)
+        g.body = QRect(x, y, w, h)
+        widget.setGeometry(g.body)
+        widget.show()
+        return y + h
+
+    def relayout(self):
+        """Stack the sections.
+
+        No group marked `flex` in panel.items: stack top to bottom as
+        before, a collapsed group is its header alone, and the slack (if
+        any) falls to the sunken filler at the bottom -- unchanged so a
+        spec that never uses `flex` is unaffected.
+
+        A `flex` group instead splits the stack in three: everything above
+        it lays out from the top, everything below it is pinned to the
+        bottom (sized first, at natural height, so we know where that block
+        starts), and the flex group takes whatever vertical space is left
+        between the two -- never less than its own natural height, so a
+        panel too short to fit everything overflows rather than being
+        crushed to nothing.
+        """
+        x = photon.FRAME_W
+        w = self.width() - photon.FRAME_W
+        flex = next((g for g in self.groups if g.flex), None)
+
+        if flex is None:
+            y = 0
+            for g in self.groups:
+                y = self._place_group(g, x, y, w)
+            self.filler = QRect(x, y, w, max(0, self.height() - y))
+            self.update()
+            return
+
+        i = self.groups.index(flex)
+        top, bottom = self.groups[:i], self.groups[i + 1:]
+
+        y = 0
+        for g in top:
+            y = self._place_group(g, x, y, w)
+        top_y = y
+
+        bottom_h = sum(self._group_height(g, w) for g in bottom)
+        bottom_y = self.height() - bottom_h
+
+        header_h = 0 if flex.bare else photon.HEADER_H
+        flex_natural = (self._natural_height(flex.body_widget, w)
+                        if flex.body_widget is not None and not flex.collapsed
+                        else 0)
+        flex_h = max(flex_natural, bottom_y - top_y - header_h)
+        self._place_group(flex, x, top_y, w, height=flex_h)
+
+        y = bottom_y
+        for g in bottom:
+            y = self._place_group(g, x, y, w)
+
+        #  Nothing left for a filler once a group is claiming the slack.
+        self.filler = QRect(x, 0, w, 0)
         self.update()
 
     def resizeEvent(self, event):
@@ -309,6 +407,8 @@ class Panel(QWidget):
         p.fillRect(self.rect(), photon.FACE)
         photon.frame(p, self.rect())
         for g in self.groups:
+            if g.bare:
+                continue
             photon.group_header(p, g.header, g.label, g.collapsed,
                                 self.font_header)
         if self.filler.height() > 0:
@@ -321,7 +421,7 @@ class Panel(QWidget):
 
     def _header_at(self, pos):
         for g in self.groups:
-            if g.header.contains(pos):
+            if not g.bare and g.header.contains(pos):
                 return g
         return None
 
@@ -353,7 +453,7 @@ class Panel(QWidget):
         if width != self.width():
             s = self.screen_rect()
             self.setGeometry(s.right() + 1 - width, s.top(),
-                             width, s.height() - TASKBAR_H)
+                             width, s.height())
             self._strut.start()
 
     def mouseReleaseEvent(self, event):
@@ -370,24 +470,48 @@ class Panel(QWidget):
         EwmhBaseStruts is a plain fvwm command and it does take effect at
         runtime: setting it to 400 and re-maximising a window took that
         window from 1750px to 1510px wide.  Without this, widening the shelf
-        would just cover the windows underneath it.
+        would just cover the windows underneath it.  Right only, now that
+        FvwmTaskBar is gone -- there is no bottom strip left to claim.
         """
         QProcess.startDetached(
-            "FvwmCommand", ["EwmhBaseStruts 0 %d 0 %d" % (self.width(), TASKBAR_H)])
+            "FvwmCommand", ["EwmhBaseStruts 0 %d 0 0" % self.width()])
+
+
+def quit_on_sigterm(app):
+    """Make SIGTERM an orderly exit, and return the socketpair keeping it alive.
+
+    config restarts the panel by pkilling it, so SIGTERM is now how this
+    process ordinarily ends.  Default-handled it dies without unwinding, and
+    every child the components own -- stalonetray, `pactl subscribe` -- is
+    orphaned rather than reaped, once per fvwm Restart.  Python defers a
+    signal until the interpreter next runs bytecode, which inside Qt's C++
+    event loop may be a long time; the wakeup fd turns the signal into
+    something the loop itself can select on.
+    """
+    rsock, wsock = socket.socketpair()
+    rsock.setblocking(False)
+    wsock.setblocking(False)
+    signal.set_wakeup_fd(wsock.fileno())
+    signal.signal(signal.SIGTERM, lambda *_: None)
+
+    notifier = QSocketNotifier(rsock.fileno(), QSocketNotifier.Type.Read, app)
+    notifier.activated.connect(lambda *_: app.quit())
+    return rsock, wsock
 
 
 def main():
     if "--print-width" in sys.argv:
-        #  For the config's EwmhBaseStruts line.  A Restart re-reads the
-        #  config but does not restart this program, so the strut has to be
-        #  re-derived from the saved width or a widened shelf would go back
-        #  to reserving the default.
+        #  For the config's EwmhBaseStruts line, which is read before this
+        #  program is back up.  The strut has to be re-derived from the saved
+        #  width or a widened shelf would reserve the default for as long as
+        #  the restart takes.
         print(max(MIN_W, min(MAX_W, int(read_state().get("width", DEFAULT_W)))))
         return
 
     app = QApplication(sys.argv)
     app.setApplicationName("ShelfPanel")
     app.setDesktopFileName("ShelfPanel")
+    _sigterm = quit_on_sigterm(app)
     panel = Panel()
     panel.setWindowTitle("ShelfPanel")
     panel.show()

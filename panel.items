@@ -13,29 +13,56 @@
 ##                         a launcher row.  <icon> is a file in icons/, or a
 ##                         themed name looked up in the Haiku set.  <command>
 ##                         is run through the shell.
-##    widget <name>        a drawn widget: worldview, meters or media.
-##    fixed                marks the group above as not collapsible.
+##    widget <name>        a drawn widget: worldview, meters, media, tasks,
+##                         tray or clock.
+##    bare <name>          a widget section with no group header at all, so
+##                         it cannot be collapsed and costs no HEADER_H --
+##                         for a section that should read as part of the
+##                         frame rather than a titled group, like the clock.
+##    flex                 marks the group *above* as the one that absorbs
+##                         the panel's leftover height.  Sections above it
+##                         stack from the top as usual; sections below it
+##                         are pinned to the bottom of the panel instead;
+##                         the flex group is given whatever vertical space
+##                         is left between the two, never less than its own
+##                         natural height.  At most one group should carry
+##                         this -- a spec with none falls back to the old
+##                         top-down stack with a sunken filler at the bottom.
 ##
 ##  $VARS in a command are expanded by the shell that runs it, so the
 ##  terminal and friends come from the environment rather than from fvwm's
 ##  InfoStore -- bin/shelf-panel is not an fvwm module and cannot read it.
 
-group Applications
-item Terminal     | 16x16-xterm-color.png                    | ${TERMINAL:-kitty}
-item Browser      | 16x16-firefox.png                        | firefox
-item File Manager | 16x16-Explorer++.png                     | ${FILEMANAGER:-dolphin}
-item Calculator   | 16x16-org.speedcrunch.SpeedCrunch.png    | ${CALCULATOR:-speedcrunch}
-item Editor       | 16x16-emacs.png                          | emacs
+##  The launchers are parked, not gone.  LauncherBody and the `item`
+##  directive both still work; uncommenting a group below is all it takes to
+##  bring the rows back.
+#
+#group Applications
+#item Terminal     | 16x16-xterm-color.png                    | ${TERMINAL:-kitty}
+#item Browser      | 16x16-firefox.png                        | firefox
+#item File Manager | 16x16-Explorer++.png                     | ${FILEMANAGER:-dolphin}
+#item Calculator   | 16x16-org.speedcrunch.SpeedCrunch.png    | ${CALCULATOR:-speedcrunch}
+#item Editor       | 16x16-emacs.png                          | emacs
+#
+#group Utilities
+#item Process Monitor | 16x16-qps.png                         | ${TERMINAL:-kitty} -e btop
+#item Screenshot      | 16x16-org.flameshot.Flameshot.png     | flameshot gui
+#item Clipboard       | 16x16-qlipper.png                     | qlipper
+#
+#group Configure
+#item Graphics     | 16x16-nvidia-settings.png                | arandr
+#item Screen Saver | 16x16-xscreensaver.png                   | xscreensaver-demo
+#item Appearance   | 16x16-menulibre.png                      | ${TERMINAL:-kitty} -e ${EDITOR:-vi} $FVWM_USERDIR/config
 
-group Utilities
-item Process Monitor | 16x16-qps.png                         | ${TERMINAL:-kitty} -e btop
-item Screenshot      | 16x16-org.flameshot.Flameshot.png     | flameshot gui
-item Clipboard       | 16x16-qlipper.png                     | qlipper
+##  Windows absorbs whatever the rest of the stack does not need -- the same
+##  job FvwmTaskBar's window-list cell did, now with a whole sidebar's worth
+##  of height to grow into instead of one fixed row.
+group Windows
+widget tasks
+flex
 
-group Configure
-item Graphics     | 16x16-nvidia-settings.png                | arandr
-item Screen Saver | 16x16-xscreensaver.png                   | xscreensaver-demo
-item Appearance   | 16x16-menulibre.png                      | ${TERMINAL:-kitty} -e ${EDITOR:-vi} $FVWM_USERDIR/config
+group System Tray
+widget tray
 
 group World View
 widget worldview
@@ -45,3 +72,7 @@ widget meters
 
 group Media
 widget media
+
+##  No header: flush against the bottom of the panel, the last thing in the
+##  stack.  Format and position both carried over from TaskbarClockTick.
+bare clock

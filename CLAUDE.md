@@ -48,18 +48,16 @@ all three are free here (`PANEL-DESIGN.md` has the measurements):
 `EwmhBaseStruts` **does** take effect at runtime — verified by maximising a
 window across a strut change — which is what lets the shelf be resizable at
 all. The panel re-issues it as you drag; `bin/shelf-panel --print-width` is
-how the config gets it right again after a Restart, which re-reads the config
-but leaves the running panel alone.
+how the config gets it right again after a Restart, which re-reads the
+config. The panel itself is restarted along with fvwm (`StartFunction` pkills
+and relaunches it), so this only covers the moment between the config
+re-read and the panel coming back up.
 
-**Generated panel** — the taskbar, still. FvwmButtons has no flexible sizing,
-so its cell list is generated from a spec rather than written by hand:
-
-| generator | spec | window |
-|---|---|---|
-| `bin/mk-taskbar` | `taskbar.items` | `FvwmTaskBar` — Launch, window list, tray, VOL, clock |
-
-Adding a cell means adding a spec line; widths are solved by the generator,
-which hands leftover pixels to a `flex` cell.
+**Generated panel — retired.** The bottom `FvwmTaskBar` this fed is gone from
+`config`; the shelf now carries everything it held (window list, tray,
+clock). `bin/mk-taskbar` and `taskbar.items` are left on disk unused rather
+than deleted, in case a generated cell list is useful again, but nothing
+wires them in.
 
 **Shelf components** — everything the panel draws, split so each piece stays
 testable on its own. Run any of them directly and it comes up as an ordinary
@@ -72,6 +70,9 @@ window.
 | `bin/photon_media.py` | MPRIS transport, marquee title, volume slider |
 | `bin/photon_meters.py` | CPU / memory / filesystem meters, via `psutil` |
 | `bin/photon_pager.py` | World View, drawn from EWMH rather than swallowed |
+| `bin/photon_tasks.py` | the window list, drawn from EWMH like the pager |
+| `bin/photon_tray.py` | the system tray: stalonetray reparented in via Qt's foreign-window container — the one piece here that is swallowed rather than drawn |
+| `bin/photon_clock.py` | the clock field that used to be a taskbar cell |
 
 Three bevel vocabularies, one function each in `photon.py`: soft-bevelled
 chrome (`raised`), hard-outlined sunken wells (`sunken`, `trough`, `groove`),
@@ -101,8 +102,8 @@ to a comment that used to live in `FvwmScript-ShelfMedia`.)
 **lib/Thumbnail** — custom Perl module using Image::Magick for window thumbnail generation (200x180px, cached in `.thumbs/` with 100s expiry). Loaded via `ModulePath` and recycled every 300s.
 
 **FvwmScript-\*** — small UI dialogs (Confirm{Quit,Reboot,Shutdown}).
-`FvwmScript-DateTime` is no longer used by the taskbar (its clock is a native
-FvwmButtons cell updated via `SendToModule ChangeButton`) but is kept.
+`FvwmScript-DateTime` is no longer used for the clock (that's now
+`bin/photon_clock.py`, a Qt widget in the shelf) but is kept.
 
 **scripts/** — shell scripts: `onLock.sh` (xsecurelock), `onSuspend.sh`, `onReboot.sh`, `onShutdown.sh`, `toggle_whiskermenu.sh` (xdotool-based).
 

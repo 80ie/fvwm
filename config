@@ -23,15 +23,12 @@ InfoStoreAdd pager_scale 18
 InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
 
-# Taskbar row height. Cell widths come from taskbar.items via bin/mk-taskbar;
-# this is the one number the bar's height is derived from.
-InfoStoreAdd taskbar_height 30
-
-# QNX Photon shelf, down the right edge above the taskbar.  It is one program
-# now -- bin/shelf-panel -- which owns its own width, its own section layout
-# and its own collapse state, so none of that lives here any more.  What fvwm
-# still needs to know is how much edge it is claiming, and that is read back
-# from the panel where EwmhBaseStruts is set below.
+# QNX Photon shelf, down the full right edge -- there is no taskbar row
+# below it any more.  It is one program -- bin/shelf-panel -- which owns its
+# own width, its own section layout and its own collapse state, so none of
+# that lives here any more.  What fvwm still needs to know is how much edge
+# it is claiming, and that is read back from the panel where EwmhBaseStruts
+# is set below.
 
 # Colorset numbers by name, so the taskbar's spec file can refer to them
 # without hardcoding a number that would shift if the warm brown sets below
@@ -88,23 +85,14 @@ AddToFunc   StartFunction
 + I Module FvwmPager
 + I Module FvwmPerl
 #+ I Module FvwmAnimate
-+ I Module FvwmButtons FvwmTaskBar
-###  The clock cell comes up blank and is filled by SendToModule, which is
-###  dropped rather than queued if the button does not exist yet -- hence two
-###  early attempts before the periodic timer takes over.  Id 3010 just has to
-###  not collide with the "5minutes" schedule below (1222).
-+ I Schedule 300 TaskbarClockTick
-+ I Schedule 1200 TaskbarClockTick
-+ I Schedule Periodic 30000 3010 TaskbarClockTick
 ###  Shelf.  Not a module, so fvwm won't restart it on its own; kill any
 ###  running instance and launch a fresh one so a Restart picks up changes
 ###  to bin/shelf-panel, photon.py, or panel.items, same as everything else
 ###  StartFunction brings up.  Width/collapse state survives in
 ###  .panel.state, so the restart is invisible beyond a brief redraw.
 + I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
-# Replaced by the FvwmButtons taskbar above; both sit full-width at the bottom
-# and would overlap. Its tray also blocks stalonetray from claiming the tray
-# selection.
+# Replaced by the shelf panel above, which now carries the window list, tray
+# and clock the taskbar used to; lxqt-panel would duplicate all three.
 #+ I Test (Init) Exec exec lxqt-panel
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
@@ -480,14 +468,6 @@ DestroyFunc PlaySound
 AddToFunc   PlaySound
 + I Exec exec mpg123 ~/.fvwm/sounds/$0
 
-DestroyFunc IconManClick
-AddToFunc   IconManClick
-+ I ThisWindow (Focused, !Iconic, CurrentPage, AnyScreen) IconifyWindow
-+ I TestRc (Match) Break
-+ I ThisWindow (Iconic) DeIconifyWindow
-+ I TestRc (Match) Break
-+ I ThisWindow (Raised, !Shaded, !Iconic, CurrentPage, AnyScreen) Focus
-+ I Raise
 ##                                                           }}}1
 ##  Style                                                    {{{1
 ##   ├ Cursor                                                {{{2
@@ -528,15 +508,16 @@ Style * EdgeResizeDelay -1
 # EwmhBaseStruts [left] [right] [top] [bottom]
 # Reserves space along the edge(s) of the Screen that will not
 # be covered when maximizing or placing windows.
-# The shelf claims the right column, the taskbar the bottom row.
+# The shelf claims the right column; there is no bottom row any more.
 ##  The shelf is resizable, so its width is whatever the panel last saved
 ##  rather than a constant.  The panel re-issues this itself as you drag the
 ##  edge -- EwmhBaseStruts does take effect at runtime -- and this line is
-##  what gets it right again after a Restart, which re-reads the config but
-##  leaves the running panel alone.
+##  what gets it right again after a Restart, which re-reads the config.  The
+##  panel itself is restarted along with fvwm (see the StartFunction line
+##  above that pkills and relaunches it), so this is only for the moment
+##  between the config re-read and the panel coming back up.
 PipeRead "echo EwmhBaseStruts 0 \
-    $($[FVWM_USERDIR]/bin/shelf-panel --print-width) 0 \
-    $[infostore.taskbar_height]"
+    $($[FVWM_USERDIR]/bin/shelf-panel --print-width) 0 0"
 
 ##                                                           }}}2
 ##   ├ Windows                                               {{{2
@@ -595,7 +576,6 @@ Style FvwmIdent WindowListSkip
 Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, \
                 Layer $[infostore.bottomlayer], !Iconifiable, \
                 PositionPlacement Center, FixedSize, FixedPosition, NeverFocus
-Style FvwmIconMan WindowListSkip
 
 
 Style lxqt-panel !Title, !Borders, Layer $[infostore.putlayer]
@@ -686,9 +666,9 @@ Colorset 21 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], 
 # soft #a7a7a7 rather than black, which is what makes Photon read as gentler
 # than Win95 at the same 1px bevel width.  Referred to by name through the
 # cs_* InfoStore keys, never by number.
-#~~~~~~~ 30 - Shelf and taskbar face
+#~~~~~~~ 30 - Shelf face
 Colorset 30 fg #000000, bg #d9d9d9, hi #ffffff, sh #a7a7a7, Plain, NoShape
-#~~~~~~~ 31 - Shelf and taskbar hover
+#~~~~~~~ 31 - Shelf hover
 Colorset 31 fg #000000, bg #e4e4e4, hi #ffffff, sh #a7a7a7, Plain, NoShape
 #~~~~~~~ 32 - Shelf group header
 Colorset 32 fg #000000, bg #dbdbdb, hi #ffffff, sh #a7a7a7, Plain, NoShape
@@ -925,84 +905,13 @@ DestroyModuleConfig FvwmPager:*
 #*FvwmAnimate: Effect Zoom3D
 #*FvwmAnimate: Iterations 25
 ##                                                           }}}2
-##   ├ FvwmTaskBar                                           {{{2
-##  Photon's bottom strip: Launch, the window list, the tray, VOL and a clock.
-##
-##  DestroyModuleConfig first because mk-taskbar's cell lines are plain "(...)"
-##  appends with nothing keying them to a slot, so a second read without a
-##  Destroy between would stack the new cells after the old ones.
-DestroyModuleConfig FvwmTaskBar:*
-*FvwmTaskBar: Colorset       $[infostore.cs_shelf]
-*FvwmTaskBar: ActiveColorset $[infostore.cs_shelf_hi]
-*FvwmTaskBar: Frame 0
-*FvwmTaskBar: Font $[infostore.shelf_font]
-
-###  The cells live in taskbar.items; mk-taskbar sizes them, spending every
-###  leftover pixel on the "flex" cell, and emits Geometry/Rows/Columns to
-###  match.  So adding a launcher costs no arithmetic here, and neither does a
-###  resolution change.  Geometry has to be generated rather than written as
-###  $[vp.width]: that expands in a command but not in a "*Module: option"
-###  line, where it silently yields a 16px-wide bar.
-PipeRead "$[FVWM_USERDIR]/bin/mk-taskbar $[FVWM_USERDIR]/taskbar.items \
-    FvwmTaskBar $[vp.width] $[infostore.taskbar_height]"
-
-##  TaskbarClockTick pushes the time into the cell taskbar.items names
-##  "TaskbarClock" via Id, using FvwmButtons' own SendToModule/ChangeButton
-##  rather than a swallowed FvwmScript -- that is what lets the clock read as
-##  one flush sunken field, "Fri-19 11:33PM", instead of FvwmScript-DateTime's
-##  two-line HH:MM / date pair in its own window chrome.  date's own tokens
-##  spell Photon's format: %a-%d is "Fri-19", %I:%M%p is "11:33PM".
-DestroyFunc TaskbarClockTick
-AddToFunc   TaskbarClockTick
-+ I PipeRead "date '+SendToModule FvwmTaskBar ChangeButton TaskbarClock Title \"%a-%d %I:%M%p\"'"
-
-Style FvwmTaskBar !Borders, !Title, WindowListSkip, \
-                  Layer 6, Sticky, FixedSize, !Iconifiable, NeverFocus
-
-##   │ ├ TaskBarIcons                                        {{{3
-DestroyModuleConfig TaskBarIcons: *
-*TaskBarIcons: IconName "TaskBarIcons"
-*TaskBarIcons: UseWinList true
-*TaskBarIcons: Resolution page
-*TaskBarIcons: Tips needed
-*TaskBarIcons: Font $[infostore.shelf_font]
-
-# Manager Size.  ButtonGeometry's height tracks taskbar_height, and a plain
-# "*Module: option" line does not expand $[...] -- the same trap the Geometry
-# line above documents -- so it goes through PipeRead.
-PipeRead "echo '*TaskBarIcons: ButtonGeometry 120x$[infostore.taskbar_height]'"
-*TaskBarIcons: MaxButtonWidth 150
-*TaskBarIcons: ManagerGeometry 1x1
-
-# Sort
-*TaskBarIcons: Sort weighted
-*TaskBarIcons: SortWeight 1 class=firefox
-*TaskBarIcons: SortWeight 5
-*TaskBarIcons: ShowNoIcons false
-
-# Button Styles.  The bevel keywords are what draw the 3D relief and are the
-# same shape Photon uses; only the colours differ from the warm brown set.
-*TaskBarIcons: DrawIcons always
-*TaskBarIcons: ReliefThickness 1
-*TaskBarIcons: Format "%t"
-*TaskBarIcons: PlainButton up
-*TaskBarIcons: IconButton sunkedge
-*TaskBarIcons: IconAndSelectButton down
-*TaskBarIcons: SelectButton up
-*TaskBarIcons: Colorset               $[infostore.cs_shelf]
-*TaskBarIcons: PlainColorset          $[infostore.cs_shelf]
-*TaskBarIcons: FocusColorset          $[infostore.cs_shelf]
-*TaskBarIcons: FocusAndSelectColorset $[infostore.cs_shelf_hi]
-*TaskBarIcons: SelectColorset         $[infostore.cs_shelf_hi]
-*TaskBarIcons: IconAndSelectColorset  $[infostore.cs_shelf_hi]
-*TaskBarIcons: IconColorset           $[infostore.cs_shelf]
-##                                                           }}}3
-##                                                           }}}2
 ##   ├ Shelf                                                 {{{2
 ##  The QNX Photon shelf is one program: bin/shelf-panel, over bin/photon.py.
-##  It draws its own frame, headers, launchers, pager, meters and media
-##  widget, reads its sections from panel.items and keeps its width and
-##  collapse state in .panel.state.
+##  It runs the full height of the right edge -- there is no taskbar row
+##  below it any more, and it carries the window list, tray and clock that
+##  row used to hold.  It draws its own frame, headers, launchers, pager,
+##  meters and media widget, reads its sections from panel.items and keeps
+##  its width and collapse state in .panel.state.
 ##
 ##  It is not an fvwm module, and that is the point.  FvwmButtons cannot
 ##  change its layout at runtime -- ChangeButton reaches a button's title,

@@ -268,19 +268,43 @@ class Sink(QObject):
         self._reader = QProcess(self)
         self._reader.finished.connect(self._reader_done)
 
+        self._stopping = False
         self._sub = QProcess(self)
         self._sub.readyReadStandardOutput.connect(self._on_events)
         self._sub.finished.connect(self._sub_died)
         self._start_sub()
         self._read()
 
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self.stop)
+
     def _start_sub(self):
         self._sub.start("pactl", ["subscribe"])
 
     def _sub_died(self):
+        if self._stopping:
+            return
         #  pipewire-pulse restarting takes the subscription with it.  Come
         #  back for it rather than going silently deaf.
         QTimer.singleShot(2000, self._start_sub)
+
+    def stop(self):
+        """Reap the children before the panel goes.
+
+        config restarts the panel on every fvwm Restart, so this is now the
+        ordinary exit path rather than a rare one, and a subscription left
+        running is a subscription left running *per restart* -- there were
+        three orphaned `pactl subscribe` processes in ps when this was
+        written.  The _stopping flag is what stops _sub_died reading its own
+        termination as pipewire dying and resurrecting it."""
+        self._stopping = True
+        for proc in (self._sub, self._reader):
+            if proc.state() == QProcess.ProcessState.NotRunning:
+                continue
+            proc.terminate()
+            if not proc.waitForFinished(300):
+                proc.kill()
 
     def _on_events(self):
         data = bytes(self._sub.readAllStandardOutput()).decode("utf-8", "replace")
