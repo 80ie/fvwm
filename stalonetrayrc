@@ -33,6 +33,9 @@ fuzzy_edges 0
 
 # geometry <geometry>        # tray's geometry in standard X notation; width and
                              # height are specified in slot_size multiples
+# This 10x1 is a fallback for running stalonetray by hand. bin/photon_tray.py
+# always passes --geometry/--max-geometry on the command line, sized to the
+# sidebar's actual width in slots, which per the header above wins over this.
 geometry 10x1
 
 # grow_gravity <gravity>     # one of N, S, E, W, NW, NE, SW, SE; tray will grow
@@ -40,14 +43,19 @@ geometry 10x1
                              # grow_gravity; if horizontal or vertical
                              # direction is not specified, tray will not grow in
                              # that direction
-#grow_gravity E
+# NW: the sidebar's tray is a vertical grid anchored at its own top-left, so
+# new icons should extend it downward and rightward, not recentre it.
+grow_gravity NW
 
 # icon_gravity <gravity>     # icon placement gravity, one of NW, NE, SW, SE
-icon_gravity SE
+# NW to match grow_gravity: icons pack toward the same corner the grid grows
+# from, rather than SE's taskbar-era bottom-right packing.
+icon_gravity NW
 
 # icon_size <int>            # specifies dimensions of an icon
-# Shrunk from 24 to fit the Photon taskbar's 30px row (see taskbar.proto);
-# slot_size below shrinks to match.
+# 22, slot_size 26: sized for the sidebar's vertical grid (bin/photon_tray.py
+# computes columns as inner_width // slot_size), not the 30px taskbar row
+# these were originally shrunk to fit -- that row is gone.
 icon_size 22
 
 # slot_size <w>[x<h>]        # specifies width and hight of an icon slot that
@@ -56,8 +64,8 @@ icon_size 22
                              # defaults to icon size
 # This build only accepts an integer here, despite the WxH form documented
 # above; "28x40" made stalonetray exit at startup with a parse error.
-# 26 (was 28) to fit the Photon taskbar's 30px row; taskbar.items' tray cell
-# width (10 slots) is sized to match.
+# 26: the sidebar's column count is bin/photon_tray.py's inner width divided
+# by this, so the two must agree.
 slot_size 26
 
 # log_level <level>          # controls the amount of logging output, level can
@@ -80,17 +88,27 @@ kludges force_icons_size
 
 # max_geometry <geometry>    # maximal tray dimensions; 0 in width/height means
                              # no limit
+# Also a fallback -- see geometry above; photon_tray.py's --max-geometry
+# caps rows at 0 (unlimited), since the sidebar has no fixed height to fit.
 max_geometry 10x1
 
 # monitor <int>              # specifies which monitor to draw the tray in
 # monitor 0
 
 # no_shrink [<bool>]         # disables shrink-back mode
-no_shrink true
+# Off: the taskbar cell used to reserve ten slots' worth of width regardless
+# of occupancy, because FvwmButtons couldn't resize the cell around it. The
+# sidebar widget reads the tray's own height back (see natural_height in
+# photon_tray.py) and relayouts around it, so the tray should shrink to
+# whatever the icon count actually needs.
+no_shrink false
 
 # parent_bg [<bool>]         # whether to use pseudo-transparency
                              # (looks better when reparented into smth like
                              #   FvwmButtons)
+# Still true when reparented into bin/photon_tray.py's Qt container instead:
+# checked live, the icons sit on the sunken well's own fill colour rather
+# than showing black or the stalonetray default grey.
 parent_bg true
 
 # pixmap_bg <path_to_xpm>    # use pixmap from specified xpm file for (tiled)
