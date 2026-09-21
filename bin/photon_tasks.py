@@ -127,6 +127,10 @@ class TasksWidget(QWidget):
                 if (ev.type == X.PropertyNotify
                         and ev.atom == self.atoms["_NET_WM_ICON"]):
                     self._icons.pop(getattr(ev.window, "id", None), None)
+        except (xerror.ConnectionClosedError, OSError):
+            self._notifier.setEnabled(False)
+            QApplication.quit()
+            return
         except Exception:
             return
         if dirty:

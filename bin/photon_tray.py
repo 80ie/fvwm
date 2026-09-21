@@ -42,6 +42,7 @@ RC = os.path.join(USERDIR, "stalonetrayrc")
 SLOT_SIZE = 26           # must agree with stalonetrayrc's slot_size
 FIND_INTERVAL_MS = 200
 FIND_ATTEMPTS = 25       # 5s -- stalonetray's window lands well under this
+SYNC_INTERVAL_MS = 250
 
 
 class TrayWidget(QWidget):
@@ -71,6 +72,9 @@ class TrayWidget(QWidget):
         self._find_timer = QTimer(self)
         self._find_timer.setInterval(FIND_INTERVAL_MS)
         self._find_timer.timeout.connect(self._poll_find)
+        self._sync_timer = QTimer(self)
+        self._sync_timer.setInterval(SYNC_INTERVAL_MS)
+        self._sync_timer.timeout.connect(self._sync_tray_height)
 
         app = QApplication.instance()
         if app is not None:
@@ -168,6 +172,7 @@ class TrayWidget(QWidget):
         self.container = QWidget.createWindowContainer(window, self)
         self.container.setGeometry(photon.sunken_interior(self.rect()))
         self.container.show()
+        QTimer.singleShot(0, self._show_container)
 
         try:
             win.change_attributes(event_mask=X.StructureNotifyMask)
@@ -179,6 +184,12 @@ class TrayWidget(QWidget):
         self._x_notifier.activated.connect(self._drain_x)
 
         self._sync_tray_height()
+        self._sync_timer.start()
+
+    def _show_container(self):
+        if self.container is not None and self.isVisible():
+            self.container.show()
+            self.container.raise_()
 
     def _drain_x(self):
         try:
@@ -186,19 +197,25 @@ class TrayWidget(QWidget):
                 if (ev.type == X.ConfigureNotify
                         and getattr(ev.window, "id", None) == self.tray_xid):
                     self._sync_tray_height()
+        except (xerror.ConnectionClosedError, OSError):
+            self._x_notifier.setEnabled(False)
+            QApplication.quit()
+            return
         except Exception:
             return
 
     def _sync_tray_height(self):
-        """Follow the embedded window's real height rather than reserving a
-        fixed slot count -- stalonetray resizes itself as icons dock and
-        undock (no_shrink is off), and the container does not resize it back
-        the other way, so this is the only source of truth for how tall the
-        tray actually is right now."""
+        """Size the tray from its icon children after Qt reparents it."""
         try:
-            h = self.tray_win.get_geometry().height
+            bottom = 0
+            for child in self.tray_win.query_tree().children:
+                g = child.get_geometry()
+                if g.x >= 0 and g.y >= 0 and g.width > 1 and g.height > 1:
+                    bottom = max(bottom, g.y + g.height)
         except xerror.XError:
             return
+        h = max(SLOT_SIZE,
+                ((bottom + SLOT_SIZE - 1) // SLOT_SIZE) * SLOT_SIZE)
         if h != self._tray_h:
             self._tray_h = h
             self.updateGeometry()
@@ -214,6 +231,7 @@ class TrayWidget(QWidget):
     #  -- teardown --
 
     def _cleanup(self):
+        self._sync_timer.stop()
         if self.proc is not None and self.proc.state() != QProcess.ProcessState.NotRunning:
             self.proc.terminate()
             self.proc.waitForFinished(500)

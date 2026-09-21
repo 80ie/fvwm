@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import QRect, QSize, QSocketNotifier, Qt
+from PyQt6.QtCore import QRect, QSize, QSocketNotifier, Qt, QTimer
 from PyQt6.QtGui import QColor, QPainter, QPalette
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -90,8 +90,6 @@ class WorldView(QWidget):
         self.atoms["_NET_WM_STATE"] = self.dpy.intern_atom("_NET_WM_STATE")
         self.atoms["_NET_WM_STATE_SKIP_PAGER"] = self.dpy.intern_atom(
             "_NET_WM_STATE_SKIP_PAGER")
-        self.atoms["_NET_WM_STATE_HIDDEN"] = self.dpy.intern_atom(
-            "_NET_WM_STATE_HIDDEN")
 
         self.root.change_attributes(event_mask=X.PropertyChangeMask)
         self.dpy.flush()
@@ -121,15 +119,28 @@ class WorldView(QWidget):
 
     def _drain(self):
         wanted = set(self.atoms[n] for n in WATCH)
+        wanted.add(self.atoms["_NET_WM_STATE"])
         dirty = False
+        viewport_changed = False
         try:
             for ev in photon.x_events(self.dpy):
-                if ev.type == X.PropertyNotify and ev.atom in wanted:
+                if (ev.type == X.PropertyNotify and ev.atom in wanted
+                        or ev.type in (X.ConfigureNotify, X.DestroyNotify,
+                                       X.UnmapNotify)):
                     dirty = True
+                if (ev.type == X.PropertyNotify
+                        and ev.atom == self.atoms["_NET_DESKTOP_VIEWPORT"]):
+                    viewport_changed = True
+        except (xerror.ConnectionClosedError, OSError):
+            self._notifier.setEnabled(False)
+            QApplication.quit()
+            return
         except Exception:
             return
         if dirty:
             self.refresh()
+        if viewport_changed:
+            QTimer.singleShot(50, self.refresh)
 
     def _prop(self, window, name):
         try:
@@ -158,16 +169,19 @@ class WorldView(QWidget):
                 state = self._prop(win, "_NET_WM_STATE") or []
                 if self.atoms["_NET_WM_STATE_SKIP_PAGER"] in state:
                     continue
-                if self.atoms["_NET_WM_STATE_HIDDEN"] in state:
-                    continue
                 g = win.get_geometry()
                 #  Geometry is relative to the frame fvwm reparented it into,
                 #  so ask the server where it really is.
                 t = win.translate_coords(self.root, 0, 0)
+                win.change_attributes(
+                    event_mask=X.PropertyChangeMask | X.StructureNotifyMask)
             except Exception:
                 continue
-            found.append((QRect(-t.x, -t.y, g.width, g.height), wid == active))
+            found.append((QRect(self.viewport[0] - t.x,
+                                self.viewport[1] - t.y,
+                                g.width, g.height), wid == active))
         self.windows = found
+        self.dpy.flush()
         self.update()
 
     def _set_page(self, col, row):
