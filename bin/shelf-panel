@@ -14,20 +14,13 @@ reasons for doing it rather than side effects:
   - **The double bevel.**  The shelf's inner edge is two nested bevels with a
     face channel between them.  `Frame N` draws one bevel N pixels wide out
     of a colorset's hi/sh and cannot nest, at any width.
-  - **Live resizing.**  FvwmButtons cannot resize its grid, so a width
-    change meant regenerating the module -- and a module restart is
-    asynchronous with no "I am mapped" signal to sequence against, so the
-    150ms kill timer was a race that dropped the shelf entirely on about one
-    toggle in four (measured at 60fps).  Dragging the edge here is a
-    relayout.  fvwm is told the new reserved width with EwmhBaseStruts,
-    which does take effect at runtime -- checked by maximising a window
-    across a strut change.
+  - **Step resizing.** Super+[ and Super+] change width in fixed steps, so
+    the native pager can be restarted at its new geometry without a drag race.
   - **Collapsing without restarting anything.**  Same reason: no module, no
     swap, no stranded duplicate.
 
-Sections come from panel.items.  The drawn widgets are the same components
-the dock swallowed before, imported rather than launched, which is what they
-were written for.
+Sections come from panel.items. Most widgets are drawn locally; World View
+hosts its own FvwmPager so its window-moving controls remain available.
 """
 
 import json
@@ -45,8 +38,7 @@ os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
 from PyQt6.QtCore import (QPoint, QProcess, QRect, QSocketNotifier, Qt,
                           QTimer)
-from PyQt6.QtGui import (QCursor, QFontMetrics, QPainter, QPalette,
-                         QPixmap)
+from PyQt6.QtGui import QFontMetrics, QPainter, QPalette, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
 import photon
@@ -309,16 +301,6 @@ class Panel(QWidget):
             if hasattr(g.body_widget, "natural_height_changed"):
                 g.body_widget.natural_height_changed.connect(self.relayout)
 
-        self._drag_from = None      # inner-edge resize in progress
-        self._drag_w = 0
-
-        #  Coalesces the strut update: a drag fires dozens of resizes and
-        #  each one would otherwise be an FvwmCommand spawn.
-        self._strut = QTimer(self)
-        self._strut.setSingleShot(True)
-        self._strut.setInterval(60)
-        self._strut.timeout.connect(self._push_strut)
-
         self._state_timer = QTimer(self)
         self._state_timer.setInterval(100)
         self._state_timer.timeout.connect(self._reload_side)
@@ -333,7 +315,7 @@ class Panel(QWidget):
         scr = QApplication.primaryScreen()
         return scr.geometry() if scr else QRect(0, 0, 1920, 1080)
 
-    def place(self):
+    def place(self, width=None):
         """Dock to the selected edge at full screen height.
 
         FvwmTaskBar is gone, so there is no strip at the bottom to leave
@@ -342,18 +324,21 @@ class Panel(QWidget):
         used to occupy.
         """
         s = self.screen_rect()
-        x = s.left() if self.side == "left" else s.right() + 1 - self.width()
-        self.setGeometry(x, s.top(), self.width(), s.height())
+        width = self.width() if width is None else width
+        x = s.left() if self.side == "left" else s.right() + 1 - width
+        self.setGeometry(x, s.top(), width, s.height())
         self.relayout()
 
     def _reload_side(self):
         state = read_state()
         side = panel_side(state)
-        if side == self.side:
+        width = panel_width(state)
+        if side == self.side and width == self.width():
             return
         self.state = state
         self.side = side
-        self.place()
+        self.place(width)
+        self._push_strut()
 
     def _natural_height(self, widget, w):
         if isinstance(widget, WorldView):
@@ -493,11 +478,6 @@ class Panel(QWidget):
 
     #  -- input --
 
-    def _edge(self, pos):
-        if self.side == "left":
-            return pos.x() >= self.width() - photon.FRAME_W
-        return pos.x() < photon.FRAME_W
-
     def _header_at(self, pos):
         for g in self.groups:
             if not g.bare and g.header.contains(pos):
@@ -508,10 +488,6 @@ class Panel(QWidget):
         if event.button() != Qt.MouseButton.LeftButton:
             return
         pos = event.position().toPoint()
-        if self._edge(pos):
-            self._drag_from = event.globalPosition().toPoint().x()
-            self._drag_w = self.width()
-            return
         g = self._header_at(pos)
         if g is not None and g.body_widget is not None:
             g.collapsed = not g.collapsed
@@ -519,32 +495,6 @@ class Panel(QWidget):
             self.state.setdefault("collapsed", {})[g.label] = g.collapsed
             write_state(self.state)
             self.relayout()
-
-    def mouseMoveEvent(self, event):
-        pos = event.position().toPoint()
-        if self._drag_from is None:
-            self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor
-                                   if self._edge(pos)
-                                   else Qt.CursorShape.ArrowCursor))
-            return
-        pointer_x = event.globalPosition().toPoint().x()
-        delta = (pointer_x - self._drag_from if self.side == "left"
-                 else self._drag_from - pointer_x)
-        width = max(MIN_W, min(MAX_W, self._drag_w + delta))
-        if width != self.width():
-            s = self.screen_rect()
-            x = s.left() if self.side == "left" else s.right() + 1 - width
-            self.setGeometry(x, s.top(), width, s.height())
-            self._strut.start()
-
-    def mouseReleaseEvent(self, event):
-        if self._drag_from is None:
-            return
-        self._drag_from = None
-        self.state.update(read_state())
-        self.state["width"] = self.width()
-        write_state(self.state)
-        self._push_strut()
 
     def _push_strut(self):
         """Tell fvwm how much edge the shelf is claiming.
@@ -580,6 +530,18 @@ def quit_on_sigterm(app):
 
 
 def main():
+    if "--adjust-width" in sys.argv:
+        try:
+            step = int(sys.argv[sys.argv.index("--adjust-width") + 1])
+        except (IndexError, ValueError):
+            return
+        state = read_state()
+        state["width"] = panel_width({
+            "width": panel_width(state) + step,
+        })
+        write_state(state)
+        return
+
     if "--toggle-side" in sys.argv:
         toggle_side()
         return

@@ -14,6 +14,7 @@ ModulePath +:${HOME}/.fvwm/lib:$[FVWM_MODULEDIR]
 InfoStoreAdd terminal /usr/bin/kitty
 InfoStoreAdd filemanager /usr/bin/dolphin
 InfoStoreAdd calculator /usr/bin/speedcrunch
+InfoStoreAdd media_output @DEFAULT_SINK@
 
 InfoStoreAdd bg $[FVWM_USERDIR]/images/background/bg.png
 
@@ -517,6 +518,21 @@ DestroyFunc ShelfToRight
 AddToFunc ShelfToRight
 + I EwmhBaseStruts 0 $0 0 0
 + I TileArrange
+
+DestroyFunc ShelfWiden
+AddToFunc ShelfWiden
++ I Exec exec "$[FVWM_USERDIR]/bin/shelf-panel" --adjust-width 20
+
+DestroyFunc ShelfNarrow
+AddToFunc ShelfNarrow
++ I Exec exec "$[FVWM_USERDIR]/bin/shelf-panel" --adjust-width -20
+
+DestroyFunc ShelfPagerLaunch
+AddToFunc ShelfPagerLaunch
++ I KillModule FvwmPager ShelfPager
++ I DestroyModuleConfig ShelfPager: Geometry
++ I PipeRead "echo '*ShelfPager: Geometry $0x$1'"
++ I Schedule 100 Module FvwmPager ShelfPager
 ##                                                           }}}3
 ##   │ ├ Tile                                                {{{3
 ##
@@ -577,6 +593,8 @@ Key Up      WTSF    CSM Maximize True 0 growup
 Key Down    WTSF    CSM Maximize True 0 growdown
 Key Right   WTSF    CSM Maximize True growright 0
 Key Left    WTSF    CSM Maximize True growleft 0
+Key bracketleft  A 4 Function ShelfNarrow
+Key bracketright A 4 Function ShelfWiden
 ##                                                           }}}3
 ##   │ ├ (De)Iconify                                         {{{3
 DestroyFunc IconifyWindow
@@ -657,13 +675,8 @@ Style * EdgeResizeDelay -1
 # Reserves space along the edge(s) of the Screen that will not
 # be covered when maximizing or placing windows.
 # The shelf claims one side column; there is no bottom row any more.
-##  The shelf is resizable, so its width is whatever the panel last saved
-##  rather than a constant.  The panel re-issues this itself as you drag the
-##  edge -- EwmhBaseStruts does take effect at runtime -- and this line is
-##  what gets it right again after a Restart, which re-reads the config.  The
-##  panel itself is restarted along with fvwm (see the StartFunction line
-##  above that pkills and relaunches it), so this is only for the moment
-##  between the config re-read and the panel coming back up.
+##  Shelf width is persisted and adjusted in keyboard steps; this covers the
+##  brief interval before the restarted panel re-issues its runtime strut.
 PipeRead "$[FVWM_USERDIR]/bin/shelf-panel --print-struts"
 
 ##                                                           }}}2
@@ -723,6 +736,8 @@ Style FvwmIdent WindowListSkip
 Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, \
                 Layer $[infostore.bottomlayer], !Iconifiable, \
                 PositionPlacement Center, FixedSize, FixedPosition, NeverFocus
+Style ShelfPager !Title, !Handles, BorderWidth 0, HandleWidth 0, \
+    Sticky, WindowListSkip, CirculateSkip, NeverFocus, !Iconifiable
 
 
 Style lxqt-panel !Title, !Borders, Layer $[infostore.putlayer]
@@ -962,6 +977,24 @@ DestroyModuleConfig FvwmPager:*
 *FvwmPager: Mouse 3 Scroll
 *FvwmPager: Mouse 4 Cmd PagerNavigateSeq -1
 *FvwmPager: Mouse 5 Cmd PagerNavigateSeq +1
+##                                                           }}}2
+##   ├ ShelfPager                                            {{{2
+DestroyModuleConfig ShelfPager:*
+*ShelfPager: Colorset 34
+*ShelfPager: HilightColorset 35
+*ShelfPager: WindowColorset 36
+*ShelfPager: FocusColorset 37
+*ShelfPager: Font None
+*ShelfPager: MiniIcons
+*ShelfPager: NoDeskLabels
+*ShelfPager: SolidSeparators
+*ShelfPager: Window3DBorders
+*ShelfPager: WindowBorderWidth 1
+*ShelfPager: WindowMinSize 3
+*ShelfPager: UseSkipList
+*ShelfPager: Mouse 1 ChangePage
+*ShelfPager: Mouse 2 MoveWindow FlipFocus NoWarp
+*ShelfPager: Mouse 3 Scroll
 ##                                                           }}}2
 ##   ├ FvwmAnimate                                           {{{2
 #*FvwmAnimate: Effect Zoom3D

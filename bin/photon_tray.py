@@ -65,6 +65,7 @@ class TrayWidget(QWidget):
         self.tray_xid = None
         self.tray_win = None
         self._tray_h = SLOT_SIZE       # one empty row, until told otherwise
+        self._columns = 0
         self._launched = False
         self._find_tries = 0
         self._x_notifier = None
@@ -94,9 +95,13 @@ class TrayWidget(QWidget):
             self.container.setGeometry(interior)
         if not self._launched and interior.width() > 0:
             self._launched = True
-            self._spawn(interior.width())
+            self._spawn(max(1, interior.width() // SLOT_SIZE))
+        elif self._launched:
+            columns = max(1, interior.width() // SLOT_SIZE)
+            if columns != self._columns:
+                self._restart(columns)
 
-    def _spawn(self, width):
+    def _spawn(self, columns):
         """Kill any stalonetray already running -- it owns the tray
         selection, so a second one would just exit -- and launch our own, so
         the panel owns its lifetime.  Same pkill-then-exec shape as config's
@@ -111,17 +116,32 @@ class TrayWidget(QWidget):
         subprocess.run(["pkill", "-x", "stalonetray"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        cols = max(1, width // SLOT_SIZE)
+        self._columns = columns
         self.proc = QProcess(self)
         self.proc.start("stalonetray", [
             "--config", RC,
-            "--geometry", "%dx1" % cols,
-            "--max-geometry", "%dx0" % cols,
+            "--geometry", "%dx1" % columns,
+            "--max-geometry", "%dx0" % columns,
             "--grow-gravity", "NW",
         ])
 
         self._find_tries = 0
         self._find_timer.start()
+
+    def _restart(self, columns):
+        self._find_timer.stop()
+        self._sync_timer.stop()
+        self._columns = columns
+        if self.container is not None:
+            self.container.hide()
+            self.container.deleteLater()
+            self.container = None
+        self.tray_win = None
+        self.tray_xid = None
+        self._tray_h = SLOT_SIZE
+        self.updateGeometry()
+        self.natural_height_changed.emit()
+        self._spawn(columns)
 
     #  -- finding the window --
 

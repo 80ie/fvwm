@@ -75,8 +75,8 @@ Mouse 3 4 A Maximize 100 0
 Mouse 1 6 A ThisWindow IconifyWindow
 ##                                                           }}}3
 ##   │ ├ Audio                                               {{{3
-#Silent Key XF86AudioRaiseVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%+"
-#Silent Key XF86AudioLowerVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%-"
+Silent Key XF86AudioRaiseVolume A A Exec exec "wpctl set-volume $[infostore.media_output] 2%+"
+Silent Key XF86AudioLowerVolume A A Exec exec "wpctl set-volume $[infostore.media_output] 2%-"
 #Silent Key XF86AudioMute A A Exec exec "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
 Silent Key Pause A A Exec exec /home/deer/.scripts/volume_brightness.sh play_pause
 ##                                                           }}}3

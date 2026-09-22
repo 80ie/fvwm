@@ -33,12 +33,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import (QObject, QProcess, QRect, QSize, Qt, QTimer,
-                          pyqtSignal, pyqtSlot)
+from PyQt6.QtCore import (QObject, QProcess, QRect, QSignalBlocker, QSize, Qt,
+                          QTimer, pyqtSignal, pyqtSlot)
 from PyQt6.QtGui import QFontMetrics, QPainter, QPalette, QPolygon
 from PyQt6.QtCore import QPoint
 from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication, QComboBox, QWidget
 
 import photon
 
@@ -252,28 +252,33 @@ class Sink(QObject):
     """
 
     changed = pyqtSignal()
+    outputs_changed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.volume = 0.0
         self.muted = False
+        self.outputs = []
+        self.target = "@DEFAULT_SINK@"
 
         #  Coalesces a burst of server events into one read: changing the
         #  volume emits several in a row and they all want the same answer.
         self._coalesce = QTimer(self)
         self._coalesce.setSingleShot(True)
         self._coalesce.setInterval(30)
-        self._coalesce.timeout.connect(self._read)
+        self._coalesce.timeout.connect(self._refresh)
 
         self._reader = QProcess(self)
         self._reader.finished.connect(self._reader_done)
+        self._outputs_reader = QProcess(self)
+        self._outputs_reader.finished.connect(self._outputs_done)
 
         self._stopping = False
         self._sub = QProcess(self)
         self._sub.readyReadStandardOutput.connect(self._on_events)
         self._sub.finished.connect(self._sub_died)
         self._start_sub()
-        self._read()
+        self._refresh()
 
         app = QApplication.instance()
         if app is not None:
@@ -299,7 +304,7 @@ class Sink(QObject):
         written.  The _stopping flag is what stops _sub_died reading its own
         termination as pipewire dying and resurrecting it."""
         self._stopping = True
-        for proc in (self._sub, self._reader):
+        for proc in (self._sub, self._reader, self._outputs_reader):
             if proc.state() == QProcess.ProcessState.NotRunning:
                 continue
             proc.terminate()
@@ -318,7 +323,17 @@ class Sink(QObject):
             #  A read is already in flight; its result will be current enough,
             #  and another event will re-arm us if it is not.
             return
-        self._reader.start("wpctl", ["get-volume", "@DEFAULT_SINK@"])
+        self._reader.start(
+            "wpctl", ["get-volume", self.target])
+
+    def _read_outputs(self):
+        if self._outputs_reader.state() != QProcess.ProcessState.NotRunning:
+            return
+        self._outputs_reader.start("wpctl", ["status"])
+
+    def _refresh(self):
+        self._read()
+        self._read_outputs()
 
     def _reader_done(self):
         out = bytes(self._reader.readAllStandardOutput()).decode("utf-8", "replace")
@@ -331,17 +346,55 @@ class Sink(QObject):
             self.volume, self.muted = volume, muted
             self.changed.emit()
 
+    @staticmethod
+    def _parse_outputs(text):
+        outputs = []
+        in_sinks = False
+        for line in text.splitlines():
+            section = re.sub(r"^[\s│├└─]+", "", line).strip()
+            if section == "Sinks:":
+                in_sinks = True
+                continue
+            if section in ("Sources:", "Streams:", "Clients:", "Filters:"):
+                in_sinks = False
+            if not in_sinks:
+                continue
+            match = re.match(r"^\s*(?:[│├└─]\s*)*(\*)?\s*(\d+)\.\s+(.+?)\s*$",
+                             line)
+            if not match:
+                continue
+            label = re.sub(r"(?:\s+\[[^]]+\])+$", "", match.group(3))
+            outputs.append((int(match.group(2)), label,
+                            bool(match.group(1))))
+        return outputs
+
+    def _outputs_done(self):
+        out = bytes(self._outputs_reader.readAllStandardOutput()).decode(
+            "utf-8", "replace")
+        outputs = self._parse_outputs(out)
+        default = next((node_id for node_id, _label, is_default in outputs
+                        if is_default), None)
+        self.target = str(default) if default is not None else "@DEFAULT_SINK@"
+        if outputs != self.outputs:
+            self.outputs = outputs
+            self.outputs_changed.emit()
+
     #  -- writing --
 
     def set_volume(self, fraction):
         #  -l 1.0 caps it: pipewire will happily amplify past 100% and it
         #  sounds terrible.
         QProcess.startDetached("wpctl", ["set-volume", "-l", "1.0",
-                                         "@DEFAULT_SINK@",
+                                         self.target,
                                          "%.2f" % max(0.0, min(1.0, fraction))])
 
     def toggle_mute(self):
-        QProcess.startDetached("wpctl", ["set-mute", "@DEFAULT_SINK@", "toggle"])
+        QProcess.startDetached("wpctl", ["set-mute", self.target, "toggle"])
+
+    def set_default_output(self, node_id):
+        self.target = str(node_id)
+        QProcess.startDetached("wpctl", ["set-default", str(node_id)])
+        QTimer.singleShot(200, self._refresh)
 
 
 #  ---- The widget -----------------------------------------------------------
@@ -349,7 +402,7 @@ class Sink(QObject):
 PREV, STOP, PLAY, NEXT = range(4)
 
 #  Media body, header excluded.
-NATURAL_H = 77
+NATURAL_H = 100
 
 #  Everything below is measured off ~/Desktop/qnx621-1-1.png rather than
 #  guessed, columns at x=900/920 and rows at y=589.  The reference shelf is
@@ -379,6 +432,30 @@ class MediaWidget(QWidget):
         self.mpris.changed.connect(self._on_mpris)
         self.sink = Sink(self)
         self.sink.changed.connect(self._on_sink)
+        self.sink.outputs_changed.connect(self._on_outputs)
+
+        self.output = QComboBox(self)
+        self.output.setFont(photon.font(8))
+        self.output.setMaxVisibleItems(8)
+        self.output.setStyleSheet("""
+            QComboBox {
+                background: %s; color: %s; border: 1px solid %s;
+                padding: 0 16px 0 3px;
+            }
+            QComboBox::drop-down { border-left: 1px solid %s; width: 15px; }
+            QComboBox::down-arrow {
+                border-left: 4px solid transparent; border-right: 4px solid transparent;
+                border-top: 5px solid %s;
+            }
+            QComboBox QAbstractItemView {
+                background: %s; color: %s; border: 1px solid %s;
+                selection-background-color: %s; selection-color: %s;
+            }
+        """ % (photon.FIELD.name(), photon.INK.name(), photon.DARK.name(),
+               photon.DARK.name(), photon.INK.name(), photon.FIELD.name(),
+               photon.INK.name(), photon.DARK.name(), photon.HEADER.name(),
+               photon.INK.name()))
+        self.output.currentIndexChanged.connect(self._choose_output)
 
         self._pressed = None          # transport button held down
         self._dragging = False        # slider thumb held
@@ -402,6 +479,7 @@ class MediaWidget(QWidget):
         self.resize(photon.SHELF_INNER, NATURAL_H)
         self.setMinimumSize(110, 60)
         self._relayout()
+        self._on_outputs()
 
     #  -- geometry --
     #
@@ -451,6 +529,10 @@ class MediaWidget(QWidget):
         #  The reference's scale marks sit on the thumb's bottom row.
         self.r_ticks_y = thumb_top + THUMB_H - 1
 
+        self.r_output = QRect(pad, thumb_top + THUMB_H + 4,
+                              max(20, w - 2 * pad), FIELD_H)
+        self.output.setGeometry(self.r_output)
+
         self._measure_title()
 
     def sizeHint(self):
@@ -468,6 +550,36 @@ class MediaWidget(QWidget):
     def _on_sink(self):
         if not self._dragging:
             self.update(self._vol_band())
+
+    def _on_outputs(self):
+        with QSignalBlocker(self.output):
+            self.output.clear()
+            if not self.sink.outputs:
+                self.output.addItem("No output device")
+                self.output.setEnabled(False)
+                self.output.setToolTip("")
+                self._publish_output("@DEFAULT_SINK@")
+                return
+            self.output.setEnabled(True)
+            selected = 0
+            for i, (node_id, label, is_default) in enumerate(self.sink.outputs):
+                self.output.addItem(label, node_id)
+                if is_default:
+                    selected = i
+            self.output.setCurrentIndex(selected)
+            self.output.setToolTip(self.output.currentText())
+            self._publish_output(self.output.currentData())
+
+    def _choose_output(self, index):
+        node_id = self.output.itemData(index)
+        if node_id is not None:
+            self.sink.set_default_output(node_id)
+            self._publish_output(node_id)
+
+    @staticmethod
+    def _publish_output(node_id):
+        QProcess.startDetached(
+            "FvwmCommand", ["InfoStoreAdd media_output %s" % node_id])
 
     def _vol_band(self):
         top = self.r_thumb_top - 1

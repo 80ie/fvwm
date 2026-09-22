@@ -4,7 +4,7 @@ Status: **option C implemented for the sidebar.** Written 2026-09-20 after the
 `fold-in-protos` branch landed the generated shelf and taskbar. Option B — the
 Media widget and the System Monitor meters — followed on `panel-widgets` the
 same day, and option C followed B once it turned out that the two things
-wanted next, a double bevel and a resizable shelf, were both things
+wanted next, a double bevel and a step-resizable shelf, were both things
 FvwmButtons cannot do at all. The sidebar is now `bin/shelf-panel`. The
 taskbar along the bottom is still FvwmButtons and still generated.
 
@@ -210,9 +210,8 @@ Geometry, x measured from the shelf's inner left edge:
   `#d9d9d9`, on a 25px pitch with an etched divider along the bottom.
 
 `FvwmPager` styles the active page by background colour and has no border
-option, which is why `config` settled for a lighter khaki instead of the
-reference's outline. Drawing the pager removed that wall rather than working
-around it.
+option. The shelf now accepts that visual trade-off to embed a native pager,
+which restores its window-moving controls.
 
 `FvwmButtons`' `Frame N` draws **one** bevel N pixels wide out of a colorset's
 hi/sh. It cannot nest, at any N, so the double bevel was not reachable while
@@ -232,8 +231,8 @@ widget, swallowed into `shelfdock.items` exactly as conky already is. The dock
 is `--static`, so its swallows are stable by construction.
 
 **C — One panel process.** A single program draws shelf and taskbar; the pager
-is drawn from EWMH rather than swallowed; the window list comes from FvwmMFL's
-event socket; fvwm keeps `EwmhBaseStruts` and a `Style` rule. Removes
+is hosted as a native FvwmPager; the window list comes from FvwmMFL's event
+socket; fvwm keeps `EwmhBaseStruts` and a `Style` rule. Removes
 `mk-shelf`, `mk-taskbar`, the spec files, the alias swap and every `Swallow`.
 
 **Rejected outright: adopting a third-party panel.** No candidate clears the
