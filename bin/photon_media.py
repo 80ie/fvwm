@@ -559,7 +559,9 @@ class MediaWidget(QWidget):
         self.sink.outputs_changed.connect(self._on_outputs)
         self.cover = CoverArt(self)
         self.cover.changed.connect(self._on_cover)
-        self._has_art = False    # presence of a loaded pixmap, the only flip that relays
+        self._has_art = False    # the well is up; a flip or a side change relays
+        self._side = None        # the side the last natural_height_changed was for
+        self._pip_container = None   # the embedded PiP window (Task 3)
         #  Mpris already rescan'd during its own __init__ -- before this
         #  connect existed -- so a track that loaded while the player was
         #  paused (or the panel restarted mid-play) would never emit.
@@ -619,64 +621,80 @@ class MediaWidget(QWidget):
     #  FvwmButtons resizes a swallowed window to its cell and a widget laid
     #  out at fixed positions clips instead of reflowing.
 
+    #  Every rect below the width, in one place: _relayout and
+    #  natural_height both read this, so with a variable side there is no
+    #  second copy of the arithmetic to drift.
+    def _layout(self, w, side):
+        pad = 4
+        if side is None:
+            r_art, art_div_y = None, None
+            r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
+        else:
+            r_art = QRect(pad, pad, w - 2 * pad, side)
+            art_div_y = r_art.bottom() + 1 + GAP
+            r_title = QRect(pad, art_div_y + 2 + GAP, w - 2 * pad, FIELD_H)
+        by = r_title.bottom() + 1 + GAP
+        row_w = max(4, w - 2 * pad - 3 * BTN_GAP)
+        button_w, extra = divmod(row_w, 4)
+        r_buttons, bx = [], pad
+        for i in range(4):
+            bw = button_w + (1 if i < extra else 0)
+            r_buttons.append(QRect(bx, by, bw, BTN_H))
+            bx += bw + BTN_GAP
+        div_y = by + BTN_H + GAP
+        thumb_top = div_y + 2 + GAP
+        return {"pad": pad, "r_art": r_art, "art_div_y": art_div_y,
+                "r_title": r_title, "r_buttons": r_buttons, "div_y": div_y,
+                "r_speaker": QRect(6, thumb_top + 1, 16, 16),
+                "r_groove": QRect(32, thumb_top + GROOVE_DROP,
+                                  max(20, w - 28 - 32), 5),
+                "thumb_top": thumb_top, "r_ticks_y": thumb_top + THUMB_H - 1,
+                "r_output": QRect(pad, thumb_top + THUMB_H + 4,
+                                  max(20, w - 2 * pad), FIELD_H),
+                "content_bottom": thumb_top + THUMB_H + 4 + FIELD_H}
+
+    def _well_side(self, w):
+        """The well's side for the current source, or None: full width,
+        shortened by the image's own ratio, capped at the square."""
+        pm = self.cover.pixmap
+        if pm is None or pm.isNull():
+            return None
+        well_w = w - 8
+        return min(well_w, round(well_w * pm.height() / pm.width()))
+
     def _relayout(self):
         w = self.width()
         #  FvwmButtons' module-wide `Padding 4 0` does not reach a swallowed
         #  window -- it resizes the child to the whole cell -- so the inset
         #  that keeps this row in line with the meters above it has to come
-        #  from here.  The reference's field is inset 3px from its group's
-        #  content edge; 4 matches what the rest of the dock does.
-        pad = 4
-
-        if self._has_art:
-            #  The square well, the etched rule, then the title in its usual
-            #  place below.  (w-8) + 3 + 2 + 3 = w: everything below shifts
-            #  down by the body's width, which is the whole of the cost.
-            self.r_art = QRect(pad, pad, w - 2 * pad, w - 2 * pad)
-            self.art_div_y = self.r_art.bottom() + 1 + GAP
-            self.r_title = QRect(pad, self.art_div_y + 2 + GAP,
-                                 w - 2 * pad, FIELD_H)
-        else:
-            self.r_art = None
-            self.art_div_y = None
-            self.r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
-
-        by = self.r_title.bottom() + 1 + GAP
-        row_w = max(4, w - 2 * pad - 3 * BTN_GAP)
-        button_w, extra = divmod(row_w, 4)
-        self.r_buttons = []
-        bx = pad
-        for i in range(4):
-            bw = button_w + (1 if i < extra else 0)
-            self.r_buttons.append(QRect(bx, by, bw, BTN_H))
-            bx += bw + BTN_GAP
-
-        self.div_y = by + BTN_H + GAP
-
-        #  The volume sub-section hangs off the divider at the reference's
-        #  spacing and the slack, if the cell is taller than the spec, falls
-        #  to the bottom.  A cell a few pixels off changes the gap rather
-        #  than the layout, which is what keeps a swallowed widget from
-        #  clipping.
-        thumb_top = self.div_y + 2 + GAP
-        #  16px, which is a size the Haiku theme stocks: its 16x16 speaker is
-        #  a clean grey wedge, where the 24x24 one is a busier yellow drawing
-        #  from a different generation of the set.  Asking for the stocked
-        #  size also means no scaling.
-        self.r_speaker = QRect(6, thumb_top + 1, 16, 16)
-        groove_x = 32
-        groove_right = w - 28
-        self.r_groove = QRect(groove_x, thumb_top + GROOVE_DROP,
-                              max(20, groove_right - groove_x), 5)
-        self.r_thumb_top = thumb_top
-        #  The reference's scale marks sit on the thumb's bottom row.
-        self.r_ticks_y = thumb_top + THUMB_H - 1
-
-        self.r_output = QRect(pad, thumb_top + THUMB_H + 4,
-                              max(20, w - 2 * pad), FIELD_H)
+        #  from here.
+        L = self._layout(w, self._well_side(w))
+        self.r_art = L["r_art"]
+        self.art_div_y = L["art_div_y"]
+        self.r_title = L["r_title"]
+        self.r_buttons = L["r_buttons"]
+        self.div_y = L["div_y"]
+        self.r_speaker = L["r_speaker"]
+        self.r_groove = L["r_groove"]
+        self.r_thumb_top = L["thumb_top"]
+        self.r_ticks_y = L["r_ticks_y"]
+        self.r_output = L["r_output"]
         self.output.setGeometry(self.r_output)
-
         self._measure_title()
+
+    def _refresh_well(self):
+        side = self._well_side(self.width())
+        if side == self._side:
+            self.update()      # track-to-track swap: repaint the same rect
+            return
+        self._side = side
+        self._has_art = side is not None
+        self._relayout()
+        self.natural_height_changed.emit()
+        self.update()
+        if self.parent() is None:
+            #  Standalone window: nothing else grows or shrinks it.
+            self.resize(self.width(), self.natural_height(self.width()))
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER, NATURAL_H)
@@ -684,12 +702,20 @@ class MediaWidget(QWidget):
     natural_height_changed = pyqtSignal()
 
     def natural_height(self, w):
-        #  The well pushes the rows below it down by the body's width, so
-        #  art adds exactly w to the 100px body.
-        return NATURAL_H + w if self._has_art else NATURAL_H
+        side = self._well_side(w)
+        if side is None:
+            return NATURAL_H
+        #  +4: the slack the no-well state leaves below the volume row
+        #  (content bottom is side+104; the square case lands exactly on
+        #  the old NATURAL_H + w).
+        return self._layout(w, side)["content_bottom"] + 4
 
     def resizeEvent(self, event):
         self._relayout()
+        side = self._well_side(self.width())
+        if side != self._side:
+            self._side = side
+            self.natural_height_changed.emit()
 
     #  -- state in --
 
@@ -794,16 +820,7 @@ class MediaWidget(QWidget):
         p.restore()
 
     def _on_cover(self):
-        has = self.cover.pixmap is not None
-        if has != self._has_art:
-            #  Only a presence flip moves the layout; a track-to-track swap
-            #  repaints the same rect and costs no panel relayout.
-            self._has_art = has
-            self.natural_height_changed.emit()
-        self.update()
-        if self.parent() is None:
-            #  Standalone window: nothing else grows or shrinks it.
-            self.resize(self.width(), self.natural_height(self.width()))
+        self._refresh_well()
 
     def _paint_art(self, p):
         photon.trough(p, self.r_art)
