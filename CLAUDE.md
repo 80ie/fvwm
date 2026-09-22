@@ -71,7 +71,7 @@ window.
 |---|---|
 | `bin/photon.py` | the shared Photon look: palette, bevels, themed icons |
 | `bin/shelf-panel` | the window: frame, headers, launchers, resize, layout |
-| `bin/photon_media.py` | MPRIS transport, marquee title, volume slider |
+| `bin/photon_media.py` | MPRIS transport, marquee title, cover art, volume slider |
 | `bin/photon_meters.py` | CPU / memory / filesystem meters, via `psutil` |
 | `bin/photon_pager.py` | World View, drawn from EWMH rather than swallowed |
 | `bin/photon_tasks.py` | the window list, drawn from EWMH like the pager |
@@ -86,7 +86,9 @@ made. Every painter's docstring names the pixel it was measured from.
 
 Almost nothing polls. Media takes D-Bus `PropertiesChanged` (matched on the
 sender's *unique* bus name, never the well-known `org.mpris.MediaPlayer2.*`
-one) and a long-lived `pactl subscribe`; the pager takes root-window
+one), a long-lived `pactl subscribe`, and it fetches cover art when a track
+names one -- a request that ends with its image or its timeout; the pager
+takes root-window
 `PropertyNotify` through a `QSocketNotifier` on Xlib's own connection. Only
 the meters sample, because a CPU has no change signal, and they repaint only
 when a bar lands on a different pixel.

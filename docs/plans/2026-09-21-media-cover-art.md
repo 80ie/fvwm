@@ -1,7 +1,7 @@
 # Media cover art — design
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement
-> this plan task-by-task. (Plan sections land after review.)
+> this plan task-by-task. (Plan: `docs/plans/2026-09-21-media-cover-art-plan.md`.)
 
 Status: design for review, 2026-09-21.  User amendments folded in: square
 width-relative well (no hardcoded 150), World-View-style framing.

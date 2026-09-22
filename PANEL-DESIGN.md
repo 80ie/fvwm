@@ -401,3 +401,18 @@ from documentation prose.
 - `AGENTS.md` has drifted — it still describes 18 colorsets, a 4x2 page layout
   and `FvwmScript-DateTime` as a live widget. `CLAUDE.md` is current. Worth
   reconciling, separately from this work.
+
+## Cover art in the Media group (2026-09-21, a deliberate departure)
+
+The reference's CD Player has no art -- title field, four buttons, volume.
+The shelf's Media group shows it now. Measured 2026-09-21 on the live
+bus: strawberry and the kdeconnect proxy publish `file://` covers,
+spotify publishes `https://`, firefox publishes none. Fetching is
+request/response through `QNetworkAccessManager` (the only new timer is
+the eight-second per-request abort guard), decodes are capped at 1024px,
+and the well exists only while a real image has loaded, so a group
+without art is the 100px body as before. The frame reuses photon's
+meter-trough bevel -- the dark `#4b4b4b` outline and `#bcbcbc` channel,
+the same border language as the reference's World View. Design:
+`docs/plans/2026-09-21-media-cover-art.md`; plan:
+`docs/plans/2026-09-21-media-cover-art-plan.md`.
