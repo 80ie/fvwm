@@ -557,6 +557,14 @@ class MediaWidget(QWidget):
         self.sink = Sink(self)
         self.sink.changed.connect(self._on_sink)
         self.sink.outputs_changed.connect(self._on_outputs)
+        self.cover = CoverArt(self)
+        self.cover.changed.connect(self._on_cover)
+        self._has_art = False    # presence of a loaded pixmap, the only flip that relays
+        #  Mpris already rescan'd during its own __init__ -- before this
+        #  connect existed -- so a track that loaded while the player was
+        #  paused (or the panel restarted mid-play) would never emit.
+        self.cover.set_track(self.mpris.service, self.mpris.trackid,
+                             self.mpris.art_url)
 
         self.output = QComboBox(self)
         self.output.setFont(photon.font(8))
@@ -620,7 +628,18 @@ class MediaWidget(QWidget):
         #  content edge; 4 matches what the rest of the dock does.
         pad = 4
 
-        self.r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
+        if self._has_art:
+            #  The square well, the etched rule, then the title in its usual
+            #  place below.  (w-8) + 3 + 2 + 3 = w: everything below shifts
+            #  down by the body's width, which is the whole of the cost.
+            self.r_art = QRect(pad, pad, w - 2 * pad, w - 2 * pad)
+            self.art_div_y = self.r_art.bottom() + 1 + GAP
+            self.r_title = QRect(pad, self.art_div_y + 2 + GAP,
+                                 w - 2 * pad, FIELD_H)
+        else:
+            self.r_art = None
+            self.art_div_y = None
+            self.r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
 
         by = self.r_title.bottom() + 1 + GAP
         row_w = max(4, w - 2 * pad - 3 * BTN_GAP)
@@ -662,12 +681,21 @@ class MediaWidget(QWidget):
     def sizeHint(self):
         return QSize(photon.SHELF_INNER, NATURAL_H)
 
+    natural_height_changed = pyqtSignal()
+
+    def natural_height(self, w):
+        #  The well pushes the rows below it down by the body's width, so
+        #  art adds exactly w to the 100px body.
+        return NATURAL_H + w if self._has_art else NATURAL_H
+
     def resizeEvent(self, event):
         self._relayout()
 
     #  -- state in --
 
     def _on_mpris(self):
+        self.cover.set_track(self.mpris.service, self.mpris.trackid,
+                             self.mpris.art_url)
         self._measure_title()
         self.update()
 
@@ -739,6 +767,9 @@ class MediaWidget(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.fillRect(self.rect(), photon.FACE)
+        if self.r_art is not None:
+            self._paint_art(p)
+            photon.divider(p, self.art_div_y, 2, self.width() - 3)
         self._paint_title(p)
         self._paint_transport(p)
         photon.divider(p, self.div_y, 2, self.width() - 3)
@@ -761,6 +792,28 @@ class MediaWidget(QWidget):
         else:
             p.drawText(inner.left() + 3, baseline, text)
         p.restore()
+
+    def _on_cover(self):
+        has = self.cover.pixmap is not None
+        if has != self._has_art:
+            #  Only a presence flip moves the layout; a track-to-track swap
+            #  repaints the same rect and costs no panel relayout.
+            self._has_art = has
+            self.natural_height_changed.emit()
+        self.update()
+        if self.parent() is None:
+            #  Standalone window: nothing else grows or shrinks it.
+            self.resize(self.width(), self.natural_height(self.width()))
+
+    def _paint_art(self, p):
+        photon.trough(p, self.r_art)
+        r = self.r_art.adjusted(4, 4, -4, -4)
+        art = self.cover.pixmap.scaled(
+            r.size(), Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation)
+        x = r.left() + (r.width() - art.width()) // 2
+        y = r.top() + (r.height() - art.height()) // 2
+        p.drawPixmap(x, y, art)
 
     def _paint_transport(self, p):
         live = self.mpris.service is not None
