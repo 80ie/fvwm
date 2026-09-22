@@ -15,7 +15,7 @@
 - No new runtime dependency. Xlib import: `from Xlib import X, display, error as xerror` — the same line `photon_tray.py` uses.
 - Lint gate: `ruff` is `/usr/bin/ruff` (there is no `python3 -m ruff` on this box) with default rules, no config file. `bin/photon_media.py` has **5 pre-existing diagnostics (4× UP031, 1× I001)** as of commit `HEAD` before this work; zero *new* ones may be added, and nothing may be auto-fixed.
 - Check scripts go in `/tmp`, run with `QT_QPA_PLATFORM=offscreen`, and are deleted when they pass.
-- Style: 2-space-indented `#  ...` comments in file-idiom, `%` formatting, no emojis, no docstrings beyond the class header this file uses.
+- Style: 2-space-indented `#  ...` comments in file-idiom, `%` formatting (new lines use f-strings: the gate allows no new UP031), no emojis, no docstrings beyond the class header this file uses.
 - Commit after every task: `feat(media): ...` (docs task: `docs(media): ...`).
 - Spec: `docs/plans/2026-09-22-media-pip-well.md`. If the live smoke (Task 4) fails its hard items, revert both Part 2 commits and ship Part 1 only — the spec's fallback decision.
 
@@ -57,6 +57,10 @@ w = MediaWidget()
 w.mpris.changed.disconnect(w._on_mpris)
 n = {"h": 0}
 w.natural_height_changed.connect(lambda: n.update(h=n["h"] + 1))
+#  A hidden top-level never delivers geometry events on the offscreen
+#  platform; swallowed widgets are mapped, so map this one too.
+w.show()
+app.processEvents()
 
 def set_art(pw, ph):
     img = QImage(pw, ph, QImage.Format.Format_RGB32)
@@ -118,10 +122,13 @@ print("pipwell OK")
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `QT_QPA_PLATFORM=offscreen python3 /tmp/pipwell-check.py`
-Expected: `TypeError: natural_height() takes 1 positional argument but
-2 were given` (today's `natural_height` takes no width) — the square
-layout values asserted above are today's behavior and must survive the
-change byte-identically.
+Expected: `AssertionError: None` at the square-section `r_art` assert —
+today's layout only re-runs on a resizeEvent, and in the standalone
+check no resize happens after the cover arrives (in the real panel the
+natural-height flip resizes the swallowed child, masking this) — the
+square values asserted there are today's behavior and must survive
+byte-identically. Note: `natural_height(self, w)` already exists (the
+width-aware shelf work); this task reworks its body, not its signature.
 
 - [ ] **Step 3: Implement**
 
@@ -161,15 +168,15 @@ comment to the top of the new method, and add `_layout` directly above it:
             bx += bw + BTN_GAP
         div_y = by + BTN_H + GAP
         thumb_top = div_y + 2 + GAP
-        return dict(pad=pad, r_art=r_art, art_div_y=art_div_y,
-                    r_title=r_title, r_buttons=r_buttons, div_y=div_y,
-                    r_speaker=QRect(6, thumb_top + 1, 16, 16),
-                    r_groove=QRect(32, thumb_top + GROOVE_DROP,
-                                   max(20, w - 28 - 32), 5),
-                    thumb_top=thumb_top, r_ticks_y=thumb_top + THUMB_H - 1,
-                    r_output=QRect(pad, thumb_top + THUMB_H + 4,
-                                   max(20, w - 2 * pad), FIELD_H),
-                    content_bottom=thumb_top + THUMB_H + 4 + FIELD_H)
+        return {"pad": pad, "r_art": r_art, "art_div_y": art_div_y,
+                "r_title": r_title, "r_buttons": r_buttons, "div_y": div_y,
+                "r_speaker": QRect(6, thumb_top + 1, 16, 16),
+                "r_groove": QRect(32, thumb_top + GROOVE_DROP,
+                                  max(20, w - 28 - 32), 5),
+                "thumb_top": thumb_top, "r_ticks_y": thumb_top + THUMB_H - 1,
+                "r_output": QRect(pad, thumb_top + THUMB_H + 4,
+                                  max(20, w - 2 * pad), FIELD_H),
+                "content_bottom": thumb_top + THUMB_H + 4 + FIELD_H}
 
     def _well_side(self, w):
         """The well's side for the current source, or None: full width,
@@ -203,6 +210,7 @@ comment to the top of the new method, and add `_layout` directly above it:
     def _refresh_well(self):
         side = self._well_side(self.width())
         if side == self._side:
+            self.update()      # track-to-track swap: repaint the same rect
             return
         self._side = side
         self._has_art = side is not None
@@ -335,7 +343,7 @@ class PipMonitor(QObject):
         super().__init__(parent)
         try:
             self.dpy = display.Display()
-        except Exception:
+        except (xerror.DisplayConnectionError, xerror.DisplayNameError):
             self.dpy = None
         self.window_id = None
         self.width = 0
@@ -356,7 +364,7 @@ class PipMonitor(QObject):
     @staticmethod
     def _comm(pid):
         try:
-            with open("/proc/%d/comm" % pid) as f:
+            with open(f"/proc/{pid}/comm") as f:
                 return f.read().strip()
         except OSError:
             return ""
@@ -414,10 +422,12 @@ class PipMonitor(QObject):
 
 - [ ] **Step 2: Check the live browser's identity**
 
-Run: `tr -d '\0' < /proc/$(pidof firefox | cut -d' ' -f1)/comm`
-Expected: `firefox`. If it is not exactly `firefox` (e.g. `firefox-bin`),
-add the real string to `BROWSERS` before committing — the smoke will see
-the same string.
+Run: `for p in $(pidof firefox); do tr -d '\0' < /proc/$p/comm; done | sort -u`
+Expected: `firefox` among the output (the main browser process; content
+processes show up as `Web Content` and friends and are not the PiP
+window's owner). If the main process's comm is not exactly one of
+`BROWSERS` (e.g. `firefox-bin`), add the real string to `BROWSERS` before
+committing — the smoke will see the same string.
 
 - [ ] **Step 3: Compile and lint gates**
 
@@ -470,6 +480,7 @@ w.pip._timer.stop()          # do not let the live desktop steer the check
 
 # Back to the canonical width from the Task 1 sections.
 w.resize(152, 252)
+app.processEvents()      # resize delivery: see the show() note in Task 1
 assert w.r_art == QRect(4, 4, 144, 81)     # the 16:9 cover (Task 1)
 
 w.pip.window_id = 0xDEAD
@@ -481,6 +492,7 @@ assert w.natural_height(152) == 189
 #  without raising; the real embed is proven in Task 4's smoke.)
 
 w.resize(130, 177)
+app.processEvents()
 assert w.r_art == QRect(4, 4, 122, 69), w.r_art
 assert w.natural_height(130) == 177
 

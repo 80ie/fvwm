@@ -45,6 +45,7 @@ from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
 from PyQt6.QtWidgets import QApplication, QComboBox, QWidget
 
 import photon
+from Xlib import X, display, error as xerror
 
 MPRIS_PREFIX = "org.mpris.MediaPlayer2."
 MPRIS_PATH = "/org/mpris/MediaPlayer2"
@@ -519,6 +520,109 @@ class CoverArt(QObject):
         if pixmap is not self._pixmap:
             self._pixmap = pixmap
             self.changed.emit()
+
+
+#  ---- PiP monitor ----------------------------------------------------------
+
+class PipMonitor(QObject):
+    """A browser's PiP window, found by geometry and owner.
+
+    There is no X event for "a PiP appeared", so this is a deliberate
+    poll, the same find loop shape photon_tray uses to adopt stalonetray.
+    Candidate: a managed top-level that is video-shaped and whose
+    _NET_WM_PID is a browser.  fvwm reparents every top-level into its
+    own frame, so _NET_CLIENT_LIST (client ids) is the enumeration, not
+    a root query_tree.
+    """
+
+    INTERVAL_MS = 1500
+
+    W_MIN, W_MAX = 160, 1000       # plausible PiP widths
+    H_MIN, H_MAX = 90, 700
+    R_MIN, R_MAX = 1.2, 2.6        # video-ish aspect only
+    BROWSERS = ("firefox", "chromium", "chrome")
+
+    changed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        try:
+            self.dpy = display.Display()
+        except (xerror.DisplayConnectionError, xerror.DisplayNameError):
+            self.dpy = None
+        self.window_id = None
+        self.width = 0
+        self.height = 0
+        self._win = None           # the Xlib window of the current PiP
+        self._dead = set()         # ids whose embed kept failing
+        self._x_notifier = None    # Task 3
+        self._timer = QTimer(self)
+        self._timer.setInterval(self.INTERVAL_MS)
+        self._timer.timeout.connect(self._poll)
+        if self.dpy is not None:
+            self._timer.start()
+
+    def give_up(self, xid):
+        """The widget could not embed this window; stop re-offering it."""
+        self._dead.add(xid)
+
+    @staticmethod
+    def _comm(pid):
+        try:
+            with open(f"/proc/{pid}/comm") as f:
+                return f.read().strip()
+        except OSError:
+            return ""
+
+    def _wm_pid(self, win):
+        try:
+            atom = self.dpy.intern_atom("_NET_WM_PID")
+            prop = win.get_full_property(atom, X.AnyPropertyType)
+            return prop.value[0] if prop else None
+        except xerror.XError:
+            return None
+
+    def _poll(self):
+        if self.dpy is None:
+            return
+        found = None
+        try:
+            root = self.dpy.screen().root
+            atom = self.dpy.intern_atom("_NET_CLIENT_LIST")
+            prop = root.get_full_property(atom, X.AnyPropertyType)
+            wids = list(prop.value) if prop else []
+        except xerror.XError:
+            wids = []
+        for wid in wids:
+            try:
+                win = self.dpy.create_resource_object("window", wid)
+                g = win.get_geometry()
+            except xerror.XError:
+                continue
+            if not (self.W_MIN <= g.width <= self.W_MAX
+                    and self.H_MIN <= g.height <= self.H_MAX):
+                continue
+            if not (self.R_MIN <= g.width / g.height <= self.R_MAX):
+                continue
+            pid = self._wm_pid(win)
+            if pid is None or pid in self._dead:
+                continue
+            if self._comm(pid) not in self.BROWSERS:
+                continue
+            found = (win, g)
+            break
+        self._set(found)
+
+    def _set(self, found):
+        xid = found[0].id if found else None
+        size = (found[1].width, found[1].height) if found else (0, 0)
+        if xid == self.window_id and size == (self.width, self.height):
+            return
+        self._dead.discard(self.window_id)
+        self._win = found[0] if found else None
+        self.window_id = xid
+        self.width, self.height = size
+        self.changed.emit()
 
 
 #  ---- The widget -----------------------------------------------------------
