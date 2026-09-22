@@ -32,7 +32,7 @@ Silent Key T A 4 Exec exec $[infostore.terminal] -1
 Silent Key XF86Calculator A N Exec exec $[infostore.calculator]
 Silent Key W A 4 Exec exec firefox
 Silent Key E A 4 Exec exec $[infostore.filemanager]
-Silent Key R A 4 Exec exec kitten quick-access-terminal
+Silent Key R A 4 Exec exec rofi -show drun
 #Silent Key . A 14 Exec exec kcharselect
 ##                                                           }}}3
 ##   │ ├ Window controls                                     {{{3
@@ -55,6 +55,12 @@ Silent Key slash A 4 Exec exec $[FVWM_USERDIR]/bin/fvwm-keys
 
 Silent Key F A 4 FullscreenToggle
 Silent Key F W S4 Maximize 100 100 ewmhiwa
+Silent Key A A S4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-side
+Silent Key space A 4 TileToggle
+Silent Key space A S4 TileToggleFloating
+Silent Key Return A C4 TileSetMaster
+Silent Key bracketleft A C4 TileMasterNarrower
+Silent Key bracketright A C4 TileMasterWider
 
 # Window Buttons: [1 3 5 7 9  TTTTT  0 8 6 4 2]
 #   1 - Open the WindowOps menu.
@@ -69,8 +75,8 @@ Mouse 3 4 A Maximize 100 0
 Mouse 1 6 A ThisWindow IconifyWindow
 ##                                                           }}}3
 ##   │ ├ Audio                                               {{{3
-#Silent Key XF86AudioRaiseVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%+"
-#Silent Key XF86AudioLowerVolume A A Exec exec "wpctl set-volume @DEFAULT_SINK@ 2%-"
+Silent Key XF86AudioRaiseVolume A A Exec exec "wpctl set-volume $[infostore.media_output] 2%+"
+Silent Key XF86AudioLowerVolume A A Exec exec "wpctl set-volume $[infostore.media_output] 2%-"
 #Silent Key XF86AudioMute A A Exec exec "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
 Silent Key Pause A A Exec exec /home/deer/.scripts/volume_brightness.sh play_pause
 ##                                                           }}}3

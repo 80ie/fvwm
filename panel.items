@@ -13,7 +13,7 @@
 ##                         a launcher row.  <icon> is a file in icons/, or a
 ##                         themed name looked up in the Haiku set.  <command>
 ##                         is run through the shell.
-##    widget <name>        a drawn widget: worldview, meters, media, tasks,
+##    widget <name>        a shelf widget: worldview, meters, media, tasks,
 ##                         tray or clock.
 ##    bare <name>          a widget section with no group header at all, so
 ##                         it cannot be collapsed and costs no HEADER_H --

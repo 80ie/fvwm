@@ -13,10 +13,12 @@ transport had to be ASCII; and it has no way to scroll a title.  All three are
 properties of the module, not of how we used it.
 
 Nothing here polls.  Track and playback state arrive as D-Bus
-PropertiesChanged signals, and the sink volume arrives on `pactl subscribe`.
-The only timer in the file drives the marquee, and it stops when the title
-fits.  That is what removes the once-a-second white flash: there is no
-once-a-second anything left.
+PropertiesChanged signals, the sink volume arrives on `pactl subscribe`,
+and cover art is fetched when a new track names one -- a request that ends
+with its image or its timeout, never with the next tick.  The timers in the
+file: the marquee (which stops when the title fits) and one abort guard per
+in-flight art fetch.  That is what removes the once-a-second white flash:
+there is no once-a-second anything left.
 
 Run it standalone to look at it -- it is an ordinary window until something
 swallows it.
@@ -33,12 +35,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import (QObject, QProcess, QRect, QSize, Qt, QTimer,
-                          pyqtSignal, pyqtSlot)
-from PyQt6.QtGui import QFontMetrics, QPainter, QPalette, QPolygon
-from PyQt6.QtCore import QPoint
+from PyQt6.QtCore import (QObject, QProcess, QRect, QSignalBlocker, QSize, Qt,
+                          QTimer, QUrl, pyqtSignal, pyqtSlot)
+from PyQt6.QtGui import (QFontMetrics, QImageReader, QPainter, QPalette,
+                         QPolygon, QPixmap)
+from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from PyQt6.QtCore import QBuffer, QIODevice, QPoint
 from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication, QComboBox, QWidget
 
 import photon
 
@@ -76,6 +80,11 @@ class Mpris(QObject):
         #  other player.
         self.owner = None
         self.title = ""
+        #  mpris:artUrl: the track's cover, published as a fetchable
+        #  file:// or http(s) URI, or absent.  mpris:trackid tags the track
+        #  so a slow art reply knows when it has gone stale.
+        self.art_url = ""
+        self.trackid = ""
         self.status = "Stopped"
         self.can_next = False
         self.can_prev = False
@@ -152,13 +161,21 @@ class Mpris(QObject):
     def _clear(self):
         self.owner = None
         self.title = ""
+        self.art_url = ""
+        self.trackid = ""
         self.status = "Stopped"
         self.can_next = self.can_prev = self.can_control = False
         self.changed.emit()
 
     def _apply(self, props):
         if "Metadata" in props:
-            self.title = self._format(props.get("Metadata"))
+            meta = props.get("Metadata")
+            self.title = self._format(meta)
+            if isinstance(meta, dict):
+                #  Players deliver the whole Metadata dict when the track
+                #  changes, so both keys land in the same PropertiesChanged.
+                self.art_url = str(meta.get("mpris:artUrl") or "")
+                self.trackid = str(meta.get("mpris:trackid") or "")
         if "PlaybackStatus" in props:
             self.status = props["PlaybackStatus"] or "Stopped"
         for key, attr in (("CanGoNext", "can_next"),
@@ -252,28 +269,33 @@ class Sink(QObject):
     """
 
     changed = pyqtSignal()
+    outputs_changed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.volume = 0.0
         self.muted = False
+        self.outputs = []
+        self.target = "@DEFAULT_SINK@"
 
         #  Coalesces a burst of server events into one read: changing the
         #  volume emits several in a row and they all want the same answer.
         self._coalesce = QTimer(self)
         self._coalesce.setSingleShot(True)
         self._coalesce.setInterval(30)
-        self._coalesce.timeout.connect(self._read)
+        self._coalesce.timeout.connect(self._refresh)
 
         self._reader = QProcess(self)
         self._reader.finished.connect(self._reader_done)
+        self._outputs_reader = QProcess(self)
+        self._outputs_reader.finished.connect(self._outputs_done)
 
         self._stopping = False
         self._sub = QProcess(self)
         self._sub.readyReadStandardOutput.connect(self._on_events)
         self._sub.finished.connect(self._sub_died)
         self._start_sub()
-        self._read()
+        self._refresh()
 
         app = QApplication.instance()
         if app is not None:
@@ -299,7 +321,7 @@ class Sink(QObject):
         written.  The _stopping flag is what stops _sub_died reading its own
         termination as pipewire dying and resurrecting it."""
         self._stopping = True
-        for proc in (self._sub, self._reader):
+        for proc in (self._sub, self._reader, self._outputs_reader):
             if proc.state() == QProcess.ProcessState.NotRunning:
                 continue
             proc.terminate()
@@ -318,7 +340,17 @@ class Sink(QObject):
             #  A read is already in flight; its result will be current enough,
             #  and another event will re-arm us if it is not.
             return
-        self._reader.start("wpctl", ["get-volume", "@DEFAULT_SINK@"])
+        self._reader.start(
+            "wpctl", ["get-volume", self.target])
+
+    def _read_outputs(self):
+        if self._outputs_reader.state() != QProcess.ProcessState.NotRunning:
+            return
+        self._outputs_reader.start("wpctl", ["status"])
+
+    def _refresh(self):
+        self._read()
+        self._read_outputs()
 
     def _reader_done(self):
         out = bytes(self._reader.readAllStandardOutput()).decode("utf-8", "replace")
@@ -331,17 +363,162 @@ class Sink(QObject):
             self.volume, self.muted = volume, muted
             self.changed.emit()
 
+    @staticmethod
+    def _parse_outputs(text):
+        outputs = []
+        in_sinks = False
+        for line in text.splitlines():
+            section = re.sub(r"^[\s│├└─]+", "", line).strip()
+            if section == "Sinks:":
+                in_sinks = True
+                continue
+            if section in ("Sources:", "Streams:", "Clients:", "Filters:"):
+                in_sinks = False
+            if not in_sinks:
+                continue
+            match = re.match(r"^\s*(?:[│├└─]\s*)*(\*)?\s*(\d+)\.\s+(.+?)\s*$",
+                             line)
+            if not match:
+                continue
+            label = re.sub(r"(?:\s+\[[^]]+\])+$", "", match.group(3))
+            outputs.append((int(match.group(2)), label,
+                            bool(match.group(1))))
+        return outputs
+
+    def _outputs_done(self):
+        out = bytes(self._outputs_reader.readAllStandardOutput()).decode(
+            "utf-8", "replace")
+        outputs = self._parse_outputs(out)
+        default = next((node_id for node_id, _label, is_default in outputs
+                        if is_default), None)
+        self.target = str(default) if default is not None else "@DEFAULT_SINK@"
+        if outputs != self.outputs:
+            self.outputs = outputs
+            self.outputs_changed.emit()
+
     #  -- writing --
 
     def set_volume(self, fraction):
         #  -l 1.0 caps it: pipewire will happily amplify past 100% and it
         #  sounds terrible.
         QProcess.startDetached("wpctl", ["set-volume", "-l", "1.0",
-                                         "@DEFAULT_SINK@",
+                                         self.target,
                                          "%.2f" % max(0.0, min(1.0, fraction))])
 
     def toggle_mute(self):
-        QProcess.startDetached("wpctl", ["set-mute", "@DEFAULT_SINK@", "toggle"])
+        QProcess.startDetached("wpctl", ["set-mute", self.target, "toggle"])
+
+    def set_default_output(self, node_id):
+        self.target = str(node_id)
+        QProcess.startDetached("wpctl", ["set-default", str(node_id)])
+        QTimer.singleShot(200, self._refresh)
+
+
+#  ---- Cover art ----------------------------------------------------------
+
+class CoverArt(QObject):
+    """The current track's artwork, fetched on demand and held briefly.
+
+    Request/response rather than a poll: a fetch starts when MPRIS names a
+    new track and ends when its image lands or its guard timer expires.
+    file://, bare paths and http(s) all go through one
+    QNetworkAccessManager call; anything else (mpris-proxy's coverart://)
+    is treated as no art.  A failed fetch keeps the last good pixmap up --
+    the well would flash if every broken link blanked it -- and a reply
+    that arrives after the track has moved on is dropped by its
+    (service, trackid, url) tag.
+    """
+
+    changed = pyqtSignal()
+
+    MAX_PIXELS = 1024    # decode cap: a 4000px cover must not balloon the panel
+    CACHE = 8            # LRU entries, url -> pixmap
+    TIMEOUT_MS = 8000    # per-request abort guard
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._nav = QNetworkAccessManager(self)
+        self._nav.finished.connect(self._on_reply)
+        self._state = None     # the (service, trackid, url) currently served
+        self._pixmap = None    # what the well currently shows
+        self._cache = {}       # url -> QPixmap, oldest first
+        self._timers = {}      # reply -> abort guard
+        self._tags = {}        # reply -> the state it was made under
+
+    @property
+    def pixmap(self):
+        return self._pixmap
+
+    def set_track(self, service, trackid, art_url):
+        """MPRIS just named a track (or nothing).  Fetch, swap, or clear."""
+        url = str(art_url or "")
+        if service and url and "://" not in url and not url.startswith("/"):
+            url = os.path.abspath(url)
+        if service and url and "://" not in url:
+            url = QUrl.fromLocalFile(url).toString()
+        state = (service, str(trackid or ""), url)
+        if state == self._state:
+            return
+        self._state = state
+        if not url:
+            #  No player, no artUrl: the source says the art is gone.
+            self._show(None)
+            return
+        if url in self._cache:
+            self._cache[url] = self._cache.pop(url)   # most-recent last
+            self._show(self._cache[url])
+            return
+        if QUrl(url).scheme() not in ("file", "http", "https"):
+            #  Opaque schemes: there is no standard client-side resolver.
+            self._show(None)
+            return
+        self._start(url)
+
+    def _start(self, url):
+        reply = self._nav.get(QNetworkRequest(QUrl(url)))
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(self.TIMEOUT_MS)
+        timer.timeout.connect(lambda: reply.abort())
+        self._timers[reply] = timer
+        self._tags[reply] = self._state
+
+    def _on_reply(self, reply):
+        timer = self._timers.pop(reply, None)
+        if timer is not None:
+            timer.stop()
+        tag = self._tags.pop(reply, None)
+        if tag != self._state:
+            #  The track moved on while this was in flight.
+            reply.deleteLater()
+            return
+        data = bytes(reply.readAll())
+        reply.deleteLater()
+        if not data:
+            #  Timeout or empty body: the last good art stays up.
+            return
+        buf = QBuffer(self)
+        buf.setData(data)
+        buf.open(QIODevice.OpenModeFlag.ReadOnly)
+        reader = QImageReader(buf)
+        image = reader.read()
+        buf.close()
+        if not image.isNull() and max(image.width(), image.height()) > self.MAX_PIXELS:
+            image = image.scaled(self.MAX_PIXELS, self.MAX_PIXELS,
+                                 Qt.AspectRatioMode.KeepAspectRatio)
+        if image.isNull():
+            #  Decoding failed the same way: keep what is up.
+            return
+        url = tag[2]
+        self._cache[url] = QPixmap.fromImage(image)
+        while len(self._cache) > self.CACHE:
+            self._cache.pop(next(iter(self._cache)))
+        self._show(self._cache[url])
+
+    def _show(self, pixmap):
+        if pixmap is not self._pixmap:
+            self._pixmap = pixmap
+            self.changed.emit()
 
 
 #  ---- The widget -----------------------------------------------------------
@@ -349,7 +526,7 @@ class Sink(QObject):
 PREV, STOP, PLAY, NEXT = range(4)
 
 #  Media body, header excluded.
-NATURAL_H = 77
+NATURAL_H = 100
 
 #  Everything below is measured off ~/Desktop/qnx621-1-1.png rather than
 #  guessed, columns at x=900/920 and rows at y=589.  The reference shelf is
@@ -379,6 +556,38 @@ class MediaWidget(QWidget):
         self.mpris.changed.connect(self._on_mpris)
         self.sink = Sink(self)
         self.sink.changed.connect(self._on_sink)
+        self.sink.outputs_changed.connect(self._on_outputs)
+        self.cover = CoverArt(self)
+        self.cover.changed.connect(self._on_cover)
+        self._has_art = False    # presence of a loaded pixmap, the only flip that relays
+        #  Mpris already rescan'd during its own __init__ -- before this
+        #  connect existed -- so a track that loaded while the player was
+        #  paused (or the panel restarted mid-play) would never emit.
+        self.cover.set_track(self.mpris.service, self.mpris.trackid,
+                             self.mpris.art_url)
+
+        self.output = QComboBox(self)
+        self.output.setFont(photon.font(8))
+        self.output.setMaxVisibleItems(8)
+        self.output.setStyleSheet("""
+            QComboBox {
+                background: %s; color: %s; border: 1px solid %s;
+                padding: 0 16px 0 3px;
+            }
+            QComboBox::drop-down { border-left: 1px solid %s; width: 15px; }
+            QComboBox::down-arrow {
+                border-left: 4px solid transparent; border-right: 4px solid transparent;
+                border-top: 5px solid %s;
+            }
+            QComboBox QAbstractItemView {
+                background: %s; color: %s; border: 1px solid %s;
+                selection-background-color: %s; selection-color: %s;
+            }
+        """ % (photon.FIELD.name(), photon.INK.name(), photon.DARK.name(),
+               photon.DARK.name(), photon.INK.name(), photon.FIELD.name(),
+               photon.INK.name(), photon.DARK.name(), photon.HEADER.name(),
+               photon.INK.name()))
+        self.output.currentIndexChanged.connect(self._choose_output)
 
         self._pressed = None          # transport button held down
         self._dragging = False        # slider thumb held
@@ -402,6 +611,7 @@ class MediaWidget(QWidget):
         self.resize(photon.SHELF_INNER, NATURAL_H)
         self.setMinimumSize(110, 60)
         self._relayout()
+        self._on_outputs()
 
     #  -- geometry --
     #
@@ -418,7 +628,18 @@ class MediaWidget(QWidget):
         #  content edge; 4 matches what the rest of the dock does.
         pad = 4
 
-        self.r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
+        if self._has_art:
+            #  The square well, the etched rule, then the title in its usual
+            #  place below.  (w-8) + 3 + 2 + 3 = w: everything below shifts
+            #  down by the body's width, which is the whole of the cost.
+            self.r_art = QRect(pad, pad, w - 2 * pad, w - 2 * pad)
+            self.art_div_y = self.r_art.bottom() + 1 + GAP
+            self.r_title = QRect(pad, self.art_div_y + 2 + GAP,
+                                 w - 2 * pad, FIELD_H)
+        else:
+            self.r_art = None
+            self.art_div_y = None
+            self.r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
 
         by = self.r_title.bottom() + 1 + GAP
         row_w = max(4, w - 2 * pad - 3 * BTN_GAP)
@@ -451,10 +672,21 @@ class MediaWidget(QWidget):
         #  The reference's scale marks sit on the thumb's bottom row.
         self.r_ticks_y = thumb_top + THUMB_H - 1
 
+        self.r_output = QRect(pad, thumb_top + THUMB_H + 4,
+                              max(20, w - 2 * pad), FIELD_H)
+        self.output.setGeometry(self.r_output)
+
         self._measure_title()
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER, NATURAL_H)
+
+    natural_height_changed = pyqtSignal()
+
+    def natural_height(self, w):
+        #  The well pushes the rows below it down by the body's width, so
+        #  art adds exactly w to the 100px body.
+        return NATURAL_H + w if self._has_art else NATURAL_H
 
     def resizeEvent(self, event):
         self._relayout()
@@ -462,12 +694,44 @@ class MediaWidget(QWidget):
     #  -- state in --
 
     def _on_mpris(self):
+        self.cover.set_track(self.mpris.service, self.mpris.trackid,
+                             self.mpris.art_url)
         self._measure_title()
         self.update()
 
     def _on_sink(self):
         if not self._dragging:
             self.update(self._vol_band())
+
+    def _on_outputs(self):
+        with QSignalBlocker(self.output):
+            self.output.clear()
+            if not self.sink.outputs:
+                self.output.addItem("No output device")
+                self.output.setEnabled(False)
+                self.output.setToolTip("")
+                self._publish_output("@DEFAULT_SINK@")
+                return
+            self.output.setEnabled(True)
+            selected = 0
+            for i, (node_id, label, is_default) in enumerate(self.sink.outputs):
+                self.output.addItem(label, node_id)
+                if is_default:
+                    selected = i
+            self.output.setCurrentIndex(selected)
+            self.output.setToolTip(self.output.currentText())
+            self._publish_output(self.output.currentData())
+
+    def _choose_output(self, index):
+        node_id = self.output.itemData(index)
+        if node_id is not None:
+            self.sink.set_default_output(node_id)
+            self._publish_output(node_id)
+
+    @staticmethod
+    def _publish_output(node_id):
+        QProcess.startDetached(
+            "FvwmCommand", ["InfoStoreAdd media_output %s" % node_id])
 
     def _vol_band(self):
         top = self.r_thumb_top - 1
@@ -503,6 +767,9 @@ class MediaWidget(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.fillRect(self.rect(), photon.FACE)
+        if self.r_art is not None:
+            self._paint_art(p)
+            photon.divider(p, self.art_div_y, 2, self.width() - 3)
         self._paint_title(p)
         self._paint_transport(p)
         photon.divider(p, self.div_y, 2, self.width() - 3)
@@ -525,6 +792,28 @@ class MediaWidget(QWidget):
         else:
             p.drawText(inner.left() + 3, baseline, text)
         p.restore()
+
+    def _on_cover(self):
+        has = self.cover.pixmap is not None
+        if has != self._has_art:
+            #  Only a presence flip moves the layout; a track-to-track swap
+            #  repaints the same rect and costs no panel relayout.
+            self._has_art = has
+            self.natural_height_changed.emit()
+        self.update()
+        if self.parent() is None:
+            #  Standalone window: nothing else grows or shrinks it.
+            self.resize(self.width(), self.natural_height(self.width()))
+
+    def _paint_art(self, p):
+        photon.trough(p, self.r_art)
+        r = self.r_art.adjusted(4, 4, -4, -4)
+        art = self.cover.pixmap.scaled(
+            r.size(), Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation)
+        x = r.left() + (r.width() - art.width()) // 2
+        y = r.top() + (r.height() - art.height()) // 2
+        p.drawPixmap(x, y, art)
 
     def _paint_transport(self, p):
         live = self.mpris.service is not None

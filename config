@@ -14,6 +14,7 @@ ModulePath +:${HOME}/.fvwm/lib:$[FVWM_MODULEDIR]
 InfoStoreAdd terminal /usr/bin/kitty
 InfoStoreAdd filemanager /usr/bin/dolphin
 InfoStoreAdd calculator /usr/bin/speedcrunch
+InfoStoreAdd media_output @DEFAULT_SINK@
 
 InfoStoreAdd bg $[FVWM_USERDIR]/images/background/bg.png
 
@@ -22,8 +23,10 @@ InfoStoreAdd pager_scale 18
 
 InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
+SetEnv TILE_MASTER_PERCENT 55
+SetEnv TILING_0-0-0 on
 
-# QNX Photon shelf, down the full right edge -- there is no taskbar row
+# QNX Photon shelf, down either screen edge -- there is no taskbar row
 # below it any more.  It is one program -- bin/shelf-panel -- which owns its
 # own width, its own section layout and its own collapse state, so none of
 # that lives here any more.  What fvwm still needs to know is how much edge
@@ -71,6 +74,7 @@ AddToFunc   StartFunction
 + I Module FvwmEvent EventRestoreFocus
 + I Module FvwmEvent EventNewDesk
 + I Module FvwmEvent EventIcon
++ I Module FvwmEvent TileEvent
 + I Module FvwmMFL
 + I Module FvwmPager
 + I Module FvwmPerl
@@ -78,7 +82,7 @@ AddToFunc   StartFunction
 ###  Shelf.  Not a module, so fvwm won't restart it on its own; kill any
 ###  running instance and launch a fresh one so a Restart picks up changes
 ###  to bin/shelf-panel, photon.py, or panel.items, same as everything else
-###  StartFunction brings up.  Width/collapse state survives in
+###  StartFunction brings up.  Width/side/collapse state survives in
 ###  .panel.state, so the restart is invisible beyond a brief redraw.
 + I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
 # Replaced by the shelf panel above, which now carries the window list, tray
@@ -241,6 +245,16 @@ AddToFunc FocusChange
 DestroyModuleConfig EventChangeFocus:*
 *EventChangeFocus: Cmd Function
 *EventChangeFocus: focus_change FocusChange
+
+DestroyModuleConfig TileEvent:*
+*TileEvent: Cmd Function
+*TileEvent: PassID
+*TileEvent: add_window TileEventAdd
+*TileEvent: destroy_window TileEventRemove
+*TileEvent: deiconify TileEventChange
+*TileEvent: iconify TileEventRemove
+*TileEvent: new_page TileEventChange
+*TileEvent: new_desk TileEventChange
 ##                                                           }}}3
 ##   │ ├ Pager                                               {{{3
 # The pager sits centre-screen and never moves. Navigating raises it above
@@ -361,6 +375,165 @@ AddToFunc AltTabFocus
 + I Raise
 
 ##                                                           }}}3
+##   │ ├ Automatic tiling                                   {{{3
+# State 11 = tiled, 12 = floating, 13 = master, 15 = temporary exclusion.
+DestroyFunc TileEventAdd
+AddToFunc TileEventAdd
++ I TileAdmit $0
+
+DestroyFunc TileEventRemove
+AddToFunc TileEventRemove
++ I ThisWindow State 11 False
++ I ThisWindow State 13 False
++ I TileQueueArrange
+
+DestroyFunc TileEventChange
+AddToFunc TileEventChange
++ I TileQueueArrange
+
+DestroyFunc TileQueueArrange
+AddToFunc TileQueueArrange
++ I Test (EnvMatch TILE_BUSY yes) Break
++ I Deschedule 9902
++ I Schedule 75 9902 TileArrange
+
+DestroyFunc TileAdmit
+AddToFunc TileAdmit
++ I Test (!EnvMatch TILING_$[desk.n]-$[page.nx]-$[page.ny] on) Break
++ I WindowId $0 (CurrentPage, AcceptsFocus, !Transient, !State 12, !State 14) KeepRc \
+    All (CurrentPage, State 13) State 13 False
++ I TestRc (NoMatch) Break
++ I WindowId $0 State 13 True
++ I TileArrange
+
+DestroyFunc TileEnsureMaster
+AddToFunc TileEnsureMaster
++ I All (CurrentPage, State 13, State 14) State 13 False
++ I None (CurrentPage, !Iconic, AcceptsFocus, !Transient, !State 12, !State 14, State 13) \
+    Prev (CurrentPage, !Iconic, AcceptsFocus, !Transient, !State 12, !State 14) \
+    State 13 True
+
+DestroyFunc TileArrange
+AddToFunc TileArrange
++ I Test (!EnvMatch TILING_$[desk.n]-$[page.nx]-$[page.ny] on) Break
++ I TileEnsureMaster
++ I All (CurrentPage, !Iconic, AcceptsFocus, !Transient, !State 12, !State 14, State 13) \
+    State 11 True
++ I None (CurrentPage, !Iconic, AcceptsFocus, !Transient, !State 12, !State 13, !State 14) \
+    KeepRc TileArrangeSolo
++ I TestRc (Match) Break
++ I All (CurrentPage, State 13) ResizeMoveMaximize frame \
+    $[TILE_MASTER_PERCENT]wa 100wa 0 0
++ I All (CurrentPage, State 12, !StickyAcrossPages) State 15 True
++ I All (CurrentPage, State 13, !StickyAcrossPages) State 15 True
++ I All (CurrentPage, State 14, !StickyAcrossPages) State 15 True
++ I All (CurrentPage, State 15) WindowStyle StickyAcrossPages
++ I UpdateStyles
++ I SetEnv TILE_BUSY yes
++ I ModuleSynchronous FvwmRearrange -tile -swap -fill_start -on_screen \
+    -noraise -maximize -order_yx -win_cmd "State 11 True" \
+    $[TILE_MASTER_PERCENT] 0 100 100
+# FvwmRearrange's handshake makes fvwm resend page info to FvwmEvent,
+# read as a spurious new_page tens of ms after this call returns --
+# TILE_BUSY has to outlive ModuleSynchronous, not clear right after it.
++ I Deschedule 9903
++ I Schedule 250 9903 SetEnv TILE_BUSY no
++ I All (CurrentPage, State 15) WindowStyle !StickyAcrossPages
++ I All (CurrentPage, State 15) State 15 False
++ I UpdateStyles
+
+DestroyFunc TileArrangeSolo
+AddToFunc TileArrangeSolo
++ I All (CurrentPage, State 13) ResizeMoveMaximize frame 100wa 100wa 0 0
+
+DestroyFunc TileToggle
+AddToFunc TileToggle
++ I Test (EnvMatch TILING_$[desk.n]-$[page.nx]-$[page.ny] on) \
+    KeepRc TileDisable
++ I TestRc (Match) Break
++ I SetEnv TILING_$[desk.n]-$[page.nx]-$[page.ny] on
++ I All (CurrentPage, State 13) State 13 False
++ I Current (CurrentPage, !Iconic, AcceptsFocus, !Transient, !State 12, !State 14) \
+    State 13 True
++ I TileArrange
+
+DestroyFunc TileDisable
+AddToFunc TileDisable
++ I SetEnv TILING_$[desk.n]-$[page.nx]-$[page.ny] off
++ I All (CurrentPage, State 11) Maximize False
++ I All (CurrentPage, State 11) State 11 False
++ I All (CurrentPage, State 13) State 13 False
+
+DestroyFunc TileToggleFloating
+AddToFunc TileToggleFloating
++ I Test (!EnvMatch TILING_$[desk.n]-$[page.nx]-$[page.ny] on) Break
++ I ThisWindow (State 12) KeepRc TileJoin
++ I TestRc (Match) Break
++ I ThisWindow (!Transient, !State 14, AcceptsFocus) TileFloat
+
+DestroyFunc TileJoin
+AddToFunc TileJoin
++ I All (CurrentPage, State 13) State 13 False
++ I State 12 False
++ I State 13 True
++ I TileArrange
+
+DestroyFunc TileFloat
+AddToFunc TileFloat
++ I State 12 True
++ I State 13 False
++ I State 11 False
++ I Maximize False
++ I TileArrange
+
+DestroyFunc TileSetMaster
+AddToFunc TileSetMaster
++ I Test (!EnvMatch TILING_$[desk.n]-$[page.nx]-$[page.ny] on) Break
++ I ThisWindow (!State 11, !State 13) Break
++ I ThisWindow (State 14) Break
++ I All (CurrentPage, State 13) State 13 False
++ I State 13 True
++ I TileArrange
+
+DestroyFunc TileMasterWider
+AddToFunc TileMasterWider
++ I Test (!EnvMatch TILING_$[desk.n]-$[page.nx]-$[page.ny] on) Break
++ I Test (EnvMatch TILE_MASTER_PERCENT 75) Break
++ I PipeRead "echo SetEnv TILE_MASTER_PERCENT $$(( $[TILE_MASTER_PERCENT] + 5 ))"
++ I TileArrange
+
+DestroyFunc TileMasterNarrower
+AddToFunc TileMasterNarrower
++ I Test (!EnvMatch TILING_$[desk.n]-$[page.nx]-$[page.ny] on) Break
++ I Test (EnvMatch TILE_MASTER_PERCENT 25) Break
++ I PipeRead "echo SetEnv TILE_MASTER_PERCENT $$(( $[TILE_MASTER_PERCENT] - 5 ))"
++ I TileArrange
+
+DestroyFunc ShelfToLeft
+AddToFunc ShelfToLeft
++ I EwmhBaseStruts $0 0 0 0
++ I TileArrange
+
+DestroyFunc ShelfToRight
+AddToFunc ShelfToRight
++ I EwmhBaseStruts 0 $0 0 0
++ I TileArrange
+
+DestroyFunc ShelfWiden
+AddToFunc ShelfWiden
++ I Exec exec "$[FVWM_USERDIR]/bin/shelf-panel" --adjust-width 20
+
+DestroyFunc ShelfNarrow
+AddToFunc ShelfNarrow
++ I Exec exec "$[FVWM_USERDIR]/bin/shelf-panel" --adjust-width -20
+
+DestroyFunc ShelfPagerLaunch
+AddToFunc ShelfPagerLaunch
++ I KillModule FvwmPager ShelfPager
++ I DestroyModuleConfig ShelfPager: Geometry
++ I PipeRead "echo '*ShelfPager: Geometry $0x$1'"
++ I Schedule 100 Module FvwmPager ShelfPager
+##                                                           }}}3
 ##   │ ├ Tile                                                {{{3
 ##
 DestroyFunc TileFull
@@ -420,6 +593,8 @@ Key Up      WTSF    CSM Maximize True 0 growup
 Key Down    WTSF    CSM Maximize True 0 growdown
 Key Right   WTSF    CSM Maximize True growright 0
 Key Left    WTSF    CSM Maximize True growleft 0
+Key bracketleft  A 4 Function ShelfNarrow
+Key bracketright A 4 Function ShelfWiden
 ##                                                           }}}3
 ##   │ ├ (De)Iconify                                         {{{3
 DestroyFunc IconifyWindow
@@ -465,6 +640,7 @@ CursorStyle ROOT         left_ptr
 CursorStyle TITLE        left_ptr
 CursorStyle DEFAULT      left_ptr
 CursorStyle MENU         left_ptr
+BusyCursor ModuleSynchronous False
 
 # This sets the ClickTime and MoveThreshold used to determine
 # Double Clicks, Hold and Move for the mouse.
@@ -498,16 +674,10 @@ Style * EdgeResizeDelay -1
 # EwmhBaseStruts [left] [right] [top] [bottom]
 # Reserves space along the edge(s) of the Screen that will not
 # be covered when maximizing or placing windows.
-# The shelf claims the right column; there is no bottom row any more.
-##  The shelf is resizable, so its width is whatever the panel last saved
-##  rather than a constant.  The panel re-issues this itself as you drag the
-##  edge -- EwmhBaseStruts does take effect at runtime -- and this line is
-##  what gets it right again after a Restart, which re-reads the config.  The
-##  panel itself is restarted along with fvwm (see the StartFunction line
-##  above that pkills and relaunches it), so this is only for the moment
-##  between the config re-read and the panel coming back up.
-PipeRead "echo EwmhBaseStruts 0 \
-    $($[FVWM_USERDIR]/bin/shelf-panel --print-width) 0 0"
+# The shelf claims one side column; there is no bottom row any more.
+##  Shelf width is persisted and adjusted in keyboard steps; this covers the
+##  brief interval before the restarted panel re-issues its runtime strut.
+PipeRead "$[FVWM_USERDIR]/bin/shelf-panel --print-struts"
 
 ##                                                           }}}2
 ##   ├ Windows                                               {{{2
@@ -526,7 +696,7 @@ Style * GrabFocus, GrabFocusTransient
 ## Sets all windows to OpaqueMove (vs a wired frame) and  windows will
 ## snap to each other and the edge of the screen.
 OpaqueMoveSize unlimited
-Style * ResizeOpaque
+Style * ResizeOpaque, ResizeHintOverride
 Style * SnapAttraction 15 Windows ScreenAll
 #                                                            }}}3
 ##   │ ├ Transience                                          {{{3
@@ -566,6 +736,8 @@ Style FvwmIdent WindowListSkip
 Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, \
                 Layer $[infostore.bottomlayer], !Iconifiable, \
                 PositionPlacement Center, FixedSize, FixedPosition, NeverFocus
+Style ShelfPager !Title, !Handles, BorderWidth 0, HandleWidth 0, \
+    Sticky, WindowListSkip, CirculateSkip, NeverFocus, !Iconifiable
 
 
 Style lxqt-panel !Title, !Borders, Layer $[infostore.putlayer]
@@ -806,17 +978,35 @@ DestroyModuleConfig FvwmPager:*
 *FvwmPager: Mouse 4 Cmd PagerNavigateSeq -1
 *FvwmPager: Mouse 5 Cmd PagerNavigateSeq +1
 ##                                                           }}}2
+##   ├ ShelfPager                                            {{{2
+DestroyModuleConfig ShelfPager:*
+*ShelfPager: Colorset 34
+*ShelfPager: HilightColorset 35
+*ShelfPager: WindowColorset 36
+*ShelfPager: FocusColorset 37
+*ShelfPager: Font None
+*ShelfPager: MiniIcons
+*ShelfPager: NoDeskLabels
+*ShelfPager: SolidSeparators
+*ShelfPager: Window3DBorders
+*ShelfPager: WindowBorderWidth 1
+*ShelfPager: WindowMinSize 3
+*ShelfPager: UseSkipList
+*ShelfPager: Mouse 1 ChangePage
+*ShelfPager: Mouse 2 MoveWindow FlipFocus NoWarp
+*ShelfPager: Mouse 3 Scroll
+##                                                           }}}2
 ##   ├ FvwmAnimate                                           {{{2
 #*FvwmAnimate: Effect Zoom3D
 #*FvwmAnimate: Iterations 25
 ##                                                           }}}2
 ##   ├ Shelf                                                 {{{2
 ##  The QNX Photon shelf is one program: bin/shelf-panel, over bin/photon.py.
-##  It runs the full height of the right edge -- there is no taskbar row
+##  It runs the full height of either edge -- there is no taskbar row
 ##  below it any more, and it carries the window list, tray and clock that
 ##  row used to hold.  It draws its own frame, headers, launchers, pager,
 ##  meters and media widget, reads its sections from panel.items and keeps
-##  its width and collapse state in .panel.state.
+##  its width, side and collapse state in .panel.state.
 ##
 ##  It is not an fvwm module, and that is the point.  FvwmButtons cannot
 ##  change its layout at runtime -- ChangeButton reaches a button's title,
@@ -837,12 +1027,3 @@ Style "ShelfPanel" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
     FixedPosition, FixedSize, StaysOnTop
 ##                                                           }}}2
 ##                                                           }}}1
-
-
-
-
-
-
-
-
-

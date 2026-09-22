@@ -1,28 +1,9 @@
 #!/usr/bin/env python3
-"""World View: the QNX Photon shelf's page pager, drawn rather than swallowed.
+"""Native FvwmPager embedded in the QNX Photon shelf.
 
-A component of bin/shelf-panel, and a window of its own when run directly.
-
-This used to be a real FvwmPager reparented into the shelf.  Two things that
-buys us by being drawn instead:
-
-  - `FvwmPager` styles the active page by *background colour* and has no
-    border option, so the reference's black outline around the current page
-    was not reachable and `config` settled for a lighter khaki.  Here it is
-    an outline.
-  - A swallowed module has to be handed a fresh Geometry every time the
-    shelf's width changes, which put a module restart in the middle of a
-    live resize.  Nothing to restart now.
-
-Everything comes over EWMH, which fvwm3 implements in both directions:
-`_NET_DESKTOP_VIEWPORT` is broadcast from `virtual_scr.Vx/Vy` (`ewmh.c:592`)
-*and* accepted as an incoming ClientMessage that calls `MoveViewport()`
-(`ewmh_events.c:115`).  So we can read the page and set it without shelling
-out to FvwmCommand.
-
-Event-driven: a PropertyNotify selection on the root window, drained through
-a QSocketNotifier on Xlib's own connection, so this shares the Qt event loop
-rather than polling beside it.
+FvwmPager supplies the useful behaviour here: button 1 changes page and
+button 2 drags miniature windows. It calculates its page grid at startup, so
+the shelf changes width in discrete steps and starts a fresh pager each time.
 """
 
 import os
@@ -33,242 +14,127 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import QRect, QSize, QSocketNotifier, Qt, QTimer
-from PyQt6.QtGui import QPainter, QPalette
+from PyQt6.QtCore import QProcess, QSize, QTimer
+from PyQt6.QtGui import QPalette, QWindow
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from Xlib import X, display, protocol, error as xerror
+from Xlib import X, display, error as xerror
 
 import photon
 
-#  The World View section does not sit on the shelf's own face.  Sampled
-#  either side of the grid in the reference -- x=73,74 and x=197,198,199 on
-#  every row of the section -- the surround is #c0c0c0, a good deal darker
-#  than the #d9d9d9 the meters and the clock sit on.  It is what makes the
-#  pager read as recessed into the shelf rather than laid on top of it.
-#  The surround is not even: 2px before the well and 3px after it, on both
-#  axes.  x=73,74 then x=197,198,199 across the section; y=193,194 above the
-#  grid then y=287,288,289 below it.  Because that trailing 3px has to stay
-#  #c0c0c0 rather than showing shelf face, this section takes the panel's
-#  full body width and does its own right-hand padding -- see PAD_R and
-#  `full_width` in bin/shelf-panel.
-SECTION   = photon.PAGER_SECTION
-MARGIN_TL = 2
-MARGIN_BR = 3
-
-DESK       = photon.PAGER_DESK
-DESK_HI    = photon.PAGER_DESK_HI
-WIN        = photon.PAGER_WIN
-WIN_EDGE   = photon.PAGER_WIN_EDGE
-FOCUS      = photon.PAGER_FOCUS
-FOCUS_EDGE = photon.PAGER_FOCUS_EDGE
-GRID       = photon.PAGER_GRID
-
-WATCH = ("_NET_DESKTOP_VIEWPORT", "_NET_DESKTOP_GEOMETRY", "_NET_CLIENT_LIST",
-         "_NET_ACTIVE_WINDOW", "_NET_CURRENT_DESKTOP")
-
 
 class WorldView(QWidget):
-
-    full_width = True
+    """Find and reparent the shelf-specific FvwmPager instance."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         pal = self.palette()
-        pal.setColor(QPalette.ColorRole.Window, SECTION)
+        pal.setColor(QPalette.ColorRole.Window, photon.PAGER_DESK)
         self.setPalette(pal)
 
-        self.pages = (3, 3)
-        self.viewport = (0, 0)
-        self.windows = []          # (QRect in desktop coords, focused)
+        try:
+            self.dpy = display.Display()
+        except Exception:
+            self.dpy = None
+        self.container = None
+        self._size = None
+        self._find_tries = 0
 
-        self.dpy = display.Display()
-        self.root = self.dpy.screen().root
-        self.screen_w = self.dpy.screen().width_in_pixels
-        self.screen_h = self.dpy.screen().height_in_pixels
-        self.atoms = {name: self.dpy.intern_atom(name) for name in WATCH}
-        self.atoms["_NET_WM_STATE"] = self.dpy.intern_atom("_NET_WM_STATE")
-        self.atoms["_NET_WM_STATE_SKIP_PAGER"] = self.dpy.intern_atom(
-            "_NET_WM_STATE_SKIP_PAGER")
-
-        self.root.change_attributes(event_mask=X.PropertyChangeMask)
-        self.dpy.flush()
-        self._notifier = QSocketNotifier(
-            self.dpy.fileno(), QSocketNotifier.Type.Read, self)
-        self._notifier.activated.connect(self._drain)
-
-        self.refresh()
-
-    #  -- size --
+        self._launch_timer = QTimer(self)
+        self._launch_timer.setSingleShot(True)
+        self._launch_timer.timeout.connect(self._launch)
+        self._find_timer = QTimer(self)
+        self._find_timer.setInterval(200)
+        self._find_timer.timeout.connect(self._poll_find)
 
     def natural_height(self, width=None):
-        """A page cell is screen-shaped, so the grid's height follows the
-        width.  This is the sum the panel asks for when it lays out."""
         width = self.width() if width is None else width
-        chrome = 2 + MARGIN_TL + MARGIN_BR   # the sunken bevel, then the surround
-        inner = max(1, width - chrome)
-        cols, rows = self.pages
-        cell = inner / float(cols)
-        return int(round(cell * rows * self.screen_h / self.screen_w)) + chrome
+        screen = QApplication.primaryScreen()
+        geometry = screen.geometry() if screen is not None else None
+        screen_w = geometry.width() if geometry is not None else 1920
+        screen_h = geometry.height() if geometry is not None else 1080
+        return max(1, round(width * screen_h / screen_w))
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER,
                      self.natural_height(photon.SHELF_INNER))
 
-    #  -- X --
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._queue_launch()
 
-    def _drain(self):
-        wanted = set(self.atoms[n] for n in WATCH)
-        wanted.add(self.atoms["_NET_WM_STATE"])
-        dirty = False
-        viewport_changed = False
-        try:
-            for ev in photon.x_events(self.dpy):
-                if (ev.type == X.PropertyNotify and ev.atom in wanted
-                        or ev.type in (X.ConfigureNotify, X.DestroyNotify,
-                                       X.UnmapNotify)):
-                    dirty = True
-                if (ev.type == X.PropertyNotify
-                        and ev.atom == self.atoms["_NET_DESKTOP_VIEWPORT"]):
-                    viewport_changed = True
-        except (xerror.ConnectionClosedError, OSError):
-            self._notifier.setEnabled(False)
-            QApplication.quit()
-            return
-        except Exception:
-            return
-        if dirty:
-            self.refresh()
-        if viewport_changed:
-            QTimer.singleShot(50, self.refresh)
+    def resizeEvent(self, event):
+        if self.container is not None:
+            self.container.setGeometry(self.rect())
+        self._queue_launch()
 
-    def _prop(self, window, name):
-        try:
-            atom = self.atoms.get(name) or self.dpy.intern_atom(name)
-            p = window.get_full_property(atom, X.AnyPropertyType)
-        except (xerror.XError, Exception):
+    def _queue_launch(self):
+        if self.isVisible() and self.width() > 0 and self.height() > 0:
+            self._launch_timer.start(50)
+
+    def _launch(self):
+        size = (self.width(), self.height())
+        if size == self._size and self.container is not None:
+            return
+        self._size = size
+        self._find_timer.stop()
+        self._drop_container()
+        QProcess.startDetached("FvwmCommand", [
+            "ShelfPagerLaunch %d %d" % size,
+        ])
+        self._find_tries = 0
+        self._find_timer.start()
+
+    def _poll_find(self):
+        self._find_tries += 1
+        pager = self._find_pager()
+        if pager is not None:
+            self._find_timer.stop()
+            self._embed(pager)
+        elif self._find_tries >= 25:
+            self._find_timer.stop()
+
+    def _find_pager(self):
+        if self.dpy is None:
             return None
-        return list(p.value) if p else None
-
-    def refresh(self):
-        geom = self._prop(self.root, "_NET_DESKTOP_GEOMETRY")
-        if geom and len(geom) >= 2 and self.screen_w and self.screen_h:
-            self.pages = (max(1, geom[0] // self.screen_w),
-                          max(1, geom[1] // self.screen_h))
-        vp = self._prop(self.root, "_NET_DESKTOP_VIEWPORT")
-        if vp and len(vp) >= 2:
-            self.viewport = (vp[0], vp[1])
-
-        active = self._prop(self.root, "_NET_ACTIVE_WINDOW")
-        active = active[0] if active else 0
-
-        found = []
-        for wid in self._prop(self.root, "_NET_CLIENT_LIST") or []:
-            try:
+        try:
+            root = self.dpy.screen().root
+            atom = self.dpy.intern_atom("_NET_CLIENT_LIST")
+            prop = root.get_full_property(atom, X.AnyPropertyType)
+            for wid in (prop.value if prop else []):
                 win = self.dpy.create_resource_object("window", wid)
-                state = self._prop(win, "_NET_WM_STATE") or []
-                if self.atoms["_NET_WM_STATE_SKIP_PAGER"] in state:
-                    continue
-                g = win.get_geometry()
-                #  Geometry is relative to the frame fvwm reparented it into,
-                #  so ask the server where it really is.
-                t = win.translate_coords(self.root, 0, 0)
-                win.change_attributes(
-                    event_mask=X.PropertyChangeMask | X.StructureNotifyMask)
-            except Exception:
-                continue
-            found.append((QRect(self.viewport[0] - t.x,
-                                self.viewport[1] - t.y,
-                                g.width, g.height), wid == active))
-        self.windows = found
-        self.dpy.flush()
-        self.update()
+                title = win.get_wm_name() or ""
+                classes = win.get_wm_class() or ()
+                if title == "ShelfPager" or "ShelfPager" in classes:
+                    return win
+        except xerror.XError:
+            return None
+        return None
 
-    def _set_page(self, col, row):
-        data = [col * self.screen_w, row * self.screen_h, 0, 0, 0]
-        ev = protocol.event.ClientMessage(
-            window=self.root,
-            client_type=self.atoms["_NET_DESKTOP_VIEWPORT"],
-            data=(32, data))
-        self.root.send_event(
-            ev, event_mask=X.SubstructureNotifyMask | X.SubstructureRedirectMask)
-        self.dpy.flush()
+    def _embed(self, pager):
+        self._drop_container()
+        window = QWindow.fromWinId(pager.id)
+        self.container = QWidget.createWindowContainer(window, self)
+        self.container.setGeometry(self.rect())
+        self.container.show()
+        QTimer.singleShot(0, self._show_container)
 
-    #  -- painting --
+    def _show_container(self):
+        if self.container is not None and self.isVisible():
+            self.container.show()
+            self.container.raise_()
 
-    def _grid(self):
-        """The trough's interior and one page cell, in widget coordinates."""
-        pad = MARGIN_TL + MARGIN_BR
-        well = QRect(MARGIN_TL, MARGIN_TL,
-                     self.width() - pad, self.height() - pad)
-        inner = photon.sunken_interior(well)
-        cols, rows = self.pages
-        return well, inner, inner.width() / float(cols), inner.height() / float(rows)
+    def _drop_container(self):
+        if self.container is not None:
+            self.container.hide()
+            self.container.deleteLater()
+            self.container = None
 
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.fillRect(self.rect(), SECTION)
-        well, inner, cw, ch = self._grid()
-        photon.sunken(p, well, DESK)
-
-        cols, rows = self.pages
-        col = min(cols - 1, self.viewport[0] // max(1, self.screen_w))
-        row = min(rows - 1, self.viewport[1] // max(1, self.screen_h))
-        cur = QRect(inner.left() + int(round(col * cw)),
-                    inner.top() + int(round(row * ch)),
-                    int(round(cw)), int(round(ch))).intersected(inner)
-
-        #  The reference does both: the current page is lighter *and* it is
-        #  outlined.  Sampled at y=651, the rule at x=939 is white, the
-        #  outline at 940 is #4b4b4b and the page behind it is #e1e3d8.
-        p.fillRect(cur, DESK_HI)
-
-        #  White 1px rules between pages, as in the reference -- the grid is
-        #  drawn, not implied by gaps.
-        p.setPen(GRID)
-        for c in range(1, cols):
-            x = inner.left() + int(round(c * cw))
-            p.drawLine(x, inner.top(), x, inner.bottom())
-        for r in range(1, rows):
-            y = inner.top() + int(round(r * ch))
-            p.drawLine(inner.left(), y, inner.right(), y)
-
-        scale_x = inner.width() / float(max(1, cols * self.screen_w))
-        scale_y = inner.height() / float(max(1, rows * self.screen_h))
-        for rect, focused in self.windows:
-            mini = QRect(inner.left() + int(rect.left() * scale_x),
-                         inner.top() + int(rect.top() * scale_y),
-                         max(2, int(rect.width() * scale_x)),
-                         max(2, int(rect.height() * scale_y)))
-            mini = mini.intersected(inner)
-            if mini.isEmpty():
-                continue
-            p.fillRect(mini, FOCUS if focused else WIN)
-            p.setPen(FOCUS_EDGE if focused else WIN_EDGE)
-            p.drawRect(QRect(mini.left(), mini.top(),
-                             mini.width() - 1, mini.height() - 1))
-
-        #  The outline goes *inside* the white rule rather than over it,
-        #  which is the order the reference reads in.  FvwmPager had no
-        #  border option at all, which is why config settled for a lighter
-        #  khaki alone and this is the part that could not be had before.
-        p.setPen(photon.DARK)
-        p.drawRect(QRect(cur.left() + 1, cur.top() + 1,
-                         cur.width() - 2, cur.height() - 2))
-
-    #  -- input --
-
-    def mousePressEvent(self, event):
-        if event.button() != Qt.MouseButton.LeftButton:
-            return
-        _, inner, cw, ch = self._grid()
-        pos = event.position().toPoint()
-        if not inner.contains(pos):
-            return
-        col = int((pos.x() - inner.left()) / max(1.0, cw))
-        row = int((pos.y() - inner.top()) / max(1.0, ch))
-        cols, rows = self.pages
-        self._set_page(max(0, min(cols - 1, col)), max(0, min(rows - 1, row)))
+    def closeEvent(self, event):
+        self._find_timer.stop()
+        self._drop_container()
+        QProcess.startDetached("FvwmCommand", ["KillModule FvwmPager ShelfPager"])
+        super().closeEvent(event)
 
 
 def main():
