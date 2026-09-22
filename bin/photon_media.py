@@ -13,10 +13,12 @@ transport had to be ASCII; and it has no way to scroll a title.  All three are
 properties of the module, not of how we used it.
 
 Nothing here polls.  Track and playback state arrive as D-Bus
-PropertiesChanged signals, and the sink volume arrives on `pactl subscribe`.
-The only timer in the file drives the marquee, and it stops when the title
-fits.  That is what removes the once-a-second white flash: there is no
-once-a-second anything left.
+PropertiesChanged signals, the sink volume arrives on `pactl subscribe`,
+and cover art is fetched when a new track names one -- a request that ends
+with its image or its timeout, never with the next tick.  The timers in the
+file: the marquee (which stops when the title fits) and one abort guard per
+in-flight art fetch.  That is what removes the once-a-second white flash:
+there is no once-a-second anything left.
 
 Run it standalone to look at it -- it is an ordinary window until something
 swallows it.
@@ -34,9 +36,11 @@ os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
 from PyQt6.QtCore import (QObject, QProcess, QRect, QSignalBlocker, QSize, Qt,
-                          QTimer, pyqtSignal, pyqtSlot)
-from PyQt6.QtGui import QFontMetrics, QPainter, QPalette, QPolygon
-from PyQt6.QtCore import QPoint
+                          QTimer, QUrl, pyqtSignal, pyqtSlot)
+from PyQt6.QtGui import (QFontMetrics, QImageReader, QPainter, QPalette,
+                         QPolygon, QPixmap)
+from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from PyQt6.QtCore import QBuffer, QIODevice, QPoint
 from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
 from PyQt6.QtWidgets import QApplication, QComboBox, QWidget
 
@@ -408,6 +412,113 @@ class Sink(QObject):
         self.target = str(node_id)
         QProcess.startDetached("wpctl", ["set-default", str(node_id)])
         QTimer.singleShot(200, self._refresh)
+
+
+#  ---- Cover art ----------------------------------------------------------
+
+class CoverArt(QObject):
+    """The current track's artwork, fetched on demand and held briefly.
+
+    Request/response rather than a poll: a fetch starts when MPRIS names a
+    new track and ends when its image lands or its guard timer expires.
+    file://, bare paths and http(s) all go through one
+    QNetworkAccessManager call; anything else (mpris-proxy's coverart://)
+    is treated as no art.  A failed fetch keeps the last good pixmap up --
+    the well would flash if every broken link blanked it -- and a reply
+    that arrives after the track has moved on is dropped by its
+    (service, trackid, url) tag.
+    """
+
+    changed = pyqtSignal()
+
+    MAX_PIXELS = 1024    # decode cap: a 4000px cover must not balloon the panel
+    CACHE = 8            # LRU entries, url -> pixmap
+    TIMEOUT_MS = 8000    # per-request abort guard
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._nav = QNetworkAccessManager(self)
+        self._nav.finished.connect(self._on_reply)
+        self._state = None     # the (service, trackid, url) currently served
+        self._pixmap = None    # what the well currently shows
+        self._cache = {}       # url -> QPixmap, oldest first
+        self._timers = {}      # reply -> abort guard
+        self._tags = {}        # reply -> the state it was made under
+
+    @property
+    def pixmap(self):
+        return self._pixmap
+
+    def set_track(self, service, trackid, art_url):
+        """MPRIS just named a track (or nothing).  Fetch, swap, or clear."""
+        url = str(art_url or "")
+        if service and url and "://" not in url and not url.startswith("/"):
+            url = os.path.abspath(url)
+        if service and url and "://" not in url:
+            url = QUrl.fromLocalFile(url).toString()
+        state = (service, str(trackid or ""), url)
+        if state == self._state:
+            return
+        self._state = state
+        if not url:
+            #  No player, no artUrl: the source says the art is gone.
+            self._show(None)
+            return
+        if url in self._cache:
+            self._cache[url] = self._cache.pop(url)   # most-recent last
+            self._show(self._cache[url])
+            return
+        if QUrl(url).scheme() not in ("file", "http", "https"):
+            #  Opaque schemes: there is no standard client-side resolver.
+            self._show(None)
+            return
+        self._start(url)
+
+    def _start(self, url):
+        reply = self._nav.get(QNetworkRequest(QUrl(url)))
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(self.TIMEOUT_MS)
+        timer.timeout.connect(lambda: reply.abort())
+        self._timers[reply] = timer
+        self._tags[reply] = self._state
+
+    def _on_reply(self, reply):
+        timer = self._timers.pop(reply, None)
+        if timer is not None:
+            timer.stop()
+        tag = self._tags.pop(reply, None)
+        if tag != self._state:
+            #  The track moved on while this was in flight.
+            reply.deleteLater()
+            return
+        data = bytes(reply.readAll())
+        reply.deleteLater()
+        if not data:
+            #  Timeout or empty body: the last good art stays up.
+            return
+        buf = QBuffer(self)
+        buf.setData(data)
+        buf.open(QIODevice.OpenModeFlag.ReadOnly)
+        reader = QImageReader(buf)
+        image = reader.read()
+        buf.close()
+        if not image.isNull() and max(image.width(), image.height()) > self.MAX_PIXELS:
+            image = image.scaled(self.MAX_PIXELS, self.MAX_PIXELS,
+                                 Qt.AspectRatioMode.KeepAspectRatio)
+        if image.isNull():
+            #  Decoding failed the same way: keep what is up.
+            return
+        url = tag[2]
+        self._cache[url] = QPixmap.fromImage(image)
+        while len(self._cache) > self.CACHE:
+            self._cache.pop(next(iter(self._cache)))
+        self._show(self._cache[url])
+
+    def _show(self, pixmap):
+        if pixmap is not self._pixmap:
+            self._pixmap = pixmap
+            self.changed.emit()
 
 
 #  ---- The widget -----------------------------------------------------------
