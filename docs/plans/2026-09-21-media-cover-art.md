@@ -96,9 +96,10 @@ With art:
 
 ```
 r_art   = QRect(4, 4, W-8, W-8)          # the square well
-divider = r_art.bottom() + GAP           # etched 2px, same rule as div_y
+divider = r_art.bottom() + 1 + GAP       # etched 2px, 3px of face above and
+                                          # below -- the file's usual rule
           everything below shifts by ART_BLOCK = (W-8) + 3 + 2 + 3 = W
-r_title = (4, 4 + W, W-8, 19)            # interiors unchanged
+r_title = (4, 4 + W, W-8, 19)            # 4 + (W-8) + 1 + 3 + 2 + 3 = 4 + W
 buttons, div_y, volume, output           # unchanged, shifted by W
 body height = 100 + W
 ```
@@ -115,8 +116,9 @@ not "discovered" later. Width steps (`Super+[` / `Super+]`) re-layout while
 art is visible; the well tracks the new width and the group height follows.
 
 `MediaWidget.natural_height(w)` returns `100 + w` with art, `100`
-without. `sizeHint()` = `(SHELF_INNER, natural_height(SHELF_INNER))`, so the
-standalone window sizes itself for art. In `shelf-panel._natural_height`,
+without. The standalone window is resized by the cover handler when the art
+comes up or goes away (a no-parent guard), because `sizeHint` is only
+consulted when a window is created. In `shelf-panel._natural_height`,
 the width-aware branch becomes `isinstance(widget, (WorldView, MediaWidget))`
 (both already imported); the duck-typed `natural_height()` path is untouched.
 
