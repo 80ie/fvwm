@@ -76,6 +76,11 @@ class Mpris(QObject):
         #  other player.
         self.owner = None
         self.title = ""
+        #  mpris:artUrl: the track's cover, published as a fetchable
+        #  file:// or http(s) URI, or absent.  mpris:trackid tags the track
+        #  so a slow art reply knows when it has gone stale.
+        self.art_url = ""
+        self.trackid = ""
         self.status = "Stopped"
         self.can_next = False
         self.can_prev = False
@@ -152,13 +157,21 @@ class Mpris(QObject):
     def _clear(self):
         self.owner = None
         self.title = ""
+        self.art_url = ""
+        self.trackid = ""
         self.status = "Stopped"
         self.can_next = self.can_prev = self.can_control = False
         self.changed.emit()
 
     def _apply(self, props):
         if "Metadata" in props:
-            self.title = self._format(props.get("Metadata"))
+            meta = props.get("Metadata")
+            self.title = self._format(meta)
+            if isinstance(meta, dict):
+                #  Players deliver the whole Metadata dict when the track
+                #  changes, so both keys land in the same PropertiesChanged.
+                self.art_url = str(meta.get("mpris:artUrl") or "")
+                self.trackid = str(meta.get("mpris:trackid") or "")
         if "PlaybackStatus" in props:
             self.status = props["PlaybackStatus"] or "Stopped"
         for key, attr in (("CanGoNext", "can_next"),
