@@ -32,3 +32,6 @@ docs/Wiki/
 
 # Python bytecode cache from the shelf widgets
 __pycache__/
+
+# Agent session artifacts
+.pi/
