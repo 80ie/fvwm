@@ -668,6 +668,19 @@ THUMB_W, THUMB_H = 10, 17
 GROOVE_DROP = 6       # groove top below thumb top
 
 
+class _OutputBox(QComboBox):
+    #  QSS can't build the wedge out of borders -- that rule rendered a
+    #  solid bar, not an arrow -- so the glyph is painted.
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        p = QPainter(self)
+        cx, cy = self.width() - 8, self.height() // 2
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(photon.INK)
+        p.drawPolygon(QPolygon([QPoint(cx - 4, cy - 2), QPoint(cx + 4, cy - 2),
+                                QPoint(cx, cy + 3)]))
+
+
 class MediaWidget(QWidget):
 
     def __init__(self, parent=None):
@@ -702,7 +715,7 @@ class MediaWidget(QWidget):
         self.cover.set_track(self.mpris.service, self.mpris.trackid,
                              self.mpris.art_url)
 
-        self.output = QComboBox(self)
+        self.output = _OutputBox(self)
         self.output.setFont(photon.font(8))
         self.output.setMaxVisibleItems(8)
         self.output.setStyleSheet("""
@@ -711,16 +724,12 @@ class MediaWidget(QWidget):
                 padding: 0 16px 0 3px;
             }
             QComboBox::drop-down { border-left: 1px solid %s; width: 15px; }
-            QComboBox::down-arrow {
-                border-left: 4px solid transparent; border-right: 4px solid transparent;
-                border-top: 5px solid %s;
-            }
             QComboBox QAbstractItemView {
                 background: %s; color: %s; border: 1px solid %s;
                 selection-background-color: %s; selection-color: %s;
             }
         """ % (photon.FIELD.name(), photon.INK.name(), photon.DARK.name(),
-               photon.DARK.name(), photon.INK.name(), photon.FIELD.name(),
+               photon.DARK.name(), photon.FIELD.name(),
                photon.INK.name(), photon.DARK.name(), photon.HEADER.name(),
                photon.INK.name()))
         self.output.currentIndexChanged.connect(self._choose_output)
@@ -760,11 +769,13 @@ class MediaWidget(QWidget):
     #  second copy of the arithmetic to drift.
     def _layout(self, w, side):
         pad = 4
+        r_output = QRect(pad, pad, w - 2 * pad, FIELD_H)
+        y0 = r_output.bottom() + 1 + GAP
         if side is None:
             r_art, art_div_y = None, None
-            r_title = QRect(pad, pad, w - 2 * pad, FIELD_H)
+            r_title = QRect(pad, y0, w - 2 * pad, FIELD_H)
         else:
-            r_art = QRect(pad, pad, w - 2 * pad, side)
+            r_art = QRect(pad, y0, w - 2 * pad, side)
             art_div_y = r_art.bottom() + 1 + GAP
             r_title = QRect(pad, art_div_y + 2 + GAP, w - 2 * pad, FIELD_H)
         by = r_title.bottom() + 1 + GAP
@@ -783,9 +794,8 @@ class MediaWidget(QWidget):
                 "r_groove": QRect(32, thumb_top + GROOVE_DROP,
                                   max(20, w - 28 - 32), 5),
                 "thumb_top": thumb_top, "r_ticks_y": thumb_top + THUMB_H - 1,
-                "r_output": QRect(pad, thumb_top + THUMB_H + 4,
-                                  max(20, w - 2 * pad), FIELD_H),
-                "content_bottom": thumb_top + THUMB_H + 4 + FIELD_H}
+                "r_output": r_output,
+                "content_bottom": thumb_top + THUMB_H}
 
     def _well_side(self, w):
         """The well's side for the current source, or None: full width,
@@ -845,8 +855,8 @@ class MediaWidget(QWidget):
         if side is None:
             return NATURAL_H
         #  +4: the slack the no-well state leaves below the volume row
-        #  (content bottom is side+104; the square case lands exactly on
-        #  the old NATURAL_H + w).
+        #  (content bottom is side+106; square well side = w-8, so the
+        #  square case lands on w+102).
         return self._layout(w, side)["content_bottom"] + 4
 
     def resizeEvent(self, event):
