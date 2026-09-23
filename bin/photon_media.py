@@ -863,7 +863,9 @@ class MediaWidget(QWidget):
 
     def _embed_pip(self, xid):
         try:
-            self.pip._win.reparent(self.winId(), 0, 0)
+            #  winId() is a sip voidptr in PyQt6, not an int: Xlib's
+            #  request packing rejects it.
+            self.pip._win.reparent(int(self.winId()), 0, 0)
         except xerror.XError:
             #  The window refuses the move (input-class or visual mismatch,
             #  or it died between the poll and now): leave it floating and
