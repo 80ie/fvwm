@@ -668,7 +668,7 @@ class MediaWidget(QWidget):
         self.pip = PipMonitor(self)
         self.pip.changed.connect(self._on_pip)
         self._pip_xid = None      # the PiP window reparented into this one
-        self._pip_geom = None     # last move_resize sent, so embed + the
+        self._pip_geom = None     # last geometry sent, so embed + the
                                   # standalone resize it triggers cannot
                                   # issue it twice
         self._has_art = False    # the well is up; a flip or a side change relays
@@ -885,7 +885,8 @@ class MediaWidget(QWidget):
             return
         self._pip_geom = (r.x(), r.y(), r.width(), r.height())
         try:
-            self.pip._win.move_resize(r.x(), r.y(), r.width(), r.height())
+            self.pip._win.configure(x=r.x(), y=r.y(),
+                                    width=r.width(), height=r.height())
         except xerror.XError:
             pass
 

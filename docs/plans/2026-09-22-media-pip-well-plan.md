@@ -474,7 +474,7 @@ what replaced it, below.
   family, Task 1's `_refresh_well` / `_side`.
 - Produces: `MediaWidget.pip`, `_on_pip`, `_embed_pip`,
   `_position_pip`, `_pip_xid` (int or None — the window currently
-  reparented in), `_pip_geom` (last move_resize tuple or None, so the
+  reparented in), `_pip_geom` (last geometry tuple or None, so the
   embed and the standalone resize it triggers cannot issue the same
   configure twice).
 - Known ceiling: whether a browser's PiP window survives X reparenting
@@ -508,8 +508,8 @@ class W:
     def reparent(self, parent, x=0, y=0):
         self.changes.append("reparent")
 
-    def move_resize(self, x, y, wd, h):
-        self.changes.append((x, y, wd, h))
+    def configure(self, x=None, y=None, width=None, height=None):
+        self.changes.append((x, y, width, height))
 
 
 def set_pip(win, size):
@@ -583,7 +583,7 @@ module imports):
         self.pip = PipMonitor(self)
         self.pip.changed.connect(self._on_pip)
         self._pip_xid = None      # the PiP window reparented into this one
-        self._pip_geom = None     # last move_resize sent, so embed + the
+        self._pip_geom = None     # last geometry sent, so embed + the
                                   # standalone resize it triggers cannot
                                   # issue it twice
 ```
@@ -666,7 +666,8 @@ The state machine (after `_on_mpris`):
             return
         self._pip_geom = (r.x(), r.y(), r.width(), r.height())
         try:
-            self.pip._win.move_resize(r.x(), r.y(), r.width(), r.height())
+            self.pip._win.configure(x=r.x(), y=r.y(),
+                                    width=r.width(), height=r.height())
         except xerror.XError:
             pass
 ```
