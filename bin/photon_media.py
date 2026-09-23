@@ -12,13 +12,16 @@ so every repaint flashes; its Icon property is broken on fvwm3 1.1.2, so the
 transport had to be ASCII; and it has no way to scroll a title.  All three are
 properties of the module, not of how we used it.
 
-Nothing here polls.  Track and playback state arrive as D-Bus
+Nothing here polls. Track and playback state arrive as D-Bus
 PropertiesChanged signals, the sink volume arrives on `pactl subscribe`,
 and cover art is fetched when a new track names one -- a request that ends
-with its image or its timeout, never with the next tick.  The timers in the
+with its image or its timeout, never with the next tick. The timers in the
 file: the marquee (which stops when the title fits) and one abort guard per
-in-flight art fetch.  That is what removes the once-a-second white flash:
-there is no once-a-second anything left.
+in-flight art fetch. That is what removes the once-a-second white flash:
+there is no once-a-second anything left. The one exception is the browser's
+picture-in-picture window: nothing in X announces when one appears, so the
+monitor polls the managed-window list; every other path here is event-
+driven.
 
 Run it standalone to look at it -- it is an ordinary window until something
 swallows it.
@@ -555,7 +558,6 @@ class PipMonitor(QObject):
         self.height = 0
         self._win = None           # the Xlib window of the current PiP
         self._dead = set()         # ids whose embed kept failing
-        self._x_notifier = None    # Task 3
         self._timer = QTimer(self)
         self._timer.setInterval(self.INTERVAL_MS)
         self._timer.timeout.connect(self._poll)
@@ -663,9 +665,14 @@ class MediaWidget(QWidget):
         self.sink.outputs_changed.connect(self._on_outputs)
         self.cover = CoverArt(self)
         self.cover.changed.connect(self._on_cover)
+        self.pip = PipMonitor(self)
+        self.pip.changed.connect(self._on_pip)
+        self._pip_xid = None      # the PiP window reparented into this one
+        self._pip_geom = None     # last move_resize sent, so embed + the
+                                  # standalone resize it triggers cannot
+                                  # issue it twice
         self._has_art = False    # the well is up; a flip or a side change relays
         self._side = None        # the side the last natural_height_changed was for
-        self._pip_container = None   # the embedded PiP window (Task 3)
         #  Mpris already rescan'd during its own __init__ -- before this
         #  connect existed -- so a track that loaded while the player was
         #  paused (or the panel restarted mid-play) would never emit.
@@ -759,11 +766,16 @@ class MediaWidget(QWidget):
 
     def _well_side(self, w):
         """The well's side for the current source, or None: full width,
-        shortened by the image's own ratio, capped at the square."""
+        shortened by the source's own ratio, capped at the square."""
+        well_w = w - 8
+        if self._pip_xid is not None:
+            #  The monitor only reports a PiP that passed its geometry
+            #  gate, so both dimensions are > 0 here.
+            return min(well_w, round(well_w * self.pip.height /
+                                     self.pip.width))
         pm = self.cover.pixmap
         if pm is None or pm.isNull():
             return None
-        well_w = w - 8
         return min(well_w, round(well_w * pm.height() / pm.width()))
 
     def _relayout(self):
@@ -820,6 +832,7 @@ class MediaWidget(QWidget):
         if side != self._side:
             self._side = side
             self.natural_height_changed.emit()
+        self._position_pip()
 
     #  -- state in --
 
@@ -828,6 +841,51 @@ class MediaWidget(QWidget):
                              self.mpris.art_url)
         self._measure_title()
         self.update()
+
+    #  The monitor found (or lost) a PiP window.  The window becomes a child
+    #  of this widget's own X window and is placed on the well; no frame, no
+    #  repaint trickery -- the browser keeps drawing it exactly where the
+    #  cover art would sit.
+    def _on_pip(self):
+        xid = self.pip.window_id
+        if xid is None:
+            if self._pip_xid is not None:
+                self._pip_xid = None
+                self._pip_geom = None
+                self._refresh_well()
+            return
+        if xid != self._pip_xid:
+            self._embed_pip(xid)
+        if self._pip_xid is None:
+            return
+        self._refresh_well()
+        self._position_pip()
+
+    def _embed_pip(self, xid):
+        try:
+            self.pip._win.reparent(self.winId(), 0, 0)
+        except xerror.XError:
+            #  The window refuses the move (input-class or visual mismatch,
+            #  or it died between the poll and now): leave it floating and
+            #  stop re-offering.
+            self.pip.give_up(xid)
+            return
+        self._pip_xid = xid
+        self._pip_geom = None
+
+    def _position_pip(self):
+        #  Child coordinates are relative to our window; r_art is in the
+        #  same space.
+        if self._pip_xid is None or self.r_art is None:
+            return
+        r = self.r_art
+        if (r.x(), r.y(), r.width(), r.height()) == self._pip_geom:
+            return
+        self._pip_geom = (r.x(), r.y(), r.width(), r.height())
+        try:
+            self.pip._win.move_resize(r.x(), r.y(), r.width(), r.height())
+        except xerror.XError:
+            pass
 
     def _on_sink(self):
         if not self._dragging:
@@ -928,13 +986,14 @@ class MediaWidget(QWidget):
 
     def _paint_art(self, p):
         photon.trough(p, self.r_art)
-        r = self.r_art.adjusted(4, 4, -4, -4)
-        art = self.cover.pixmap.scaled(
-            r.size(), Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation)
-        x = r.left() + (r.width() - art.width()) // 2
-        y = r.top() + (r.height() - art.height()) // 2
-        p.drawPixmap(x, y, art)
+        if self._pip_xid is None:
+            r = self.r_art.adjusted(4, 4, -4, -4)
+            art = self.cover.pixmap.scaled(
+                r.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            x = r.left() + (r.width() - art.width()) // 2
+            y = r.top() + (r.height() - art.height()) // 2
+            p.drawPixmap(x, y, art)
 
     def _paint_transport(self, p):
         live = self.mpris.service is not None

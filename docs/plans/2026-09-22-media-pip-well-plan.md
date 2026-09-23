@@ -300,9 +300,9 @@ run of the detector is the smoke.
 - Produces (Task 3 builds on these exact names):
   - `PipMonitor(QObject)` — attributes `dpy` (Xlib `Display` or `None`),
     `window_id` (int or `None`), `width`, `height` (int), `_win` (Xlib
-    window resource or `None`), `_dead` (set of int), `_x_notifier`
-    (`QSocketNotifier` or `None`), `_timer`; signal `changed`; methods
-    `give_up(xid)`, `_poll()`, `_set(found)`, `_wm_pid(win)`, `_comm(pid)`.
+    window resource or `None`), `_dead` (set of int), `_timer`; signal
+    `changed`; methods `give_up(xid)`, `_poll()`, `_set(found)`,
+    `_wm_pid(win)`, `_comm(pid)`.
   - Constants on the class: `INTERVAL_MS = 1500`, `W_MIN/W_MAX`,
     `H_MIN/H_MAX`, `R_MIN/R_MAX`, `BROWSERS`.
 
@@ -350,7 +350,6 @@ class PipMonitor(QObject):
         self.height = 0
         self._win = None           # the Xlib window of the current PiP
         self._dead = set()         # ids whose embed kept failing
-        self._x_notifier = None    # Task 3
         self._timer = QTimer(self)
         self._timer.setInterval(self.INTERVAL_MS)
         self._timer.timeout.connect(self._poll)
@@ -443,274 +442,279 @@ git commit -m "feat(media): PipMonitor finds the browser's PiP window"
 
 ---
 
-### Task 3: Embed the PiP window in the well (Part 2, embed + wiring)
+### Task 3: Embed the PiP window in the well (Part 2, embed + wiring) — as
+executed: the containerless approach
+
+The as-designed approach assumed the widget owned a
+`QWidget.createWindowContainer` mirror (photon_tray's `TrayContainer`
+shape). `photon_media.py` has no such container — the panel hosts the
+widget directly — and the QWindow route also turns out to be the wrong
+tool: **there is no X event to drain on our connection.** The PiP
+window's events go to the browser's connection; the only thing that can
+drive state on our side is the monitor's client-list poll. So the
+implementation reparents the PiP directly into the widget's own X window
+(lazy `winId()`), and the 1.5 s poll is the single driver end to end.
+What died (no QSocketNotifier, no container, no structure-event drain);
+what replaced it, below.
 
 **Files:**
-- Modify: `bin/photon_media.py` — `MediaWidget.__init__` (monitor wiring),
-  `__init__` (the `_pip_rect` attribute), `_relayout` (container block),
-  `_well_side` (pip priority), `_paint_art` (skip the pixmap under a
-  container), new methods `_on_pip`, `_embed_pip`, `_drop_pip`,
-  `_pip_pin`, `_raise_pip`; `PipMonitor` gains `watch()` and
-  `_drain_x()`. Module docstring gains the poll note.
-- Test: `/tmp/pipwell-check.py` extended in place (the Task 1 script,
-  kept until this task's run passes).
+- Modify: `bin/photon_media.py` — `MediaWidget.__init__` (monitor wiring;
+  the Task 1 `_pip_container` placeholder becomes `_pip_xid` /
+  `_pip_geom`), `_well_side` (pip geometry outranks the pixmap),
+  `resizeEvent` (re-position the child), `_paint_art` (trough stays, the
+  pixmap is not painted under a live child), new methods `_on_pip`,
+  `_embed_pip`, `_position_pip`; `PipMonitor` loses its dead
+  `_x_notifier` attribute. Module docstring gains the poll note.
+- Test: `/tmp/pipwell-check.py` extended in place (the state-machine
+  section; inert fake PiP windows record the X calls the widget issues).
 
 **Interfaces:**
 - Consumes: Task 2's `PipMonitor` (`window_id`, `width`, `height`,
-  `changed`, `dpy`, `_win`, `_x_notifier`, `give_up`, `_poll`, `_set`);
-  Task 1's `_well_side`, `_layout`, `_refresh_well`, `_side`,
-  `_pip_container`; `photon.x_events(dpy)` (the helper `photon_tray.py`
-  drains with); `QWindow` (PyQt6.QtGui), `QSocketNotifier` (PyQt6.QtCore).
-- Produces: `MediaWidget.pip` (the monitor instance), `MediaWidget._on_pip`,
-  `MediaWidget._embed_pip`, `MediaWidget._drop_pip`,
-  `MediaWidget._pip_pin`, `MediaWidget._raise_pip`,
-  `MediaWidget._pip_rect` (QRect or `None`), `PipMonitor.repin` signal,
-  `PipMonitor.watch()`, `PipMonitor._drain_x()`.
+  `changed`, `_win`, `give_up`, `_set`), the `Xlib.error` exception
+  family, Task 1's `_refresh_well` / `_side`.
+- Produces: `MediaWidget.pip`, `_on_pip`, `_embed_pip`,
+  `_position_pip`, `_pip_xid` (int or None — the window currently
+  reparented in), `_pip_geom` (last move_resize tuple or None, so the
+  embed and the standalone resize it triggers cannot issue the same
+  configure twice).
+- Known ceiling: whether a browser's PiP window survives X reparenting
+  across its window/input classes at all is settled only by Task 4's live
+  smoke. That is the feature's one real-world gamble; `give_up` is the
+  fallback (well = cover art, PiP keeps floating).
 
-- [ ] **Step 1: Extend the check with the integrated state machine**
+- [x] **Step 1: Extend the check with the integrated state machine**
 
-Replace the final section of `/tmp/pipwell-check.py` (everything from
-`# Art gone: back to no well.` through the `print`) with. The state
-coming in from the Task 1 sections: cover art = 320×180 (16:9), widget
-width = 130 — the check restores the canonical width first:
+The state machine section appended to `/tmp/pipwell-check.py` (the real,
+passing form; inert fakes stand in for Xlib windows so the section pins
+the state transitions **and the geometry issued** without a live
+connection):
 
 ```python
-# Task 3: pip window in hand; drive it through the real wiring.
-w.pip._timer.stop()          # do not let the live desktop steer the check
+# ---- PiP state machine ------------------------------------------------------
+#  The embed target is the widget's own native window and the PiP windows
+#  are inert fakes, so this section pins the state machine and the X
+#  geometry it issues, not a live X connection.
 
-# Back to the canonical width from the Task 1 sections.
-w.resize(152, 252)
-app.processEvents()      # resize delivery: see the show() note in Task 1
-assert w.r_art == QRect(4, 4, 144, 81)     # the 16:9 cover (Task 1)
+class G:
+    def __init__(self, wd, h):
+        self.width, self.height = wd, h
 
-w.pip.window_id = 0xDEAD
-w.pip.width, w.pip.height = 320, 180
-w._on_pip()
-assert w.r_art == QRect(4, 4, 144, 81), w.r_art
-assert w.natural_height(152) == 189
-# (offscreen QWindow.fromWinId has no X to find: the embed is skipped
-#  without raising; the real embed is proven in Task 4's smoke.)
 
-w.resize(130, 177)
+class W:
+    def __init__(self, i):
+        self.id = i
+        self.changes = []
+
+    def reparent(self, parent, x=0, y=0):
+        self.changes.append("reparent")
+
+    def move_resize(self, x, y, wd, h):
+        self.changes.append((x, y, wd, h))
+
+
+def set_pip(win, size):
+    w.pip._set((win, G(size[0], size[1])) if size else None)
+    app.processEvents()
+
+# The check starts the section with no PiP and the 16:9 MPRIS art up.
+w.resize(152, 100)      # back to the canonical width after the 130 test
 app.processEvents()
-assert w.r_art == QRect(4, 4, 122, 69), w.r_art
-assert w.natural_height(130) == 177
-
-w.pip.window_id = None
-w.pip.width = w.pip.height = 0
-w._on_pip()
-assert w.r_art == QRect(4, 4, 122, 69), w.r_art   # the cover is still 16:9
-assert w.natural_height(130) == 177
-
-# Art gone: back to no well.
-w.cover.set_track("svc", "t", "")
+set_art(320, 180)
+w.pip._set(None)
 app.processEvents()
-assert w.r_art is None and w.natural_height(152) == 100
+assert w._pip_xid is None
+assert w.r_art == QRect(4, 4, 144, 81) and w.natural_height(152) == 189
+h0 = n["h"]
+w.pip._set(None)
+app.processEvents()
+assert n["h"] == h0     # a PiP with no PiP does not reflow
+
+# 4:3 PiP up: embedded, the well follows the monitor's geometry, the
+# window is reparented and placed on the well.
+w42 = W(42)
+set_pip(w42, (320, 240))
+assert w._pip_xid == 42
+assert w.r_art == QRect(4, 4, 144, 108), w.r_art
+assert w.natural_height(152) == 216
+assert n["h"] == h0 + 1
+assert w42.changes == ["reparent", (4, 4, 144, 108)], w42.changes
+
+# Size change on the same window: the well and the window both follow.
+set_pip(w42, (320, 180))
+assert w.r_art == QRect(4, 4, 144, 81) and w.natural_height(152) == 189
+assert n["h"] == h0 + 2
+assert w42.changes[-1] == (4, 4, 144, 81)
+
+# A new PiP window: the fresh window is embedded, not the stale one.
+w43 = W(43)
+set_pip(w43, (320, 240))
+assert w._pip_xid == 43
+assert w43.changes == ["reparent", (4, 4, 144, 108)], w43.changes
+assert w42.changes.count("reparent") == 1     # 42 is never touched again
+
+# PiP gone: back to the cover art, the embedded flag cleared.
+set_pip(None, None)
+assert w._pip_xid is None
+assert w.r_art == QRect(4, 4, 144, 81) and w.natural_height(152) == 189
+assert n["h"] == h0 + 4
+
+# give_up: the monitor stops re-offering a window that refused the move.
+w.pip.give_up(43)
+assert 43 in w.pip._dead
 
 print("pipwell OK")
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it**
 
 Run: `QT_QPA_PLATFORM=offscreen python3 /tmp/pipwell-check.py`
-Expected: `AttributeError: 'MediaWidget' object has no attribute 'pip'`
+First extended run failed on line 108 (the widget was still 130 wide from
+Task 1's width section — the section now re-resizes first); a later red
+then green cycle pinned the de-duplication (`_pip_geom`) when the
+standalone-resize path was seen issuing the configure twice.
+Expected after both: `pipwell OK`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
-Module imports: add `QWindow` to the `PyQt6.QtGui` import list, add
-`QSocketNotifier` to the `PyQt6.QtCore` list, keep line grouping with
-existing ones (`photon.py` does the same sort of multi-source QtCore
-imports).
-
-`MediaWidget.__init__`, after the cover wiring (the
-`self.cover.set_track(...)` call already present, inserted immediately
-before it):
+`MediaWidget.__init__`, the Task 1 placeholder is replaced (no other new
+module imports):
 
 ```python
         self.pip = PipMonitor(self)
         self.pip.changed.connect(self._on_pip)
-        self.pip.repin.connect(self._pip_pin)
-        self._pip_rect = None
+        self._pip_xid = None      # the PiP window reparented into this one
+        self._pip_geom = None     # last move_resize sent, so embed + the
+                                  # standalone resize it triggers cannot
+                                  # issue it twice
 ```
 
-(`self._pip_container = None` already exists from Task 1.)
-
-`_well_side` — the pip window outranks the cover pixmap (the thumbnail
-is the same video, one picture per well):
+`_well_side` — the PiP outranks the pixmap, one source of side through
+the method so all consumers (_relayout / refresh / resize /
+natural_height) inherit it:
 
 ```python
     def _well_side(self, w):
         """The well's side for the current source, or None: full width,
-        shortened by the image's own ratio, capped at the square.  The
-        PiP window outranks the cover art -- the frame outranks its own
-        poster."""
-        if self.pip is not None and self.pip.window_id is not None:
-            src = (self.pip.width, self.pip.height)
-        else:
-            pm = self.cover.pixmap
-            src = ((pm.width(), pm.height()) if pm is not None
-                   and not pm.isNull() else None)
-        if src is None:
-            return None
+        shortened by the source's own ratio, capped at the square."""
         well_w = w - 8
-        return min(well_w, round(well_w * src[1] / src[0]))
+        if self._pip_xid is not None:
+            #  The monitor only reports a PiP that passed its geometry
+            #  gate, so both dimensions are > 0 here.
+            return min(well_w, round(well_w * self.pip.height /
+                                     self.pip.width))
+        pm = self.cover.pixmap
+        if pm is None or pm.isNull():
+            return None
+        return min(well_w, round(well_w * pm.height() / pm.width()))
 ```
 
-`_relayout` — insert the container block between
-`self.output.setGeometry(self.r_output)` and `self._measure_title()`:
+`resizeEvent` re-positions the child (panel resizes ride through here):
 
 ```python
-        if self._pip_container is not None and self.r_art is not None:
-            r = self.r_art.adjusted(4, 4, -4, -4)
-            self._pip_container.setGeometry(r)
-            if r != self._pip_rect:
-                self._pip_rect = r
-                self._pip_pin()
+    def resizeEvent(self, event):
+        self._relayout()
+        side = self._well_side(self.width())
+        if side != self._side:
+            self._side = side
+            self.natural_height_changed.emit()
+        self._position_pip()
 ```
 
-New widget methods (place them after `_refresh_well`):
+The state machine (after `_on_mpris`):
 
 ```python
+    #  The monitor found (or lost) a PiP window.  The window becomes a child
+    #  of this widget's own X window and is placed on the well; no frame, no
+    #  repaint trickery -- the browser keeps drawing it exactly where the
+    #  cover art would sit.
     def _on_pip(self):
-        if self.pip.window_id is not None and self._pip_container is None:
-            self._embed_pip()
-        elif self.pip.window_id is None and self._pip_container is not None:
-            self._drop_pip()
+        xid = self.pip.window_id
+        if xid is None:
+            if self._pip_xid is not None:
+                self._pip_xid = None
+                self._pip_geom = None
+                self._refresh_well()
+            return
+        if xid != self._pip_xid:
+            self._embed_pip(xid)
+        if self._pip_xid is None:
+            return
         self._refresh_well()
+        self._position_pip()
 
-    def _embed_pip(self):
-        win = QWindow.fromWinId(self.pip.window_id)
-        if win is None:
-            #  The window died between the poll and now; the next poll
-            #  re-decides.
-            return
-        container = QWidget.createWindowContainer(win, self)
-        if container is None:
-            self.pip.give_up(self.pip.window_id)
-            return
-        self._pip_container = container
-        container.show()
-        self._relayout()      # positions the container and pins the child
-        self.pip.watch()
-        QTimer.singleShot(0, self._raise_pip)
-
-    def _drop_pip(self):
-        self._pip_container.deleteLater()
-        self._pip_container = None
-        self._pip_rect = None
-
-    def _pip_pin(self):
-        """The child must sit at the container's origin:
-        XReparentWindow keeps absolute coordinates, so without this the
-        video sits where the PiP was before."""
-        mon = self.pip
-        r = self._pip_rect
-        if mon is None or mon.dpy is None or mon._win is None:
-            return
-        if r is None or r.width() < 2 or r.height() < 2:
-            return
+    def _embed_pip(self, xid):
         try:
-            mon._win.configure_request(x=0, y=0,
-                                       width=r.width(), height=r.height())
-            mon.dpy.flush()
+            self.pip._win.reparent(self.winId(), 0, 0)
+        except xerror.XError:
+            #  The window refuses the move (input-class or visual mismatch,
+            #  or it died between the poll and now): leave it floating and
+            #  stop re-offering.
+            self.pip.give_up(xid)
+            return
+        self._pip_xid = xid
+        self._pip_geom = None
+
+    def _position_pip(self):
+        #  Child coordinates are relative to our window; r_art is in the
+        #  same space.
+        if self._pip_xid is None or self.r_art is None:
+            return
+        r = self.r_art
+        if (r.x(), r.y(), r.width(), r.height()) == self._pip_geom:
+            return
+        self._pip_geom = (r.x(), r.y(), r.width(), r.height())
+        try:
+            self.pip._win.move_resize(r.x(), r.y(), r.width(), r.height())
         except xerror.XError:
             pass
-
-    def _raise_pip(self):
-        if self._pip_container is not None and self.isVisible():
-            self._pip_container.show()
-            self._pip_container.raise_()
 ```
 
-Panel exit needs no code: when our toplevel dies the X server implicitly
-reparents the orphaned child to root, the PiP re-appears floating and
-playback is untouched (relied-on X behavior — Task 4, step 4 asserts it).
-
-`_paint_art` — the trough stays (the container is inset 4px inside the
-well, same as the pixmap), but the pixmap is not painted under a live
-child:
+`_paint_art` — the trough stays (the child sits inset 4px inside the
+well, same as the pixmap); nothing painted under the live child:
 
 ```python
     def _paint_art(self, p):
         photon.trough(p, self.r_art)
-        if self._pip_container is not None:
-            return
-        r = self.r_art.adjusted(4, 4, -4, -4)
-        art = self.cover.pixmap.scaled(
-            r.size(), Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation)
-        x = r.left() + (r.width() - art.width()) // 2
-        y = r.top() + (r.height() - art.height()) // 2
-        p.drawPixmap(x, y, art)
+        if self._pip_xid is None:
+            r = self.r_art.adjusted(4, 4, -4, -4)
+            art = self.cover.pixmap.scaled(
+                r.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            x = r.left() + (r.width() - art.width()) // 2
+            y = r.top() + (r.height() - art.height()) // 2
+            p.drawPixmap(x, y, art)
 ```
 
-(`photon.x_events` is the helper `photon_tray.py` already drains with --
-import nothing new for it.)
+`PipMonitor` loses its unused `_x_notifier` attribute (the as-designed
+drain loop is gone with the container approach).
 
-`PipMonitor` gains:
+The module docstring's "Nothing here polls." paragraph gains:
 
-```python
-    repin = pyqtSignal()
-
-    def watch(self):
-        """Subscribe to the current window's structure events and drain
-        them on the display fd: close arrives before the 1500ms poll, and
-        a move or resize by the browser is caught at once."""
-        if self._win is None or self.dpy is None:
-            return
-        try:
-            self._win.change_attributes(event_mask=X.StructureNotifyMask)
-            self.dpy.flush()
-        except xerror.XError:
-            return
-        if self._x_notifier is None:
-            self._x_notifier = QSocketNotifier(self.dpy.fileno(),
-                                               QSocketNotifier.Type.Read,
-                                               self)
-            self._x_notifier.activated.connect(self._drain_x)
-
-    def _drain_x(self):
-        try:
-            for ev in photon.x_events(self.dpy):
-                if getattr(ev.window, "id", None) != self.window_id:
-                    continue
-                if ev.type in (X.DestroyNotify, X.UnmapNotify):
-                    self._set(None)
-                elif ev.type == X.ConfigureNotify:
-                    if (ev.width, ev.height) != (self.width, self.height):
-                        self.width, self.height = ev.width, ev.height
-                        self.changed.emit()
-                    elif ev.x or ev.y:
-                        self.repin.emit()
-        except (xerror.ConnectionClosedError, OSError):
-            if self._x_notifier is not None:
-                self._x_notifier.setEnabled(False)
-            QApplication.quit()
-            return
-        except Exception:
-            return
+```
+there is no once-a-second anything left. The one exception is the browser's
+picture-in-picture window: nothing in X announces when one appears, so the
+monitor polls the managed-window list; every other path here is event-
+driven.
 ```
 
-The module docstring's "Nothing here polls." paragraph: append one
-sentence —
-`  (One exception: the 1.5s PiP poll, which photon_tray's find loop makes
-  acceptable here; the video is nobody else's business until it floats.)`
-Keep the paragraph's existing lines untouched otherwise.
+Panel exit needs no code: when our toplevel dies the X server implicitly
+reparents the orphaned child to root, the PiP re-appears floating and
+playback is untouched (Task 4 step 4 asserts it).
 
-- [ ] **Step 4: Run the check to verify it passes**
+- [x] **Step 4: Run the check to verify it passes**
 
 Run: `QT_QPA_PLATFORM=offscreen python3 /tmp/pipwell-check.py`
-Expected: `pipwell OK`
+Result: `pipwell OK`
 
-- [ ] **Step 5: Compile and lint gates**
+- [x] **Step 5: Compile and lint gates**
 
 Run: `python3 -m py_compile bin/photon_media.py && ruff check --statistics bin/photon_media.py`
-Expected: no new diagnostics beyond the 5 from Task 1.
+Result: exactly the 5 baseline diagnostics, no new ones.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
-git add bin/photon_media.py
+git add bin/photon_media.py docs/plans/2026-09-22-media-pip-well-plan.md
 git commit -m "feat(media): embed the PiP window in the media well"
 ```
 
