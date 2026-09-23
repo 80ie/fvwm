@@ -46,6 +46,7 @@ BugOpts ExplainWindowPlacement On, EWMHIconicStateWorkaround
 DestroyFunc StartFunction
 AddToFunc   StartFunction
 + I Test (Init) Exec exec dbus-update-activation-environment --all
++ I Test (Init) Exec exec snixembed --fork
 + I Test (Init) Exec exec gnome-keyring-daemon --start --components=secrets
 + I Test (Init, EnvMatch DISPLAY :0) Exec exec xcompmgr -o  -Cc
 + I TestRc (NoMatch) Exec exec hsetroot -center $[infostore.bg]
