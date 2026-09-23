@@ -46,7 +46,6 @@ STRIP_H = 30
 
 
 class ClockWidget(QWidget):
-
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -105,8 +104,8 @@ class ClockWidget(QWidget):
         date = photon.elide(date, self.font_clock, field_w)
         time = photon.elide(time, self.font_clock, field_w)
         baseline = r.top() + (r.height() + fm.capHeight()) // 2
-        p.drawText(r.left() + 4, baseline, date)
-        p.drawText(r.right() - 3 - fm.horizontalAdvance(time), baseline, time)
+        p.drawText(r.left() + 4, baseline, time)
+        p.drawText(r.right() - 3 - fm.horizontalAdvance(date), baseline, date)
 
 
 def main():

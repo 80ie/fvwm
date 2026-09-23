@@ -51,14 +51,7 @@ BugOpts ExplainWindowPlacement On, EWMHIconicStateWorkaround
 
 ##                                                            }}}2
 ##  Functions                                                {{{1
-##   ├ Start Function                                        {{{2
-#
-# The start function is run right after fvwm is done reading
-# the config file. This function run after each restart
-# so using Test (Init) or Test (Restart) can further control
-# actions that are run during the first time run (Init) or
-# actions that are run after a restart.
-#
+##   ├ StartFunction                                        {{{2
 DestroyFunc StartFunction
 AddToFunc   StartFunction
 + I Test (Init) Exec exec dbus-update-activation-environment --all
@@ -78,36 +71,16 @@ AddToFunc   StartFunction
 + I Module FvwmMFL
 + I Module FvwmPager
 + I Module FvwmPerl
-#+ I Module FvwmAnimate
-###  Shelf.  Not a module, so fvwm won't restart it on its own; kill any
-###  running instance and launch a fresh one so a Restart picks up changes
-###  to bin/shelf-panel, photon.py, or panel.items, same as everything else
-###  StartFunction brings up.  Width/side/collapse state survives in
-###  .panel.state, so the restart is invisible beyond a brief redraw.
 + I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
-# Replaced by the shelf panel above, which now carries the window list, tray
-# and clock the taskbar used to; lxqt-panel would duplicate all three.
-#+ I Test (Init) Exec exec lxqt-panel
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
 + I Test (Init) Exec exec lxqt-policykit-agent
-###  fvwm doesn't implement XDG autostart, so spice-vdagent's autostart
-###  .desktop entry (/etc/xdg/autostart/spice-vdagent.desktop) never runs on
-###  its own. Without it, virt-manager window resizes never reach the guest,
-###  so the display stays stuck at the QXL default (1024x768) after every
-###  restart. spice-vdagentd (system service) is already running via its
-###  socket unit; this just starts the per-session client that talks to it.
-###  This config is shared with a bare-metal host, so it's guarded: only
-###  fires when the SPICE virtio-serial channel actually exists (i.e. we're
-###  really inside a QEMU/SPICE guest) and the binary is installed.
-+ I Test (Init) Exec exec sh -c 'test -e /dev/virtio-ports/com.redhat.spice.0 && command -v spice-vdagent >/dev/null && exec spice-vdagent'
 + I Test (Init) Exec exec flameshot
 + I Test (Init) Exec exec easyeffects --gapplication-service
 + I Test (Init) Exec exec nicotine -s
 + I Test (Init) Exec exec xscreensaver
 + I Test (Init) Exec exec kdeconnectd
 + I Test (Init) Exec exec kdeconnect-indicator
-#+ I Test (Init) Exec exec sudo firewall-applet
 + I Test (Init) Exec exec nm-applet --indicator
 + I Test (Init) Exec exec gammastep-indicator
 + I Test (Init) Exec exec signal-desktop --use-tray-icon
@@ -116,13 +89,7 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec solaar -w hide 
 + I Test (Init) Exec exec sxhkd
 + I Test (Init) Schedule 1000 Exec exec qlipper
-#+ I Test (Init) Schedule 1000 Exec exec ~/.local/opt/activitywatch/start.sh
 + I BugOpts QtDragnDropWorkaround True
-###  Prune stale window thumbnails.  Thumbnails expire after 100s and are
-###  recaptured on demand, so anything a week old belongs to a window that is
-###  long gone.  Without this the cache only grows -- it had reached 9641
-###  files / 239MB before the sweep was added.  Runs on restart too; it is a
-###  find over a few hundred files.
 + I Exec exec find $[FVWM_USERDIR]/images/thumbs -maxdepth 1 -type f -mtime +7 -delete
 + I Schedule 100 Module Thumbnail
 + I Schedule Periodic 300000 1222 5minutes
