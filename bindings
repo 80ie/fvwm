@@ -151,7 +151,6 @@ Silent Key grave A 4 ToggleEdgeScroll
 ##   ├ Mouse                                                 {{{2
 ##   │ ├ Left Click                                          {{{3
 Mouse 1	T    A RaiseMoveX Move Maximize
-Mouse 1 I    A IfDoubleClick DeIconifyWindow
 Mouse 1 R    A -
 Mouse 1 R    M Menu MenuFvwmRoot
 Mouse 1	FS   A RaiseMove Resize
@@ -164,7 +163,6 @@ Mouse 2	T    A Delete
 Mouse 3 R    M Menu MenuFvwmRoot
 Mouse 3 T    A WindowShade Toggle
 Mouse 3	R    A -
-Mouse 3 I    A Menu MenuIconOps
 Mouse 3 W    4 LazyResize
 ##                                                           }}}3
 ##   │ ├ Other                                               {{{3

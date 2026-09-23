@@ -3,7 +3,6 @@
 ##  General                                                  {{{1
 ##   ├ Environment                                           {{{2
 SetEnv FVWM_USERDIR "/home/deer/.fvwm"
-SetEnv FVWM_THUMBS "$[FVWM_USERDIR]/images/thumbs"
 SetEnv FVWM_ICON "$[FVWM_USERDIR]/images/icons"
 SetEnv EDGE_SCROLL 0
 ##                                                           }}}2
@@ -32,14 +31,6 @@ SetEnv TILING_0-0-0 on
 # that lives here any more.  What fvwm still needs to know is how much edge
 # it is claiming, and that is read back from the panel where EwmhBaseStruts
 # is set below.
-
-# FvwmPager width/height. Keep both divisible by DesktopSize so the generated
-# background tile lines up with the page cells (3x3 -> 128x72 per page).
-InfoStoreAdd pager_width 384
-InfoStoreAdd pager_height 216
-# How long the pager stays raised after a page change
-InfoStoreAdd pager_flash_ms 100
-
 InfoStoreAdd belowbottomlayer 1
 InfoStoreAdd bottomlayer 2
 InfoStoreAdd putlayer 4
@@ -69,7 +60,6 @@ AddToFunc   StartFunction
 + I Module FvwmEvent EventIcon
 + I Module FvwmEvent TileEvent
 + I Module FvwmMFL
-+ I Module FvwmPager
 + I Module FvwmPerl
 + I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
 + I Test (Init) Exec exec lxqt-globalkeysd
@@ -107,7 +97,6 @@ AddToFunc   StartFunction
 #+ I Module FvwmEvent EventRestoreFocus
 #+ I Module FvwmIdent
 #+ I Module FvwmMFL
-#+ I Module FvwmPager
 ##+ I Module FvwmButtons FvwmTaskBar
 #+ I Module FvwmPerl
 #+ I Schedule 7000 Module Thumbnail
@@ -187,8 +176,6 @@ AddToFunc EventDeIcon
 + I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible, !fvwm-alttab) \
         SendToModule Thumbnail capture $[w.id]
 + I ThisWindow Layer 0 $[infostore.putlayer]
-+ I All (CurrentDesk, Iconic) PlaceAgain Icon
-
 
 DestroyModuleConfig EventDeIcon:*
 *EventDeIcon: Cmd Function
@@ -224,16 +211,10 @@ DestroyModuleConfig TileEvent:*
 *TileEvent: new_desk TileEventChange
 ##                                                           }}}3
 ##   │ ├ Pager                                               {{{3
-# The pager sits centre-screen and never moves. Navigating raises it above
-# everything; Schedule 9901 drops it back to the bottom layer.
-#
 # $0 $1 = GotoPage x y args (absolute, or relative with a trailing 'p')
 DestroyFunc PagerNavigate
 AddToFunc PagerNavigate
-+ I Schedule Cancel 9901
 + I GotoPage wrapx wrapy $0 $1
-+ I All (FvwmPager) Layer 0 $[infostore.abovetoplayer]
-+ I Schedule $[infostore.pager_flash_ms] 9901 PagerPark
 
 # Step $0 pages in reading order, carrying across rows. GotoPage's wrapx/wrapy
 # only wrap within a row/column, so the row carry is done in the shell.
@@ -241,9 +222,6 @@ DestroyFunc PagerNavigateSeq
 AddToFunc PagerNavigateSeq
 + I PipeRead "n=$$(( $[desk.pagesx] * $[desk.pagesy] )); i=$$(( ($[page.nx] + $[page.ny] * $[desk.pagesx] + ($0) + n) % n )); echo PagerNavigate $$(( i % $[desk.pagesx] )) $$(( i / $[desk.pagesx] ))"
 
-DestroyFunc PagerPark
-AddToFunc PagerPark
-+ I All (FvwmPager) Layer 0 $[infostore.bottomlayer]
 ##                                                           }}}3
 ##   │ ├ Edge                                                {{{3
 DestroyFunc ToggleEdgeScroll
@@ -275,9 +253,6 @@ DestroyFunc RaiseMove
 AddToFunc RaiseMove
 + I Raise
 + M $0
-
-DestroyFunc IfDoubleClick
-AddToFunc IfDoubleClick D $[*]
 
 DestroyFunc LazyResize
 AddToFunc LazyResize
@@ -314,7 +289,6 @@ DestroyFunc EWMHActivateWindowFunc
 AddToFunc EWMHActivateWindowFunc
 + I ThisWindow (Iconic) DeIconifyWindow
 + I ThisWindow (!CurrentPage) MoveToPage
-+ I ThisWindow (StickyIcon) WindowStyle Sticky
 + I Focus
 + I Raise
 
@@ -566,20 +540,11 @@ Key bracketright A 4 Function ShelfWiden
 ##   │ ├ (De)Iconify                                         {{{3
 DestroyFunc IconifyWindow
 AddToFunc IconifyWindow
-+ I UnsetEnv THUMB
 + I ThisWindow (!Iconifiable) Break 1
 + I ThisWindow (Iconic) Break 1
 + I ThisWindow (Shaded) UnShadeWindow
-+ I Test (R $[FVWM_THUMBS]/$[w.class].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.class].png
-+ I Test (R $[FVWM_THUMBS]/$[w.resource].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.resource].png
-+ I Test (R $[FVWM_THUMBS]/$[w.name].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.name].png
-+ I Test (R $[FVWM_THUMBS]/$[w.id].png) SetEnv THUMB $[FVWM_THUMBS]/$[w.id].png
-+ I Test (!EnvIsSet THUMB) Break 1
 + I ThisWindow InfoStoreAdd layer_$[w.id] $[w.layer]
 + I ThisWindow Layer 0 $[infostore.bottomlayer]
-+ I ThisWindow WindowStyle IconOverride, Icon $[THUMB]
-+ I ThisWindow (Sticky) WindowStyle StickyIcon
-+ I UnsetEnv THUMB
 #+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate pause
 + I ThisWindow Iconify True
 #+ I ThisWindow (!CurrentDesk) SendToModule FvwmAnimate play
@@ -687,10 +652,10 @@ DefaultFont "xft:P052:Bold:Italic:size=10:antialias=True:minspace=True"
 #Style * Font "xft:P052:size=10:antialias=True"
 Style * Font "xft:LibreCaslonText:size=10:antialias=True"
 ##                                                           }}}2
-##   ├ Thumbnails                                            {{{2
-Style * IconOverride, !UseIconPosition
-Style * IconBox 800x1365+0+0, IconGrid 10 10, IconFill top left
-Style * IconTitleFormat %c
+##   ├ Icons                                                 {{{2
+# Iconified windows draw nothing on the desktop; the shelf pager and
+# alt-tab are the window list.
+Style * NoIcon
 ##                                                           }}}2
 ##   ├ Overrides                                             {{{2
 Style fvwm-alttab !Title, !Handles, BorderWidth 1, WindowListSkip, CirculateSkip, \
@@ -822,23 +787,6 @@ AddToMenu MenuSendTo
 + "Page &9"	MoveToPage 2 2
 
 ##                                                           }}}2
-##   ├ IconOps                                               {{{2
-DestroyMenu MenuIconOps
-AddToMenu   MenuIconOps
-+ "(De)Iconify"         Iconify
-+ "(Un)Maximize"        Maximize
-+ "(Un)Shade"           WindowShade
-+ "Move to..."			Popup MenuSendTo
-+ "" Nop
-+ "Close"               Close
-+ "Destroy"             Destroy
-+ "" Nop
-+ "StaysOnTop"          Pick (CirculateHit) Layer 0 6
-+ "StaysPut"            Pick (CirculateHit) Layer 0 4
-+ "StaysOnBottom"       Pick (CirculateHit) Layer 0 2
-+ "" Nop
-+ "Identify"            Module FvwmIdent
-##                                                           }}}2
 ##   ├ FvwmManPages                                          {{{2
 DestroyMenu MenuFvwmManPages
 AddToMenu   MenuFvwmManPages "Help" Title
@@ -928,22 +876,6 @@ DestroyModuleConfig FvwmScript:*
 # This sets the default colorsets.
 *FvwmFormDefault: Colorset 10
 *FvwmFormDefault: ItemColorset 13
-##                                                           }}}2
-##   ├ FvwmPager                                             {{{2
-DestroyModuleConfig FvwmPager:*
-*FvwmPager: Colorset 21
-*FvwmPager: HilightColorset 20
-*FvwmPager: WindowColorset 19
-*FvwmPager: FocusColorset 18
-*FvwmPager: NoDeskLabels
-*FvwmPager: MiniIcons
-*FvwmPager: Balloons All
-*FvwmPager: SolidSeparators
-*FvwmPager: UseSkipList
-*FvwmPager: Geometry $[infostore.pager_width]x$[infostore.pager_height]
-*FvwmPager: Mouse 3 Scroll
-*FvwmPager: Mouse 4 Cmd PagerNavigateSeq -1
-*FvwmPager: Mouse 5 Cmd PagerNavigateSeq +1
 ##                                                           }}}2
 ##   ├ ShelfPager                                            {{{2
 DestroyModuleConfig ShelfPager:*

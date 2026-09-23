@@ -61,16 +61,15 @@ group Windows
 widget tasks
 flex
 
-group System Tray
-widget tray
+group Media
+widget media
 
-##  System Monitor, then the player, then World View immediately above the
-##  clock -- the order the reference shelf uses, reading down its right edge.
 group System Monitor
 widget meters
 
-group Media
-widget media
+
+group System Tray
+widget tray
 
 group World View
 widget worldview
