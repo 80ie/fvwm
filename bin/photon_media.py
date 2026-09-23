@@ -532,10 +532,16 @@ class PipMonitor(QObject):
 
     There is no X event for "a PiP appeared", so this is a deliberate
     poll, the same find loop shape photon_tray uses to adopt stalonetray.
-    Candidate: a managed top-level that is video-shaped and whose
-    _NET_WM_PID is a browser.  fvwm reparents every top-level into its
-    own frame, so _NET_CLIENT_LIST (client ids) is the enumeration, not
-    a root query_tree.
+    New candidates are admitted by shape and owner: a managed top-level
+    that is video-shaped and whose _NET_WM_PID is a browser.  fvwm
+    reparents every top-level into its own frame, so _NET_CLIENT_LIST
+    (client ids) is the enumeration, not a root query_tree.
+
+    Admission is sticky: the well the embed places a window in can be
+    smaller than the gate, so a re-gated poll would drop the window we
+    are holding and stop tracking it.  An admitted window is followed
+    by identity -- a liveness probe, no gate -- until it dies or its
+    embed keeps failing (give_up).
     """
 
     INTERVAL_MS = 1500
@@ -587,6 +593,23 @@ class PipMonitor(QObject):
     def _poll(self):
         if self.dpy is None:
             return
+        found = self._tracked()
+        if found is None:
+            found = self._discover()
+        self._set(found)
+
+    def _tracked(self):
+        """The already-admitted window, or None if it is gone or refused."""
+        if (self.window_id is None or self.window_id in self._dead
+                or self._win is None):
+            return None
+        try:
+            g = self._win.get_geometry()
+            return (self._win, g)
+        except xerror.XError:
+            return None
+
+    def _discover(self):
         found = None
         try:
             root = self.dpy.screen().root
@@ -613,7 +636,7 @@ class PipMonitor(QObject):
                 continue
             found = (win, g)
             break
-        self._set(found)
+        return found
 
     def _set(self, found):
         xid = found[0].id if found else None

@@ -811,3 +811,24 @@ Expected: clean compile, still the 5 baseline ruff diagnostics, a clean
 working tree (the spec note commit from Step 3, if it ran, is in).
 Nothing else to commit in the happy path -- the work landed in Tasks
 1–3's commits.
+
+## Execution note (2026-09-22, during Task 4 smoke)
+
+Two post-commit fixes landed in `bin/photon_media.py` as separate commits:
+
+1. **`fix(media): winId() is a sip voidptr in PyQt6, not an int`** -- the
+   live smoke crashed on the first real embed: `reparent(self.winId(), ...)`
+   died in Xlib's request packing before any X request was sent.
+2. **`fix(media): Window has no move_resize, use configure`** -- Xlib has
+   no `move_resize`; the throwaway check's fake window accepted any call, so
+   the name was never exercised. `configure(x=, y=, width=, height=)` is the
+   single-request equivalent and was verified against a real X server on an
+   override-redirect child.
+3. **Sticky admission in `PipMonitor`** (this note's main subject): the
+   geometry gate re-ran on every poll, including on the window we had just
+   configured down to well size -- below `H_MIN` the monitor reported "no
+   PiP" and the widget silently stopped tracking it (well kept growing, PiP
+   froze in place, reported in Task 4 smoke). The monitor now follows an
+   admitted window by identity (`_tracked`: a liveness probe, no gate) until
+   the window dies or `give_up` marks it refused; the gate applies to new
+   admission only (`_discover`).
