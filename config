@@ -16,6 +16,8 @@ InfoStoreAdd calculator /usr/bin/speedcrunch
 InfoStoreAdd media_output @DEFAULT_SINK@
 
 InfoStoreAdd bg $[FVWM_USERDIR]/images/background/bg.png
+#InfoStoreAdd bg $[FVWM_USERDIR]/images/background/ussr2.png
+
 
 InfoStoreAdd pager_bg $[FVWM_USERDIR]/images/background/bg_pager.png
 InfoStoreAdd pager_scale 18
@@ -217,11 +219,10 @@ DestroyFunc PagerNavigate
 AddToFunc PagerNavigate
 + I GotoPage wrapx wrapy $0 $1
 
-# Step $0 pages in reading order, carrying across rows. GotoPage's wrapx/wrapy
-# only wrap within a row/column, so the row carry is done in the shell.
+# Step $0 pages in x only; wrapx wraps within the row, row itself never changes.
 DestroyFunc PagerNavigateSeq
 AddToFunc PagerNavigateSeq
-+ I PipeRead "n=$$(( $[desk.pagesx] * $[desk.pagesy] )); i=$$(( ($[page.nx] + $[page.ny] * $[desk.pagesx] + ($0) + n) % n )); echo PagerNavigate $$(( i % $[desk.pagesx] )) $$(( i / $[desk.pagesx] ))"
++ I GotoPage wrapx $0p 0p
 
 ##                                                           }}}3
 ##   │ ├ Edge                                                {{{3
@@ -896,34 +897,9 @@ DestroyModuleConfig ShelfPager:*
 *ShelfPager: Mouse 2 MoveWindow FlipFocus NoWarp
 *ShelfPager: Mouse 3 Scroll
 ##                                                           }}}2
-##   ├ FvwmAnimate                                           {{{2
-#*FvwmAnimate: Effect Zoom3D
-#*FvwmAnimate: Iterations 25
-##                                                           }}}2
 ##   ├ Shelf                                                 {{{2
-##  The QNX Photon shelf is one program: bin/shelf-panel, over bin/photon.py.
-##  It runs the full height of either edge -- there is no taskbar row
-##  below it any more, and it carries the window list, tray and clock that
-##  row used to hold.  It draws its own frame, headers, launchers, pager,
-##  meters and media widget, reads its sections from panel.items and keeps
-##  its width, side and collapse state in .panel.state.
-##
-##  It is not an fvwm module, and that is the point.  FvwmButtons cannot
-##  change its layout at runtime -- ChangeButton reaches a button's title,
-##  icon and colorset and nothing else -- so collapsing a group meant
-##  regenerating the module config and restarting the module, and resizing
-##  the shelf meant the same.  A module restart is asynchronous with no
-##  "I am mapped" signal to sequence against, so the swap was a timer race
-##  that dropped the shelf entirely on about one toggle in four.  And the
-##  reference's left edge is two nested bevels, which `Frame N` cannot draw
-##  at any N.  All three go away by drawing it ourselves.  PANEL-DESIGN.md
-##  is the long version.
-##
-##  FixedPosition and FixedSize ignore the *user's* attempts to move or
-##  resize, not the program's (fvwm3styles.html), so the panel can still
-##  move and resize itself as the edge is dragged while nothing else can.
 Style "ShelfPanel" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
     Sticky, WindowListSkip, CirculateSkip, NeverFocus, \
-    FixedPosition, FixedSize, StaysOnTop
+    FixedPosition, FixedSize, Layer $[infostore.toplayer] 
 ##                                                           }}}2
 ##                                                           }}}1
