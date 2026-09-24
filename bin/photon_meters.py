@@ -38,12 +38,12 @@ import photon
 #  has to sample -- there is no "the CPU changed" signal to subscribe to --
 #  but sampling is not the same as repainting: paintEvent only runs when a
 #  bar's pixel width actually moves.
-INTERVAL_MS = 1000
+INTERVAL_MS = 750 
 
 #  Measured off ~/Desktop/qnx621-1-1.png at x=1000, rows 475..533.
 BAR_H = 16            # CPU and MEM: outline, 14 rows of interior, outline
 THIN_H = 7            # each of the filesystem row's two bars
-GAP = 3               # between rows
+GAP = 4               # between rows
 THIN_GAP = 1          # between the two thin bars
 ICON = 16
 

@@ -33,10 +33,6 @@
 ##  terminal and friends come from the environment rather than from fvwm's
 ##  InfoStore -- bin/shelf-panel is not an fvwm module and cannot read it.
 
-##  The launchers are parked, not gone.  LauncherBody and the `item`
-##  directive both still work; uncommenting a group below is all it takes to
-##  bring the rows back.
-#
 #group Applications
 #item Terminal     | 16x16-xterm-color.png                    | ${TERMINAL:-kitty}
 #item Browser      | 16x16-firefox.png                        | firefox
@@ -54,9 +50,9 @@
 #item Screen Saver | 16x16-xscreensaver.png                   | xscreensaver-demo
 #item Appearance   | 16x16-menulibre.png                      | ${TERMINAL:-kitty} -e ${EDITOR:-vi} $FVWM_USERDIR/config
 
-##  Windows absorbs whatever the rest of the stack does not need -- the same
-##  job FvwmTaskBar's window-list cell did, now with a whole sidebar's worth
-##  of height to grow into instead of one fixed row.
+group World View
+widget worldview
+
 group Windows
 widget tasks
 flex
@@ -70,9 +66,6 @@ widget meters
 
 group System Tray
 widget tray
-
-group World View
-widget worldview
 
 ##  No header: flush against the bottom of the panel, the last thing in the
 ##  stack.  Format and position both carried over from TaskbarClockTick.
