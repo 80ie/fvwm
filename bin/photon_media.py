@@ -532,8 +532,10 @@ class PipMonitor(QObject):
 
     There is no X event for "a PiP appeared", so this is a deliberate
     poll, the same find loop shape photon_tray uses to adopt stalonetray.
-    New candidates are admitted by shape and owner: a managed top-level
-    that is video-shaped and whose _NET_WM_PID is a browser.  fvwm
+    New candidates are admitted by shape, owner and type: a managed
+    top-level that is video-shaped, whose _NET_WM_PID is a browser, and
+    whose _NET_WM_WINDOW_TYPE is not NORMAL -- that last check is what
+    keeps a tiled or floating main browser window out of the gate.  fvwm
     reparents every top-level into its own frame, so _NET_CLIENT_LIST
     (client ids) is the enumeration, not a root query_tree.
 
@@ -590,6 +592,20 @@ class PipMonitor(QObject):
         except xerror.XError:
             return None
 
+    def _is_normal_toplevel(self, win):
+        """True for a browser's own main window, which always reports
+        _NET_WM_WINDOW_TYPE_NORMAL. A real PiP popup never does (Firefox
+        sets UTILITY); without this, an ordinary tiled or floating browser
+        window that happens to land in the geometry gate gets reparented
+        into the well in its place."""
+        try:
+            atom = self.dpy.intern_atom("_NET_WM_WINDOW_TYPE")
+            normal = self.dpy.intern_atom("_NET_WM_WINDOW_TYPE_NORMAL")
+            prop = win.get_full_property(atom, X.AnyPropertyType)
+            return bool(prop) and normal in prop.value
+        except xerror.XError:
+            return False
+
     def _poll(self):
         if self.dpy is None:
             return
@@ -628,6 +644,8 @@ class PipMonitor(QObject):
                     and self.H_MIN <= g.height <= self.H_MAX):
                 continue
             if not (self.R_MIN <= g.width / g.height <= self.R_MAX):
+                continue
+            if self._is_normal_toplevel(win):
                 continue
             pid = self._wm_pid(win)
             if pid is None or pid in self._dead:
