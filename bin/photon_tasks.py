@@ -28,7 +28,8 @@ Event-driven like the pager: `PropertyChangeMask` on the root for the client
 list and active window, plus `PropertyChangeMask | StructureNotifyMask` on
 every listed client so a title edit, a state change or a page move repaints
 without polling.  Drained off Xlib's own connection through a
-`QSocketNotifier` so it shares the Qt event loop.
+`QSocketNotifier` so it shares the Qt event loop. Saved thumbnail files are
+checked once a second only while minimized windows are present.
 """
 
 import os
@@ -40,9 +41,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import QRect, QSize, QSocketNotifier, Qt, pyqtSignal
+from PyQt6.QtCore import QRect, QSize, QSocketNotifier, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFontMetrics, QImage, QPainter, QPalette
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication, QMenu, QWidget
 
 from Xlib import X, display, protocol, error as xerror
 
@@ -56,16 +57,34 @@ ICONIC_STATE = 3
 _ROOT_ATOMS = ("_NET_CLIENT_LIST", "_NET_CLIENT_LIST_STACKING",
                "_NET_ACTIVE_WINDOW", "_NET_DESKTOP_VIEWPORT")
 _EXTRA_ATOMS = ("_NET_WM_STATE", "_NET_WM_STATE_SKIP_TASKBAR",
-                "_NET_WM_STATE_HIDDEN", "_NET_WM_NAME", "_NET_WM_ICON",
-                "UTF8_STRING", "WM_CHANGE_STATE")
+                "_NET_WM_STATE_HIDDEN", "_NET_WM_STATE_MAXIMIZED_VERT",
+                "_NET_WM_STATE_MAXIMIZED_HORZ", "_NET_WM_NAME",
+                "_NET_WM_ICON", "_NET_CLOSE_WINDOW", "UTF8_STRING",
+                "WM_CHANGE_STATE")
 
 WELL_PAD = 2      # what photon.sunken_interior eats off each edge
+MIN_THUMB_H = 64
+MAX_THUMB_H = 136
+THUMB_DIR = os.path.join(os.environ.get("FVWM_USERDIR", os.path.expanduser("~/.fvwm")),
+                         "images", "thumbs")
 
-_Task = namedtuple("_Task", "wid win title focused iconified icon cls")
+_Task = namedtuple("_Task", "wid win title focused iconified maximized icon cls")
+
+
+def thumbnail_heights(images, available):
+    """Equal-height frames; all collapse before their visible crop is a sliver."""
+    count = sum(img is not None and not img.isNull() for img in images)
+    if not count:
+        return [0] * len(images)
+    visible = min(MAX_THUMB_H, available // count - 18)
+    if visible < MIN_THUMB_H:
+        return [0] * len(images)
+    return [visible + 18 if img is not None and not img.isNull() else 0
+            for img in images]
 
 
 class TasksWidget(QWidget):
-    """One row per window on the current page, `photon.ROW_H` pitch."""
+    """Windows on the current page, with expandable minimized previews."""
 
     natural_height_changed = pyqtSignal()
 
@@ -85,6 +104,14 @@ class TasksWidget(QWidget):
         #  terminal rewriting its title is enough.  Measured at 10ms a refresh
         #  for five windows before this cache, 1ms after.
         self._icons = {}
+        self._thumbs = {}
+        self._thumb_timer = QTimer(self)
+        self._thumb_timer.setInterval(1000)
+        self._thumb_timer.timeout.connect(self._poll_thumbnails)
+        self._state_timer = QTimer(self)
+        self._state_timer.setSingleShot(True)
+        self._state_timer.setInterval(150)
+        self._state_timer.timeout.connect(self.refresh)
 
         self.dpy = display.Display()
         self.root = self.dpy.screen().root
@@ -112,6 +139,38 @@ class TasksWidget(QWidget):
     def _interior(self):
         return photon.sunken_interior(self.rect())
 
+    def _thumbnail(self, wid):
+        path = os.path.join(THUMB_DIR, f"0x{wid:x}.png")
+        try:
+            stat = os.stat(path)
+            stamp = (stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            stamp = None
+        if wid not in self._thumbs or self._thumbs[wid][0] != stamp:
+            self._thumbs[wid] = (stamp, QImage(path) if stamp else QImage())
+        return self._thumbs[wid][1]
+
+    def _poll_thumbnails(self):
+        old = {wid: stamp for wid, (stamp, _) in self._thumbs.items()}
+        for task in self.tasks:
+            if task.iconified:
+                self._thumbnail(task.wid)
+        if old != {wid: stamp for wid, (stamp, _) in self._thumbs.items()}:
+            self.update()
+
+    def _rows(self):
+        inner = self._interior()
+        images = [self._thumbnail(t.wid) if t.iconified else None
+                  for t in self.tasks]
+        heights = thumbnail_heights(images,
+                                    inner.height() - len(self.tasks) * photon.ROW_H)
+        y = inner.top()
+        rows = []
+        for extra in heights:
+            rows.append(QRect(inner.left(), y, inner.width(), photon.ROW_H + extra))
+            y += photon.ROW_H + extra
+        return rows, images
+
     #  -- X: reading --
 
     def _drain(self):
@@ -122,8 +181,12 @@ class TasksWidget(QWidget):
         try:
             for ev in photon.x_events(self.dpy):
                 if ev.type in (X.PropertyNotify, X.ConfigureNotify,
-                               X.DestroyNotify, X.UnmapNotify):
+                               X.DestroyNotify, X.UnmapNotify, X.MapNotify):
                     dirty = True
+                if ev.type in (X.UnmapNotify, X.MapNotify) or (
+                        ev.type == X.PropertyNotify
+                        and ev.atom == self.atoms["_NET_WM_STATE"]):
+                    self._state_timer.start()
                 if (ev.type == X.PropertyNotify
                         and ev.atom == self.atoms["_NET_WM_ICON"]):
                     self._icons.pop(getattr(ev.window, "id", None), None)
@@ -223,10 +286,14 @@ class TasksWidget(QWidget):
                 wid=wid, win=win, title=self._title(win),
                 focused=(wid == active),
                 iconified=self.atoms["_NET_WM_STATE_HIDDEN"] in state,
+                maximized=(self.atoms["_NET_WM_STATE_MAXIMIZED_VERT"] in state
+                           and self.atoms["_NET_WM_STATE_MAXIMIZED_HORZ"] in state),
                 icon=self._icons[wid], cls=cls))
 
+        found.sort(key=lambda task: task.iconified)
         live = {t.wid for t in found}
         self._icons = {w: i for w, i in self._icons.items() if w in live}
+        self._thumbs = {w: i for w, i in self._thumbs.items() if w in live}
 
         #  _NET_CLIENT_LIST_STACKING is bottom-to-top, so the last entry that
         #  we actually list is the window sitting on top of the others.
@@ -236,6 +303,12 @@ class TasksWidget(QWidget):
         self.dpy.flush()
         resized = len(found) != len(self.tasks)
         self.tasks = found
+        if any(t.iconified for t in found):
+            if not self._thumb_timer.isActive():
+                self._thumb_timer.start()
+            self._poll_thumbnails()
+        else:
+            self._thumb_timer.stop()
         self.update()
         if resized:
             self.natural_height_changed.emit()
@@ -261,19 +334,22 @@ class TasksWidget(QWidget):
         #  source_indication 2: a pager/taskbar-class requestor.
         self._send(win, "_NET_ACTIVE_WINDOW", [2, X.CurrentTime, 0, 0, 0])
 
-    #  -- painting --
+    def _close(self, win):
+        self._send(win, "_NET_CLOSE_WINDOW", [X.CurrentTime, 2, 0, 0, 0])
 
-    def _row_rect(self, i):
-        inner = self._interior()
-        return QRect(inner.left(), inner.top() + i * photon.ROW_H,
-                     inner.width(), photon.ROW_H)
+    def _maximize(self, task):
+        self._send(task.win, "_NET_WM_STATE",
+                   [0 if task.maximized else 1,
+                    self.atoms["_NET_WM_STATE_MAXIMIZED_VERT"],
+                    self.atoms["_NET_WM_STATE_MAXIMIZED_HORZ"], 2, 0])
+
+    #  -- painting --
 
     def _row_at(self, pos):
         inner = self._interior()
         if not inner.contains(pos):
             return -1
-        i = (pos.y() - inner.top()) // photon.ROW_H
-        return i if 0 <= i < len(self.tasks) else -1
+        return next((i for i, r in enumerate(self._rows()[0]) if r.contains(pos)), -1)
 
     def _draw_icon(self, p, task, box):
         if task.icon is not None:
@@ -303,29 +379,46 @@ class TasksWidget(QWidget):
         inner = self._interior()
         p.setClipRect(inner)
 
+        rows, images = self._rows()
         for i, t in enumerate(self.tasks):
-            r = self._row_rect(i)
+            r = rows[i]
             if r.top() > inner.bottom():
                 break
 
-            if t.iconified:
-                face = photon.WELL
-            elif i == self._hover:
+            if i == self._hover:
                 face = photon.FACE_HI
+            elif t.iconified:
+                face = photon.WELL
             else:
                 face = photon.FACE
             p.fillRect(r, face)
             photon.divider(p, r.bottom() - 1, r.left(), r.right())
 
-            box = QRect(r.left() + 6, r.top() + (r.height() - 16) // 2, 16, 16)
+            box = QRect(r.left() + 6, r.top() + (photon.ROW_H - 16) // 2, 16, 16)
             self._draw_icon(p, t, box)
 
             text_x = box.right() + 7
             p.setPen(photon.INK_OFF if t.iconified else photon.INK)
-            baseline = r.top() + (r.height() + fm.capHeight()) // 2
+            baseline = r.top() + (photon.ROW_H + fm.capHeight()) // 2
             p.drawText(text_x, baseline,
                        photon.elide(t.title or "(untitled)", self.font_row,
                                     r.right() - text_x - 4))
+
+            if r.height() > photon.ROW_H and images[i] is not None:
+                area = QRect(r.left() + 6, r.top() + photon.ROW_H + 4,
+                             r.width() - 12, r.height() - photon.ROW_H - 10)
+                photon.trough(p, area)
+                content = area.adjusted(4, 4, -4, -4)
+                img = images[i]
+                scale = max(content.width() / img.width(),
+                            MAX_THUMB_H / img.height())
+                w, h = round(img.width() * scale), round(img.height() * scale)
+                target = QRect(content.left() + (content.width() - w) // 2,
+                               content.top(), w, h)
+                p.save()
+                p.setClipRect(content)
+                p.drawImage(target, img)
+                p.restore()
 
             #  The focused window is outlined rather than re-surfaced, so the
             #  mark survives whatever face the row already has -- iconified
@@ -350,12 +443,15 @@ class TasksWidget(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() != Qt.MouseButton.LeftButton:
+        if event.button() not in (Qt.MouseButton.LeftButton, Qt.MouseButton.MiddleButton):
             return
         i = self._row_at(event.position().toPoint())
         if i < 0:
             return
         t = self.tasks[i]
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._close(t.win)
+            return
         #  Iconify only a window that is focused *and* already on top.  Focus
         #  and stacking come apart under this config's ClickToFocus -- a
         #  window can hold the focus while buried -- and keying the toggle on
@@ -366,6 +462,20 @@ class TasksWidget(QWidget):
             self._iconify(t.win)
         else:
             self._activate(t.win)
+
+    def contextMenuEvent(self, event):
+        i = self._row_at(event.pos())
+        if i < 0:
+            return
+        t = self.tasks[i]
+        menu = QMenu(self)
+        menu.addAction("Restore" if t.iconified else "Minimize",
+                       lambda: self._activate(t.win) if t.iconified else self._iconify(t.win))
+        menu.addAction("Unmaximize" if t.maximized else "Maximize",
+                       lambda: self._maximize(t))
+        menu.addSeparator()
+        menu.addAction("Close", lambda: self._close(t.win))
+        menu.exec(event.globalPos())
 
 
 def main():

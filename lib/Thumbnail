@@ -19,20 +19,15 @@ use File::stat ;
 use Try::Tiny ;
 use IPC::Run qw( run timeout ) ;
 
-##  Target geometry for thumbnail icons.
-my $width = 200 ;
-my $height = 180 ;
+##  Maximum thumbnail dimensions.
+my $width = 320 ;
+my $height = 240 ;
 ##  Number of times to attempt window capture
 my $tries = 3 ;
 ##  Expiration time in seconds for saved thumbnails.
 my $expires = 100 ;
-##  Destination folder for thumbnail icons.
+##  Destination folder for thumbnails.
 my $folder = "/home/deer/.fvwm/images/thumbs" ;
-##  Tracks windows we've already attached a WindowStyle Icon to this session,
-##  so a client that self-iconifies (e.g. Claude's own minimize button) still
-##  gets a thumbnail icon without the config-level EventIcon path having to
-##  re-set WindowStyle every focus change (which risked an event loop).
-my %icon_set ;
 
 ##  Enable/disable logging
 my $logfile = path("/tmp/Thumbnail.log") ;
@@ -98,7 +93,6 @@ sub process_cmd {
 
     my %cmd = (
         capture  => sub { thumbnail($arg) },
-        iconify  => sub { iconify($arg) if thumbnail($arg) },
     ) ;
 
     if (defined $cmd{$command}) {
@@ -114,28 +108,11 @@ sub process_cmd {
     }
 }
 
-##  To capture, thumbnail and iconify the current window.
-##
-sub iconify  {
-
-    ##  Window id of target window, converted to decimal.
-    my $widhex = shift ;
-    my $wid = hex($widhex) ; 
-    ##  Destination filename for the thumbnail. 
-    my $pngfile = "$folder/$widhex.png" ;
-
-    ##  Tell fvwm to iconify the window.
-    $module->send("WindowStyle Icon $pngfile", $wid) ;
-    $module->send("Iconify True", $wid) ;
-}
-
-##  To thumbnail the current window, if existing icon has not expired.
+##  To thumbnail the current window, if existing image has not expired.
 ##
 sub thumbnail  {
 
-    ##  Window id of target window, converted to decimal.
     my $widhex = shift ;
-    my $wid = hex($widhex) ; 
     ##  Destination filename for the thumbnail. 
     my $pngfile = "$folder/$widhex.png" ;
 
@@ -149,13 +126,9 @@ sub thumbnail  {
         return 0 if not $thumb ;
         logger("$modname: capture() succeeded ") ;
 
-        ##  Reduce to thumbnail size.
-        return 0 if $thumb->Thumbnail(geometry => "${width}x$height^") ;
+        ##  Fit the full frame within the bounds, without enlarging small windows.
+        return 0 if $thumb->Thumbnail(geometry => "${width}x$height>") ;
         logger("$modname: im->thumbnail() succeeded ") ;
-
-        ##  Crop to the correct size
-        return 0 if $thumb->Crop(geometry => "${width}x$height+0+0") ;
-        logger("$modname: im->crop() succeeded ") ;
 
         ##  Save the finished thumbnail.
         unless ($thumb && ref $thumb) {
@@ -173,16 +146,6 @@ sub thumbnail  {
         logger("$modname: current thumb valid") ;
     }
 
-    ##  Pre-attach the thumbnail as this window's icon. Once per wid per
-    ##  module lifetime is enough — FVWM re-reads the file at iconify time,
-    ##  so subsequent captures overwriting the same $pngfile stay effective
-    ##  without needing to re-send WindowStyle (which would risk triggering
-    ##  cascading iconify/property_change events on already-iconic windows).
-    unless ($icon_set{$widhex}) {
-        $module->send("WindowStyle IconOverride, Icon $pngfile", $wid) ;
-        $icon_set{$widhex} = 1 ;
-        logger("$modname: WindowStyle Icon attached for $widhex") ;
-    }
     return 1 ;
 }
 

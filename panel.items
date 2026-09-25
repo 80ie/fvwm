@@ -54,6 +54,8 @@ group World View
 widget worldview
 
 group Windows
+# Minimized windows stay last; show previews when they fit, else bars.
+# Task rows: left activate/minimize, middle close, right window actions.
 widget tasks
 flex
 
