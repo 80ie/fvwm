@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Render palette/ templates with wallust, then preview the diff or apply it.
+
+  palette preview photon            a scheme from palette/schemes/
+  palette preview ~/wall.png -- -p light16   an image; args after -- go to wallust
+  palette apply photon
+
+Both render into ~/.cache/palette/preview; wallust never writes a live file.
+`apply` backs up what it replaces in ~/.fvwm/palette/history beside a
+restore.sh and a pre-apply screen.png so you can tell backups apart.
+"""
+
+import argparse
+import datetime
+import difflib
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent / "palette"
+CACHE = Path.home() / ".cache" / "palette"
+PREVIEW = CACHE / "preview"
+HEX = re.compile(r"#[0-9A-Fa-f]{6,8}\b")
+
+
+def templates():
+    conf = tomllib.loads((ROOT / "wallust.toml").read_text())["templates"]
+    return {name: (t["template"], Path(os.path.expanduser(t["target"])))
+            for name, t in conf.items()}
+
+
+def source_cmd(source):
+    scheme = ROOT / "schemes" / f"{source}.json"
+    if scheme.is_file():
+        return ["wallust", "cs", "-f", "pywal", str(scheme)]
+    path = Path(source).expanduser().resolve()
+    if not path.is_file():
+        sys.exit(f"palette: no scheme or image named {source!r}")
+    if path.suffix == ".json":
+        return ["wallust", "cs", "-f", "pywal", str(path)]
+    return ["wallust", "run", str(path)]
+
+
+def render(source, extra):
+    shutil.rmtree(PREVIEW, ignore_errors=True)
+    PREVIEW.mkdir(parents=True)
+    with tempfile.TemporaryDirectory(prefix="palette-") as work:
+        work = Path(work)
+        (work / "templates").symlink_to(ROOT / "templates")
+        lines = ["[templates]"] + [
+            f'{name} = {{ template = "{tpl}", target = "{PREVIEW / name}" }}'
+            for name, (tpl, _) in templates().items()
+        ]
+        (work / "wallust.toml").write_text("\n".join(lines) + "\n")
+        cmd = source_cmd(source) + ["-s", "--no-hooks", "-q", "-d", str(work)]
+        subprocess.run(cmd + extra, check=True)
+    for path in PREVIEW.iterdir():
+        path.write_text(HEX.sub(lambda m: m[0].lower(), path.read_text()))
+
+
+def changes():
+    for name, (_, live) in templates().items():
+        new = (PREVIEW / name).read_text()
+        old = live.read_text() if live.exists() else None
+        if new != old:
+            yield name, live, old, new
+
+
+def preview(args):
+    render(args.source, args.wallust)
+    changed = list(changes())
+    for name, live, old, new in changed:
+        if old is None:
+            print(f"=== {name}: new file {live}")
+            continue
+        sys.stdout.writelines(difflib.unified_diff(
+            old.splitlines(True), new.splitlines(True),
+            f"{live}", f"{PREVIEW / name}"))
+    same = len(templates()) - len(changed)
+    print(f"\n{len(changed)} would change, {same} unchanged. "
+          f"Rendered files: {PREVIEW}")
+
+
+def set_ini_key(path, key, value):
+    text = path.read_text()
+    line = f"{key}={value}"
+    if re.search(rf"^{key}=", text, re.M):
+        text = re.sub(rf"^{key}=.*$", line, text, flags=re.M)
+    else:
+        text = text.replace("[Appearance]\n", f"[Appearance]\n{line}\n", 1)
+    path.write_text(text)
+
+
+def kde_merge(colors):
+    group = None
+    for line in colors.read_text().splitlines():
+        if line.startswith("[Colors:"):
+            group = line[1:-1]
+        elif line.startswith("["):
+            group = None
+        elif group and "=" in line:
+            key, value = line.split("=", 1)
+            subprocess.run(["kwriteconfig6", "--file", "kdeglobals",
+                            "--group", group, "--key", key, value], check=True)
+
+
+def apply(args):
+    render(args.source, args.wallust)
+    changed = {name: live for name, live, _, _ in changes()}
+    if not changed:
+        print("nothing to apply")
+        return
+
+    ct = {v: Path.home() / f".config/{v}/{v}.conf" for v in ("qt5ct", "qt6ct")}
+    extra = [ct[n] for n in ct if n in changed]
+    if "kde" in changed:
+        extra.append(Path.home() / ".config/kdeglobals")
+
+    backup = ROOT / "history" / datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup.mkdir(parents=True)
+    shot = backup / "screen.png"
+    if subprocess.run(["import", "-window", "root", str(shot)]).returncode:
+        print(f"palette: could not capture {shot}")
+    restore = ["#!/bin/sh", "set -e"]
+    for i, live in enumerate(list(changed.values()) + extra):
+        if live.exists():
+            saved = backup / f"{i}-{live.name}"
+            shutil.copyfile(live, saved)
+            restore.append(f"cp {shlex.quote(str(saved))} {shlex.quote(str(live))}")
+        else:
+            restore.append(f"rm -f {shlex.quote(str(live))}")
+    (backup / "restore.sh").write_text("\n".join(restore) + "\n")
+    (backup / "restore.sh").chmod(0o755)
+
+    for name, live in changed.items():
+        live.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(PREVIEW / name, live)
+        print(f"wrote {live}")
+
+    for name in ct:
+        if name in changed:
+            set_ini_key(ct[name], "color_scheme_path", changed[name])
+            set_ini_key(ct[name], "custom_palette", "true")
+    if "kde" in changed:
+        kde_merge(changed["kde"])
+    if "xresources" in changed:
+        subprocess.run(["xrdb", "-merge", str(changed["xresources"])])
+    if "kitty" in changed:
+        subprocess.run(["pkill", "-USR1", "-x", "kitty"])
+    if "fvwm" in changed:
+        subprocess.run(["FvwmCommand", "Restart"])
+
+    print(f"\nBackup and undo script: {backup}/restore.sh")
+    print("Qt and GTK apps pick the new colors up when they next start.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = parser.add_subparsers(required=True)
+    for name, fn in (("preview", preview), ("apply", apply)):
+        cmd = sub.add_parser(name)
+        cmd.add_argument("source", help="scheme name, scheme .json, or image")
+        cmd.add_argument("wallust", nargs="*", help="extra wallust args, after --")
+        cmd.set_defaults(fn=fn)
+    args = parser.parse_args()
+    args.fn(args)
+
+
+if __name__ == "__main__":
+    main()

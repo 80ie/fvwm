@@ -1,0 +1,47 @@
+{% include "roles.j2" %}
+{%- macro group(bg, alt, fg, inactive) -%}
+BackgroundNormal={{ bg | rgb }}
+BackgroundAlternate={{ alt | rgb }}
+ForegroundNormal={{ fg | rgb }}
+ForegroundInactive={{ inactive | rgb }}
+ForegroundActive={{ color9 | rgb }}
+ForegroundLink={{ color4 | rgb }}
+ForegroundVisited={{ color5 | rgb }}
+ForegroundNegative={{ color1 | rgb }}
+ForegroundNeutral={{ color3 | rgb }}
+ForegroundPositive={{ color2 | rgb }}
+DecorationFocus={{ select | rgb }}
+DecorationHover={{ color4 | rgb }}
+{%- endmacro -%}
+[General]
+ColorScheme=Wallust
+Name=Wallust
+
+[Colors:Button]
+{{ group(face, well_lip, ink, groove) }}
+
+[Colors:Complementary]
+{{ group(chrome_bg, chrome_bg_lift, chrome_fg, chrome_fg_dim) }}
+
+[Colors:Header]
+{{ group(face, well_lip, ink, groove) }}
+
+[Colors:Selection]
+{{ group(select, select | lighten(0.2), hi, well) }}
+
+[Colors:Tooltip]
+{{ group(tooltip, tooltip, ink, groove) }}
+
+[Colors:View]
+{{ group(field, well_lip, ink, groove) }}
+
+[Colors:Window]
+{{ group(face, well_lip, ink, groove) }}
+
+[WM]
+activeBackground={{ chrome_bg_lift | rgb }}
+activeBlend={{ chrome_bg_lift | rgb }}
+activeForeground={{ chrome_fg | rgb }}
+inactiveBackground={{ chrome_bg | rgb }}
+inactiveBlend={{ chrome_bg | rgb }}
+inactiveForeground={{ chrome_fg_dim | rgb }}

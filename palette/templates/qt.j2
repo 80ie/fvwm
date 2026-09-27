@@ -1,0 +1,7 @@
+{#- One QPalette row in qt5ct/qt6ct role order; `text` differs only when disabled. -#}
+{%- include "roles.j2" -%}
+{%- macro argb(c) %}#ff{{ c | strip }}{% endmacro -%}
+{%- macro row(text, accent) -%}
+{{ argb(text) }}, {{ argb(face) }}, {{ argb(hi) }}, {{ argb(well_lip) }}, {{ argb(frame_mid) }}, {{ argb(btn_lo) }}, {{ argb(text) }}, {{ argb(hi) }}, {{ argb(text) }}, {{ argb(field) }}, {{ argb(face) }}, {{ argb(dark) }}, {{ argb(select) }}, {{ argb(hi) }}, {{ argb(color4) }}, {{ argb(color5) }}, {{ argb(well_lip) }}, {{ argb(ink) }}, {{ argb(tooltip) }}, {{ argb(ink) }}, {{ argb(groove) }}
+{%- if accent %}, {{ argb(select) }}{% endif %}
+{%- endmacro -%}

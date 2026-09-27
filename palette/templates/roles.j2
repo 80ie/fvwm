@@ -1,0 +1,50 @@
+{#- Slot meanings: background/foreground/color0-15 are the terminal as-is.
+    Widgets (shelf, Qt, KDE) take their face from color7/15/8/0; chrome
+    (fvwm decor, menus, GTK) is tinted from color1 and color3. -#}
+{%- set face = color7 -%}
+{%- set hi = color15 -%}
+{%- set sh = color8 -%}
+{%- set ink = color0 | darken(0.9) -%}
+{%- set dark = color8 | darken(0.55) -%}
+{%- set face_hi = face | lighten(0.29) -%}
+{%- set header = face | lighten(0.05) -%}
+{%- set gutter = face | darken(0.06) -%}
+{%- set frame_mid = face | darken(0.235) -%}
+{%- set well = face | darken(0.05) -%}
+{%- set face_alt = face | darken(0.005) -%}
+{%- set btn_hi = face | lighten(0.47) -%}
+{%- set btn_lo = face | darken(0.19) -%}
+{%- set well_sh = face | darken(0.115) -%}
+{%- set well_lip = face | lighten(0.105) -%}
+{%- set header_cell = face | darken(0.083) -%}
+{%- set header_glyph = face | darken(0.558) -%}
+{%- set field = face | lighten(0.71) -%}
+{%- set trough = face | darken(0.134) -%}
+{%- set trough_sh = face | darken(0.35) -%}
+{%- set groove = face | darken(0.355) -%}
+{%- set groove_mid = face | darken(0.207) -%}
+{%- set thumb_hi = face | lighten(0.605) -%}
+{%- set tick_lo = face | darken(0.502) -%}
+{%- set fill_cpu = color11 -%}
+{%- set fill_mem = color10 -%}
+{%- set pager_desk = color14 -%}
+{%- set pager_desk_hi = color14 | lighten(0.5) -%}
+{%- set pager_win = face | darken(0.12) -%}
+{%- set pager_win_edge = face | darken(0.12) | darken(0.33) -%}
+{%- set pager_focus = color12 -%}
+{%- set pager_focus_edge = color12 | darken(0.33) -%}
+{%- set select = color4 | darken(0.35) -%}
+{%- set tooltip = color3 | lighten(0.85) -%}
+
+{%- set chrome_bg = color1 | darken(0.6) -%}
+{%- set chrome_bg_dark = color1 | darken(0.66) -%}
+{%- set chrome_bg_deep = chrome_bg | darken(0.35) -%}
+{%- set chrome_bg_mid = color1 | darken(0.5) -%}
+{%- set chrome_bg_lift = color1 | darken(0.4) -%}
+{%- set chrome_bg_grey = chrome_bg | lighten(0.5) -%}
+{%- set chrome_fg = color3 | lighten(0.4) -%}
+{%- set chrome_fg_dim = chrome_fg | darken(0.33) -%}
+{%- set chrome_accent = color3 -%}
+{%- set chrome_alert = color1 -%}
+{%- set chrome_hot = color9 -%}
+{%- set chrome_rust = color1 | blend(color3) | darken(0.13) -%}

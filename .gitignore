@@ -16,6 +16,9 @@ doc
 # Interactive FvwmConsole command history
 .FvwmConsole-History
 
+# Palette run backups (full copies of config files) written by bin/palette
+palette/history/
+
 # Pre-save backup written by bin/fvwm-keys
 bindings.bak
 
