@@ -48,7 +48,8 @@ SetEnv FVWM_PHOTON_PAGER_GRID       "$[FVWM_PHOTON_HI]"
 SetEnv FVWM_PHOTON_FILL_DISK        "$[FVWM_PHOTON_PAGER_DESK]"
 
 # Window frame and title colors are pinned in `config`; their former
-# colorsets (0 - 4: window/border decor) are no longer rendered here.
+# colorsets (0 - 4: window/border decor, 15: close button face) are no
+# longer rendered here.
 #~~~~~~~ 5 - Menu - Inactive Item
 Colorset 5 fg {{ chrome_alert }}, bg {{ chrome_bg }}, hi, sh, Plain, NoShape
 #~~~~~~~ 6 - Menu - Active Item
@@ -69,8 +70,6 @@ Colorset 13 fg {{ chrome_alert }}, bg {{ chrome_bg }}, hi, sh, Plain, NoShape
 #~~~~~~~ 14 - FvwmIconMan Iconified Button
 Colorset 14 fg {{ chrome_alert }}, bg {{ chrome_bg_dark }}, hi, sh, Plain, NoShape
 
-#~~~~~~~ 15 - Window Close Button
-Colorset 15 fg {{ hi }}, bg {{ chrome_hot }}, hi, sh, Plain, NoShape
 #~~~~~~~ 16 - FvwmPager Default
 Colorset 16 fg {{ chrome_fg_dim }}, bg {{ chrome_bg_lift }}, hi, sh, Plain, NoShape
 #~~~~~~~ 17 - FvwmPager Page Highlight
@@ -80,8 +79,8 @@ Colorset 18 fg {{ chrome_rust }}, bg {{ chrome_accent | darken(0.64) }}, hi, sh,
 #~~~~~~~ 19 - FvwmPager Window Default
 Colorset 19 fg {{ chrome_accent | darken(0.72) }}, bg {{ chrome_fg | darken(0.4) }}, hi, sh, Plain, NoShape
 
-PipeRead "$[FVWM_USERDIR]/bin/mk-pager-bg.sh $[infostore.bg] $[infostore.pager_bg] $[desk.pagesx] $[desk.pagesy] $[infostore.pager_width] $[infostore.pager_height] >/dev/null 2>&1; echo Nop"
-
+# 20 - FvwmPager Active Page, 21 - Default: wallpaper tiled once per
+# page; re-cut to one page cell by bin/photon_pager.py on every launch.
 Colorset 20 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint {{ chrome_rust }} 35, Dither
 Colorset 21 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint {{ chrome_bg }} 10, Dither
 

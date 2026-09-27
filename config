@@ -23,6 +23,7 @@ InfoStoreAdd bg $[FVWM_USERDIR]/images/bg/bg.png
 InfoStoreAdd pager_bg $[FVWM_USERDIR]/images/bg/bg_pager.png
 InfoStoreAdd pager_scale 18
 
+
 InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
 SetEnv TILE_MASTER_PERCENT 55
@@ -52,10 +53,10 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec snixembed --fork
 + I Test (Init) Exec exec gnome-keyring-daemon --start --components=secrets
 + I Test (Init, EnvMatch DISPLAY :0) Exec exec xcompmgr -o  -Cc
+#+ I Test (Init) Exec exec magick $[infostore.bg] -resize
 + I TestRc (NoMatch) Exec exec hsetroot -center $[infostore.bg]
 + I Test (Init, EnvMatch DISPLAY :0) Exec exec devilspie
 + I Schedule 150 Exec exec hsetroot -center $[infostore.bg]
-#+ I Test (Init) Exec exec magick $[infostore.bg] -resize
 + I Module FvwmEvent EventSounds
 + I Module FvwmEvent EventDeIcon
 + I Module FvwmEvent EventChangeFocus
@@ -83,7 +84,7 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec solaar -w hide 
 + I Test (Init) Exec exec sxhkd
 + I Test (Init) Schedule 1000 Exec exec qlipper
-+ I BugOpts QtDragnDropWorkaround True
+#+ I BugOpts QtDragnDropWorkaround True
 + I Exec exec find $[FVWM_USERDIR]/images/thumbs -maxdepth 1 -type f -mtime +7 -delete
 + I Schedule 100 Module Thumbnail
 + I Schedule Periodic 300000 1222 5minutes
@@ -717,6 +718,9 @@ Read $[FVWM_USERDIR]/colorsets
 
 Colorset 40 fg #aa8664, bg #2c2a21, hi, sh, Plain, NoShape
 Colorset 41 fg #ffa733, bg #532a24, hi, sh, Plain, NoShape
+# 15: active window close button (ButtonStyle 2 Active Colorset 15),
+# matched to the active titlebar above.
+Colorset 15 fg #ffa733, bg #532a24, hi, sh, Plain, NoShape
 Style * Colorset 40, HilightColorset 41, \
         BorderColorset 40, HilightBorderColorset 41
 ##                                                           }}}1
@@ -893,8 +897,8 @@ DestroyModuleConfig FvwmScript:*
 ##                                                           }}}2
 ##   ├ ShelfPager                                            {{{2
 DestroyModuleConfig ShelfPager:*
-*ShelfPager: Colorset 34
-*ShelfPager: HilightColorset 35
+*ShelfPager: Colorset 21
+*ShelfPager: HilightColorset 20
 *ShelfPager: WindowColorset 36
 *ShelfPager: FocusColorset 37
 *ShelfPager: Font None

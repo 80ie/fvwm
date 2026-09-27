@@ -168,7 +168,7 @@ class LauncherBody(QWidget):
     def __init__(self, items, parent=None):
         super().__init__(parent)
         self.items = items
-        self.font_row = photon.font(8)
+        self.font_row = photon.font()
         self._hover = -1
         self.setMouseTracking(True)
 

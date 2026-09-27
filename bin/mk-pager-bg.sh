@@ -2,8 +2,9 @@
 # Rebuild the FvwmPager background tile from the wallpaper.
 #
 # Colorsets 20/21 use TiledPixmap, so a tile cut to exactly one page cell
-# repeats once per page. Called from config via PipeRead before the Colorset
-# block, so a Restart picks up a new wallpaper or DesktopSize automatically.
+# repeats once per page. Called by bin/photon_pager.py before each pager
+# launch, so shelf resizes, wallpaper changes and fvwm restarts all pick up
+# a fresh tile; a no-op when the tile is already the right size.
 #
 # usage: mk-pager-bg.sh <wallpaper> <tile> <pages_x> <pages_y> <pager_w> <pager_h>
 set -eu

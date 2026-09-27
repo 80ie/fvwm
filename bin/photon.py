@@ -22,8 +22,7 @@ Two things are deliberate:
 import os
 
 from PyQt6.QtCore import QRect, Qt
-from PyQt6.QtGui import (QColor, QFont, QFontMetrics, QLinearGradient,
-                         QPainter, QPixmap)
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPixmap
 
 from photon_palette import load_palette
 
@@ -34,64 +33,64 @@ def colour(name):
     return QColor(_PALETTE[name])
 
 
-FACE         = colour("FACE")
-FACE_HI      = colour("FACE_HI")
-HEADER       = colour("HEADER")
-GUTTER       = colour("GUTTER")
-FRAME_MID    = colour("FRAME_MID")
-WELL         = colour("WELL")
-FACE_ALT     = colour("FACE_ALT")
-BTN_HI       = colour("BTN_HI")
-BTN_LO       = colour("BTN_LO")
-WELL_SH      = colour("WELL_SH")
-WELL_LIP     = colour("WELL_LIP")
-HI           = colour("HI")
-SH           = colour("SH")
-DARK         = colour("DARK")
-HEADER_CELL  = colour("HEADER_CELL")
+FACE = colour("FACE")
+FACE_HI = colour("FACE_HI")
+HEADER = colour("HEADER")
+GUTTER = colour("GUTTER")
+FRAME_MID = colour("FRAME_MID")
+WELL = colour("WELL")
+FACE_ALT = colour("FACE_ALT")
+BTN_HI = colour("BTN_HI")
+BTN_LO = colour("BTN_LO")
+WELL_SH = colour("WELL_SH")
+WELL_LIP = colour("WELL_LIP")
+HI = colour("HI")
+SH = colour("SH")
+DARK = colour("DARK")
+HEADER_CELL = colour("HEADER_CELL")
 HEADER_GLYPH = colour("HEADER_GLYPH")
-FIELD        = colour("FIELD")
-TROUGH       = colour("TROUGH")
-TROUGH_SH    = colour("TROUGH_SH")
-GROOVE       = colour("GROOVE")
-GROOVE_MID   = colour("GROOVE_MID")
-GROOVE_HI    = colour("GROOVE_HI")
-GROOVE_LIP   = colour("GROOVE_LIP")
-THUMB_HI     = colour("THUMB_HI")
-THUMB_LO     = colour("THUMB_LO")
-TICK_HI      = colour("TICK_HI")
-TICK_LO      = colour("TICK_LO")
-FILL_CPU     = colour("FILL_CPU")
-FILL_MEM     = colour("FILL_MEM")
-FILL_DISK    = colour("FILL_DISK")
-INK          = colour("INK")
-INK_OFF      = colour("INK_OFF")
+FIELD = colour("FIELD")
+TROUGH = colour("TROUGH")
+TROUGH_SH = colour("TROUGH_SH")
+GROOVE = colour("GROOVE")
+GROOVE_MID = colour("GROOVE_MID")
+GROOVE_HI = colour("GROOVE_HI")
+GROOVE_LIP = colour("GROOVE_LIP")
+THUMB_HI = colour("THUMB_HI")
+THUMB_LO = colour("THUMB_LO")
+TICK_HI = colour("TICK_HI")
+TICK_LO = colour("TICK_LO")
+FILL_CPU = colour("FILL_CPU")
+FILL_MEM = colour("FILL_MEM")
+FILL_DISK = colour("FILL_DISK")
+INK = colour("INK")
+INK_OFF = colour("INK_OFF")
 PAGER_SECTION = colour("PAGER_SECTION")
-PAGER_DESK    = colour("PAGER_DESK")
+PAGER_DESK = colour("PAGER_DESK")
 PAGER_DESK_HI = colour("PAGER_DESK_HI")
-PAGER_WIN     = colour("PAGER_WIN")
+PAGER_WIN = colour("PAGER_WIN")
 PAGER_WIN_EDGE = colour("PAGER_WIN_EDGE")
-PAGER_FOCUS    = colour("PAGER_FOCUS")
+PAGER_FOCUS = colour("PAGER_FOCUS")
 PAGER_FOCUS_EDGE = colour("PAGER_FOCUS_EDGE")
-PAGER_GRID       = colour("PAGER_GRID")
+PAGER_GRID = colour("PAGER_GRID")
 
 #  The shelf's usable width inside its own frame.  A starting value only: the
 #  panel is resizable now, so nothing should assume it.
 SHELF_INNER = 152
 
 #  Geometry the reference fixes, and the panel reads rather than invents.
-FRAME_W = 7           # the shelf's left edge, the double bevel below
-HEADER_H = 20         # a group header, its divider included
-TOGGLE_W = 15         # the -/+ cell at the head of a group header
-ROW_H = 25            # a launcher row, its divider included
-GUTTER_W = 28         # the icon column of a launcher row
+FRAME_W = 7  # the shelf's left edge, the double bevel below
+HEADER_H = 20  # a group header, its divider included
+TOGGLE_W = 15  # the -/+ cell at the head of a group header
+ROW_H = 25  # a launcher row, its divider included
+GUTTER_W = 28  # the icon column of a launcher row
 
 
-def font(size=8, bold=False):
+def font(size=10, bold=False, fnt="Iosevka Curly"):
     """A shelf-sized font.  Point sizes, because the display is 96dpi and
     Photon's labels are small enough that hinting at fixed pixel sizes costs
     more than it buys."""
-    f = QFont("Sans", size)
+    f = QFont(fnt, size)
     f.setBold(bold)
     return f
 
@@ -105,6 +104,7 @@ def elide(text, fnt, width):
 #
 #  Every one of these takes the rect it should *occupy*, inclusive of its own
 #  bevel, so callers can lay out in whole rectangles without bookkeeping.
+
 
 def raised(p: QPainter, r: QRect, face=None):
     """Raised chrome: a button, a thumb, a section face.  Soft shadow."""
@@ -138,10 +138,12 @@ def sunken(p: QPainter, r: QRect, fill=None):
     p.setPen(DARK)
     p.drawRect(outline)
     p.setPen(WELL_SH)
-    p.drawLine(outline.left() + 1, outline.top() + 1,
-               outline.right() - 1, outline.top() + 1)
-    p.drawLine(outline.left() + 1, outline.top() + 1,
-               outline.left() + 1, outline.bottom() - 1)
+    p.drawLine(
+        outline.left() + 1, outline.top() + 1, outline.right() - 1, outline.top() + 1
+    )
+    p.drawLine(
+        outline.left() + 1, outline.top() + 1, outline.left() + 1, outline.bottom() - 1
+    )
     p.setPen(WELL_LIP)
     p.drawLine(r.left() + 1, r.bottom(), r.right(), r.bottom())
     p.drawLine(r.right(), r.top() + 1, r.right(), r.bottom())
@@ -182,9 +184,11 @@ def shade(colour: QColor, delta: int) -> QColor:
     and its MEM fill #b5c4b0 carries #ddecd8 and #8d9c88.  Same rule, two
     hues, so it is the rule and not a pair of measurements.
     """
-    return QColor(max(0, min(255, colour.red() + delta)),
-                  max(0, min(255, colour.green() + delta)),
-                  max(0, min(255, colour.blue() + delta)))
+    return QColor(
+        max(0, min(255, colour.red() + delta)),
+        max(0, min(255, colour.green() + delta)),
+        max(0, min(255, colour.blue() + delta)),
+    )
 
 
 def trough(p: QPainter, r: QRect):
@@ -195,10 +199,12 @@ def trough(p: QPainter, r: QRect):
     p.setPen(DARK)
     p.drawRect(outline)
     p.setPen(TROUGH_SH)
-    p.drawLine(outline.left() + 1, outline.top() + 1,
-               outline.right() - 1, outline.top() + 1)
-    p.drawLine(outline.left() + 1, outline.top() + 1,
-               outline.left() + 1, outline.bottom() - 1)
+    p.drawLine(
+        outline.left() + 1, outline.top() + 1, outline.right() - 1, outline.top() + 1
+    )
+    p.drawLine(
+        outline.left() + 1, outline.top() + 1, outline.left() + 1, outline.bottom() - 1
+    )
 
 
 def bar_fill(p: QPainter, r: QRect, colour: QColor):
@@ -259,14 +265,9 @@ def toggle_glyph(p: QPainter, r: QRect, collapsed):
 def group_header(p: QPainter, r: QRect, label, collapsed, fnt):
     """A collapsible group's header: its own `#c7c7c7` toggle cell, the label
     on a `#dbdbdb` face, and an etched divider along the bottom.
-
-    The toggle living in a *separate cell* rather than as a hyphen inline is
-    the visible difference the FvwmButtons version could not express -- a
-    Title cell is one colorset all the way across.
     """
     cell = QRect(r.left(), r.top(), TOGGLE_W, r.height() - 2)
-    face = QRect(r.left() + TOGGLE_W, r.top(),
-                 r.width() - TOGGLE_W, r.height() - 2)
+    face = QRect(r.left() + TOGGLE_W, r.top(), r.width() - TOGGLE_W, r.height() - 2)
     p.fillRect(cell, HEADER_CELL)
     p.fillRect(face, HEADER)
     toggle_glyph(p, cell, collapsed)
@@ -275,8 +276,7 @@ def group_header(p: QPainter, r: QRect, label, collapsed, fnt):
     p.setPen(INK)
     fm = QFontMetrics(fnt)
     baseline = face.top() + (face.height() + fm.capHeight()) // 2
-    p.drawText(face.left() + 5, baseline,
-               elide(label, fnt, face.width() - 8))
+    p.drawText(face.left() + 5, baseline, elide(label, fnt, face.width() - 8))
 
     divider(p, r.bottom() - 1, r.left(), r.right())
 
@@ -404,9 +404,12 @@ def icon(name, size):
         if pm.isNull():
             pm = None
         elif pm.width() != size or pm.height() != size:
-            pm = pm.scaled(size, size,
-                           Qt.AspectRatioMode.KeepAspectRatio,
-                           Qt.TransformationMode.SmoothTransformation)
+            pm = pm.scaled(
+                size,
+                size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
     _cache[key] = pm
     return pm
 

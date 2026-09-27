@@ -38,10 +38,10 @@ from PyQt6.QtWidgets import QApplication, QWidget
 
 import photon
 
-DATE_FORMAT = "%a-%d"
+DATE_FORMAT = "%a %d-%m-%y"
 TIME_FORMAT = "%I:%M%p"
 
-CLOCK_PT = 12
+CLOCK_PT = 11
 STRIP_H = 30
 
 
@@ -54,7 +54,7 @@ class ClockWidget(QWidget):
         self.setPalette(pal)
         self.setAutoFillBackground(True)
 
-        self.font_clock = photon.font(CLOCK_PT)
+        self.font_clock = photon.font(CLOCK_PT, fnt="Linux Libertine Mono")
         self._text = self._now_text()
 
         self.resize(photon.SHELF_INNER, self.natural_height())

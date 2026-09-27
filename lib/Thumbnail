@@ -25,7 +25,7 @@ my $height = 240 ;
 ##  Number of times to attempt window capture
 my $tries = 3 ;
 ##  Expiration time in seconds for saved thumbnails.
-my $expires = 100 ;
+my $expires = 15 ;
 ##  Destination folder for thumbnails.
 my $folder = "/home/deer/.fvwm/images/thumbs" ;
 

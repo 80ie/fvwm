@@ -38,10 +38,26 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import (QObject, QProcess, QRect, QSignalBlocker, QSize, Qt,
-                          QTimer, QUrl, pyqtSignal, pyqtSlot)
-from PyQt6.QtGui import (QFontMetrics, QImageReader, QPainter, QPalette,
-                         QPolygon, QPixmap)
+from PyQt6.QtCore import (
+    QObject,
+    QProcess,
+    QRect,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    QTimer,
+    QUrl,
+    pyqtSignal,
+    pyqtSlot,
+)
+from PyQt6.QtGui import (
+    QFontMetrics,
+    QImageReader,
+    QPainter,
+    QPalette,
+    QPolygon,
+    QPixmap,
+)
 from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PyQt6.QtCore import QBuffer, QIODevice, QPoint
 from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage
@@ -63,6 +79,7 @@ MARQUEE_MS = 60
 
 
 #  ---- MPRIS ----------------------------------------------------------------
+
 
 class Mpris(QObject):
     """One player's worth of state, kept current by signals.
@@ -97,18 +114,27 @@ class Mpris(QObject):
         self.bus = QDBusConnection.sessionBus()
         #  An empty sender matches any, which is what we want: one match rule
         #  covers every player on the bus, present and future.
-        self.bus.connect("", MPRIS_PATH, PROPS_IFACE, "PropertiesChanged",
-                         self._on_props)
-        self.bus.connect("org.freedesktop.DBus", "/org/freedesktop/DBus",
-                         "org.freedesktop.DBus", "NameOwnerChanged",
-                         self._on_name_owner)
+        self.bus.connect(
+            "", MPRIS_PATH, PROPS_IFACE, "PropertiesChanged", self._on_props
+        )
+        self.bus.connect(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "NameOwnerChanged",
+            self._on_name_owner,
+        )
         self.rescan()
 
     #  -- discovery --
 
     def _names(self):
-        dbus = QDBusInterface("org.freedesktop.DBus", "/org/freedesktop/DBus",
-                              "org.freedesktop.DBus", self.bus)
+        dbus = QDBusInterface(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            self.bus,
+        )
         reply = dbus.call("ListNames")
         if reply.type() != QDBusMessage.MessageType.ReplyMessage:
             return []
@@ -131,8 +157,12 @@ class Mpris(QObject):
         self.refresh()
 
     def _owner_of(self, service):
-        dbus = QDBusInterface("org.freedesktop.DBus", "/org/freedesktop/DBus",
-                              "org.freedesktop.DBus", self.bus)
+        dbus = QDBusInterface(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            self.bus,
+        )
         reply = dbus.call("GetNameOwner", service)
         if reply.type() != QDBusMessage.MessageType.ReplyMessage:
             return None
@@ -182,16 +212,18 @@ class Mpris(QObject):
                 self.trackid = str(meta.get("mpris:trackid") or "")
         if "PlaybackStatus" in props:
             self.status = props["PlaybackStatus"] or "Stopped"
-        for key, attr in (("CanGoNext", "can_next"),
-                          ("CanGoPrevious", "can_prev"),
-                          ("CanControl", "can_control")):
+        for key, attr in (
+            ("CanGoNext", "can_next"),
+            ("CanGoPrevious", "can_prev"),
+            ("CanControl", "can_control"),
+        ):
             if key in props:
                 setattr(self, attr, bool(props[key]))
         self.changed.emit()
 
     @staticmethod
     def _format(meta):
-        """"Artist - Title", or whatever subset of it exists.  Not truncated:
+        """ "Artist - Title", or whatever subset of it exists.  Not truncated:
         the widget scrolls what does not fit rather than cutting it, which is
         the whole reason the old shell backend's `printf '%.24s'` is gone."""
         if not isinstance(meta, dict):
@@ -224,8 +256,9 @@ class Mpris(QObject):
         #  Somebody else on the bus.  Hand over only if they have started
         #  playing while ours is idle, or if we had nobody at all -- rescan
         #  rather than trusting the sender, because it decides by status.
-        if self.service is None or (changed.get("PlaybackStatus") == "Playing"
-                                    and self.status != "Playing"):
+        if self.service is None or (
+            changed.get("PlaybackStatus") == "Playing" and self.status != "Playing"
+        ):
             self.rescan()
 
     @pyqtSlot(QDBusMessage)
@@ -240,8 +273,9 @@ class Mpris(QObject):
     def _call(self, method):
         if not self.service:
             return
-        QDBusInterface(self.service, MPRIS_PATH, PLAYER_IFACE,
-                       self.bus).asyncCall(method)
+        QDBusInterface(self.service, MPRIS_PATH, PLAYER_IFACE, self.bus).asyncCall(
+            method
+        )
 
     def play_pause(self):
         self._call("PlayPause")
@@ -257,6 +291,7 @@ class Mpris(QObject):
 
 
 #  ---- Sink volume ----------------------------------------------------------
+
 
 class Sink(QObject):
     """Default sink volume, event-driven.
@@ -344,8 +379,7 @@ class Sink(QObject):
             #  A read is already in flight; its result will be current enough,
             #  and another event will re-arm us if it is not.
             return
-        self._reader.start(
-            "wpctl", ["get-volume", self.target])
+        self._reader.start("wpctl", ["get-volume", self.target])
 
     def _read_outputs(self):
         if self._outputs_reader.state() != QProcess.ProcessState.NotRunning:
@@ -380,21 +414,21 @@ class Sink(QObject):
                 in_sinks = False
             if not in_sinks:
                 continue
-            match = re.match(r"^\s*(?:[│├└─]\s*)*(\*)?\s*(\d+)\.\s+(.+?)\s*$",
-                             line)
+            match = re.match(r"^\s*(?:[│├└─]\s*)*(\*)?\s*(\d+)\.\s+(.+?)\s*$", line)
             if not match:
                 continue
             label = re.sub(r"(?:\s+\[[^]]+\])+$", "", match.group(3))
-            outputs.append((int(match.group(2)), label,
-                            bool(match.group(1))))
+            outputs.append((int(match.group(2)), label, bool(match.group(1))))
         return outputs
 
     def _outputs_done(self):
         out = bytes(self._outputs_reader.readAllStandardOutput()).decode(
-            "utf-8", "replace")
+            "utf-8", "replace"
+        )
         outputs = self._parse_outputs(out)
-        default = next((node_id for node_id, _label, is_default in outputs
-                        if is_default), None)
+        default = next(
+            (node_id for node_id, _label, is_default in outputs if is_default), None
+        )
         self.target = str(default) if default is not None else "@DEFAULT_SINK@"
         if outputs != self.outputs:
             self.outputs = outputs
@@ -405,9 +439,16 @@ class Sink(QObject):
     def set_volume(self, fraction):
         #  -l 1.0 caps it: pipewire will happily amplify past 100% and it
         #  sounds terrible.
-        QProcess.startDetached("wpctl", ["set-volume", "-l", "1.0",
-                                         self.target,
-                                         "%.2f" % max(0.0, min(1.0, fraction))])
+        QProcess.startDetached(
+            "wpctl",
+            [
+                "set-volume",
+                "-l",
+                "1.0",
+                self.target,
+                "%.2f" % max(0.0, min(1.0, fraction)),
+            ],
+        )
 
     def toggle_mute(self):
         QProcess.startDetached("wpctl", ["set-mute", self.target, "toggle"])
@@ -419,6 +460,7 @@ class Sink(QObject):
 
 
 #  ---- Cover art ----------------------------------------------------------
+
 
 class CoverArt(QObject):
     """The current track's artwork, fetched on demand and held briefly.
@@ -435,19 +477,19 @@ class CoverArt(QObject):
 
     changed = pyqtSignal()
 
-    MAX_PIXELS = 1024    # decode cap: a 4000px cover must not balloon the panel
-    CACHE = 8            # LRU entries, url -> pixmap
-    TIMEOUT_MS = 8000    # per-request abort guard
+    MAX_PIXELS = 1024  # decode cap: a 4000px cover must not balloon the panel
+    CACHE = 8  # LRU entries, url -> pixmap
+    TIMEOUT_MS = 8000  # per-request abort guard
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._nav = QNetworkAccessManager(self)
         self._nav.finished.connect(self._on_reply)
-        self._state = None     # the (service, trackid, url) currently served
-        self._pixmap = None    # what the well currently shows
-        self._cache = {}       # url -> QPixmap, oldest first
-        self._timers = {}      # reply -> abort guard
-        self._tags = {}        # reply -> the state it was made under
+        self._state = None  # the (service, trackid, url) currently served
+        self._pixmap = None  # what the well currently shows
+        self._cache = {}  # url -> QPixmap, oldest first
+        self._timers = {}  # reply -> abort guard
+        self._tags = {}  # reply -> the state it was made under
 
     @property
     def pixmap(self):
@@ -469,7 +511,7 @@ class CoverArt(QObject):
             self._show(None)
             return
         if url in self._cache:
-            self._cache[url] = self._cache.pop(url)   # most-recent last
+            self._cache[url] = self._cache.pop(url)  # most-recent last
             self._show(self._cache[url])
             return
         if QUrl(url).scheme() not in ("file", "http", "https"):
@@ -508,8 +550,9 @@ class CoverArt(QObject):
         image = reader.read()
         buf.close()
         if not image.isNull() and max(image.width(), image.height()) > self.MAX_PIXELS:
-            image = image.scaled(self.MAX_PIXELS, self.MAX_PIXELS,
-                                 Qt.AspectRatioMode.KeepAspectRatio)
+            image = image.scaled(
+                self.MAX_PIXELS, self.MAX_PIXELS, Qt.AspectRatioMode.KeepAspectRatio
+            )
         if image.isNull():
             #  Decoding failed the same way: keep what is up.
             return
@@ -526,6 +569,7 @@ class CoverArt(QObject):
 
 
 #  ---- PiP monitor ----------------------------------------------------------
+
 
 class PipMonitor(QObject):
     """A browser's PiP window, found by geometry and owner.
@@ -548,9 +592,9 @@ class PipMonitor(QObject):
 
     INTERVAL_MS = 1500
 
-    W_MIN, W_MAX = 160, 1000       # plausible PiP widths
+    W_MIN, W_MAX = 160, 1000  # plausible PiP widths
     H_MIN, H_MAX = 90, 700
-    R_MIN, R_MAX = 1.2, 2.6        # video-ish aspect only
+    R_MIN, R_MAX = 1.2, 2.6  # video-ish aspect only
     BROWSERS = ("firefox", "chromium", "chrome")
 
     changed = pyqtSignal()
@@ -564,8 +608,8 @@ class PipMonitor(QObject):
         self.window_id = None
         self.width = 0
         self.height = 0
-        self._win = None           # the Xlib window of the current PiP
-        self._dead = set()         # ids whose embed kept failing
+        self._win = None  # the Xlib window of the current PiP
+        self._dead = set()  # ids whose embed kept failing
         self._timer = QTimer(self)
         self._timer.setInterval(self.INTERVAL_MS)
         self._timer.timeout.connect(self._poll)
@@ -616,8 +660,7 @@ class PipMonitor(QObject):
 
     def _tracked(self):
         """The already-admitted window, or None if it is gone or refused."""
-        if (self.window_id is None or self.window_id in self._dead
-                or self._win is None):
+        if self.window_id is None or self.window_id in self._dead or self._win is None:
             return None
         try:
             g = self._win.get_geometry()
@@ -640,8 +683,10 @@ class PipMonitor(QObject):
                 g = win.get_geometry()
             except xerror.XError:
                 continue
-            if not (self.W_MIN <= g.width <= self.W_MAX
-                    and self.H_MIN <= g.height <= self.H_MAX):
+            if not (
+                self.W_MIN <= g.width <= self.W_MAX
+                and self.H_MIN <= g.height <= self.H_MAX
+            ):
                 continue
             if not (self.R_MIN <= g.width / g.height <= self.R_MAX):
                 continue
@@ -679,11 +724,11 @@ NATURAL_H = 100
 #  guessed, columns at x=900/920 and rows at y=589.  The reference shelf is
 #  134px inner against our 152, so heights transfer 1:1 and only the widths
 #  that span the shelf grow.
-FIELD_H = 19          # title field, 16px interior inside its bevel
+FIELD_H = 19  # title field, 16px interior inside its bevel
 BTN_H, BTN_GAP = 22, 2
-GAP = 3               # field to buttons, buttons to divider, divider to volume
+GAP = 3  # field to buttons, buttons to divider, divider to volume
 THUMB_W, THUMB_H = 10, 17
-GROOVE_DROP = 6       # groove top below thumb top
+GROOVE_DROP = 6  # groove top below thumb top
 
 
 class _OutputBox(QComboBox):
@@ -695,12 +740,14 @@ class _OutputBox(QComboBox):
         cx, cy = self.width() - 8, self.height() // 2
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(photon.INK)
-        p.drawPolygon(QPolygon([QPoint(cx - 4, cy - 2), QPoint(cx + 4, cy - 2),
-                                QPoint(cx, cy + 3)]))
+        p.drawPolygon(
+            QPolygon(
+                [QPoint(cx - 4, cy - 2), QPoint(cx + 4, cy - 2), QPoint(cx, cy + 3)]
+            )
+        )
 
 
 class MediaWidget(QWidget):
-
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -709,8 +756,8 @@ class MediaWidget(QWidget):
         self.setPalette(pal)
         self.setAutoFillBackground(True)
 
-        self.font_title = photon.font(8)
-        self.font_glyph = photon.font(8)
+        self.font_title = photon.font()
+        self.font_glyph = photon.font()
 
         self.mpris = Mpris(self)
         self.mpris.changed.connect(self._on_mpris)
@@ -721,22 +768,22 @@ class MediaWidget(QWidget):
         self.cover.changed.connect(self._on_cover)
         self.pip = PipMonitor(self)
         self.pip.changed.connect(self._on_pip)
-        self._pip_xid = None      # the PiP window reparented into this one
-        self._pip_geom = None     # last geometry sent, so embed + the
-                                  # standalone resize it triggers cannot
-                                  # issue it twice
-        self._has_art = False    # the well is up; a flip or a side change relays
-        self._side = None        # the side the last natural_height_changed was for
+        self._pip_xid = None  # the PiP window reparented into this one
+        self._pip_geom = None  # last geometry sent, so embed + the
+        # standalone resize it triggers cannot
+        # issue it twice
+        self._has_art = False  # the well is up; a flip or a side change relays
+        self._side = None  # the side the last natural_height_changed was for
         #  Mpris already rescan'd during its own __init__ -- before this
         #  connect existed -- so a track that loaded while the player was
         #  paused (or the panel restarted mid-play) would never emit.
-        self.cover.set_track(self.mpris.service, self.mpris.trackid,
-                             self.mpris.art_url)
+        self.cover.set_track(self.mpris.service, self.mpris.trackid, self.mpris.art_url)
 
         self.output = _OutputBox(self)
-        self.output.setFont(photon.font(8))
+        self.output.setFont(photon.font())
         self.output.setMaxVisibleItems(8)
-        self.output.setStyleSheet("""
+        self.output.setStyleSheet(
+            """
             QComboBox {
                 background: %s; color: %s; border: 1px solid %s;
                 padding: 0 16px 0 3px;
@@ -746,17 +793,26 @@ class MediaWidget(QWidget):
                 background: %s; color: %s; border: 1px solid %s;
                 selection-background-color: %s; selection-color: %s;
             }
-        """ % (photon.FIELD.name(), photon.INK.name(), photon.DARK.name(),
-               photon.DARK.name(), photon.FIELD.name(),
-               photon.INK.name(), photon.DARK.name(), photon.HEADER.name(),
-               photon.INK.name()))
+        """
+            % (
+                photon.FIELD.name(),
+                photon.INK.name(),
+                photon.DARK.name(),
+                photon.DARK.name(),
+                photon.FIELD.name(),
+                photon.INK.name(),
+                photon.DARK.name(),
+                photon.HEADER.name(),
+                photon.INK.name(),
+            )
+        )
         self.output.currentIndexChanged.connect(self._choose_output)
 
-        self._pressed = None          # transport button held down
-        self._dragging = False        # slider thumb held
+        self._pressed = None  # transport button held down
+        self._dragging = False  # slider thumb held
         self._drag_value = 0.0
-        self._scroll = 0              # marquee offset, pixels
-        self._scroll_span = 0         # width of one title+separator cycle
+        self._scroll = 0  # marquee offset, pixels
+        self._scroll_span = 0  # width of one title+separator cycle
 
         self._marquee = QTimer(self)
         self._marquee.setInterval(MARQUEE_MS)
@@ -806,14 +862,20 @@ class MediaWidget(QWidget):
             bx += bw + BTN_GAP
         div_y = by + BTN_H + GAP
         thumb_top = div_y + 2 + GAP
-        return {"pad": pad, "r_art": r_art, "art_div_y": art_div_y,
-                "r_title": r_title, "r_buttons": r_buttons, "div_y": div_y,
-                "r_speaker": QRect(6, thumb_top + 1, 16, 16),
-                "r_groove": QRect(32, thumb_top + GROOVE_DROP,
-                                  max(20, w - 28 - 32), 5),
-                "thumb_top": thumb_top, "r_ticks_y": thumb_top + THUMB_H - 1,
-                "r_output": r_output,
-                "content_bottom": thumb_top + THUMB_H}
+        return {
+            "pad": pad,
+            "r_art": r_art,
+            "art_div_y": art_div_y,
+            "r_title": r_title,
+            "r_buttons": r_buttons,
+            "div_y": div_y,
+            "r_speaker": QRect(6, thumb_top + 1, 16, 16),
+            "r_groove": QRect(32, thumb_top + GROOVE_DROP, max(20, w - 28 - 32), 5),
+            "thumb_top": thumb_top,
+            "r_ticks_y": thumb_top + THUMB_H - 1,
+            "r_output": r_output,
+            "content_bottom": thumb_top + THUMB_H,
+        }
 
     def _well_side(self, w):
         """The well's side for the current source, or None: full width,
@@ -822,8 +884,7 @@ class MediaWidget(QWidget):
         if self._pip_xid is not None:
             #  The monitor only reports a PiP that passed its geometry
             #  gate, so both dimensions are > 0 here.
-            return min(well_w, round(well_w * self.pip.height /
-                                     self.pip.width))
+            return min(well_w, round(well_w * self.pip.height / self.pip.width))
         pm = self.cover.pixmap
         if pm is None or pm.isNull():
             return None
@@ -852,7 +913,7 @@ class MediaWidget(QWidget):
     def _refresh_well(self):
         side = self._well_side(self.width())
         if side == self._side:
-            self.update()      # track-to-track swap: repaint the same rect
+            self.update()  # track-to-track swap: repaint the same rect
             return
         self._side = side
         self._has_art = side is not None
@@ -888,8 +949,7 @@ class MediaWidget(QWidget):
     #  -- state in --
 
     def _on_mpris(self):
-        self.cover.set_track(self.mpris.service, self.mpris.trackid,
-                             self.mpris.art_url)
+        self.cover.set_track(self.mpris.service, self.mpris.trackid, self.mpris.art_url)
         self._measure_title()
         self.update()
 
@@ -936,8 +996,9 @@ class MediaWidget(QWidget):
             return
         self._pip_geom = (r.x(), r.y(), r.width(), r.height())
         try:
-            self.pip._win.configure(x=r.x(), y=r.y(),
-                                    width=r.width(), height=r.height())
+            self.pip._win.configure(
+                x=r.x(), y=r.y(), width=r.width(), height=r.height()
+            )
         except xerror.XError:
             pass
 
@@ -973,7 +1034,8 @@ class MediaWidget(QWidget):
     @staticmethod
     def _publish_output(node_id):
         QProcess.startDetached(
-            "FvwmCommand", ["InfoStoreAdd media_output %s" % node_id])
+            "FvwmCommand", ["InfoStoreAdd media_output %s" % node_id]
+        )
 
     def _vol_band(self):
         top = self.r_thumb_top - 1
@@ -982,8 +1044,7 @@ class MediaWidget(QWidget):
     #  -- marquee --
 
     def _title_text(self):
-        return self.mpris.title or ("No player" if not self.mpris.service
-                                    else "—")
+        return self.mpris.title or ("No player" if not self.mpris.service else "—")
 
     def _measure_title(self):
         fm = QFontMetrics(self.font_title)
@@ -1043,16 +1104,22 @@ class MediaWidget(QWidget):
         if self._pip_xid is None:
             r = self.r_art.adjusted(4, 4, -4, -4)
             art = self.cover.pixmap.scaled(
-                r.size(), Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation)
+                r.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
             x = r.left() + (r.width() - art.width()) // 2
             y = r.top() + (r.height() - art.height()) // 2
             p.drawPixmap(x, y, art)
 
     def _paint_transport(self, p):
         live = self.mpris.service is not None
-        enabled = (live and self.mpris.can_prev, live, live,
-                   live and self.mpris.can_next)
+        enabled = (
+            live and self.mpris.can_prev,
+            live,
+            live,
+            live and self.mpris.can_next,
+        )
         playing = self.mpris.status == "Playing"
         for i, r in enumerate(self.r_buttons):
             down = self._pressed == i
@@ -1093,9 +1160,15 @@ class MediaWidget(QWidget):
                 p.drawRect(QRect(cx - 3, cy - 3, 2, 7))
                 p.drawRect(QRect(cx + 1, cy - 3, 2, 7))
             else:
-                p.drawPolygon(QPolygon([QPoint(cx - 2, cy - 3),
-                                        QPoint(cx - 2, cy + 4),
-                                        QPoint(cx + 3, cy)]))
+                p.drawPolygon(
+                    QPolygon(
+                        [
+                            QPoint(cx - 2, cy - 3),
+                            QPoint(cx - 2, cy + 4),
+                            QPoint(cx + 3, cy),
+                        ]
+                    )
+                )
         elif which == NEXT:
             tri(cx - 4, False)
             tri(cx + 1, False)
@@ -1104,23 +1177,33 @@ class MediaWidget(QWidget):
     def _paint_volume(self, p):
         value = self._value()
         muted = self.sink.muted
-        name = ("audio-volume-muted" if muted or value <= 0.001 else
-                "audio-volume-low" if value < 0.34 else
-                "audio-volume-medium" if value < 0.67 else
-                "audio-volume-high")
+        name = (
+            "audio-volume-muted"
+            if muted or value <= 0.001
+            else "audio-volume-low"
+            if value < 0.34
+            else "audio-volume-medium"
+            if value < 0.67
+            else "audio-volume-high"
+        )
         if not photon.draw_icon(p, name, self.r_speaker, not muted):
             #  No icon theme: a filled wedge is better than an empty hole.
             p.save()
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(photon.INK if not muted else photon.INK_OFF)
             r = self.r_speaker
-            p.drawPolygon(QPolygon([
-                QPoint(r.left() + 2, r.center().y() - 3),
-                QPoint(r.left() + 6, r.center().y() - 3),
-                QPoint(r.left() + 11, r.top() + 2),
-                QPoint(r.left() + 11, r.bottom() - 2),
-                QPoint(r.left() + 6, r.center().y() + 3),
-                QPoint(r.left() + 2, r.center().y() + 3)]))
+            p.drawPolygon(
+                QPolygon(
+                    [
+                        QPoint(r.left() + 2, r.center().y() - 3),
+                        QPoint(r.left() + 6, r.center().y() - 3),
+                        QPoint(r.left() + 11, r.top() + 2),
+                        QPoint(r.left() + 11, r.bottom() - 2),
+                        QPoint(r.left() + 6, r.center().y() + 3),
+                        QPoint(r.left() + 2, r.center().y() + 3),
+                    ]
+                )
+            )
             p.restore()
 
         photon.groove(p, self.r_groove)
@@ -1156,8 +1239,12 @@ class MediaWidget(QWidget):
             self.sink.toggle_mute()
             return
 
-        band = QRect(self.r_groove.left() - 6, self.r_thumb_top - 2,
-                     self.r_groove.width() + 12, THUMB_H + 4)
+        band = QRect(
+            self.r_groove.left() - 6,
+            self.r_thumb_top - 2,
+            self.r_groove.width() + 12,
+            THUMB_H + 4,
+        )
         if band.contains(pos):
             self._dragging = True
             self._drag_value = self.sink.volume
@@ -1167,8 +1254,7 @@ class MediaWidget(QWidget):
         if self._dragging:
             self._set_from_x(event.position().toPoint().x())
         elif self._pressed is not None:
-            inside = self.r_buttons[self._pressed].contains(
-                event.position().toPoint())
+            inside = self.r_buttons[self._pressed].contains(event.position().toPoint())
             if not inside:
                 r = self.r_buttons[self._pressed]
                 self._pressed = None

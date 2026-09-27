@@ -7,7 +7,9 @@ the shelf changes width in discrete steps and starts a fresh pager each time.
 """
 
 import os
+import subprocess
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -22,6 +24,23 @@ from Xlib import X, display, error as xerror
 
 import photon
 
+# One page per axis in the shelf pager; keep in sync with DesktopSize in
+# config.  Colorsets 20/21 tile the wallpaper, so the tile must be cut to
+# exactly one page cell before FvwmPager loads it.
+PAGES = 3
+
+
+def cut_tile(width, height):
+    userdir = Path(os.environ.get("FVWM_USERDIR")
+                   or Path(__file__).resolve().parent.parent)
+    bg = userdir / "images" / "bg" / "bg.png"
+    subprocess.run(
+        ["sh", str(userdir / "bin" / "mk-pager-bg.sh"), str(bg),
+         str(bg.with_name("bg_pager.png")), str(PAGES), str(PAGES),
+         str(width), str(height)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 class WorldView(QWidget):
     """Find and reparent the shelf-specific FvwmPager instance."""
@@ -79,6 +98,7 @@ class WorldView(QWidget):
         self._size = size
         self._find_timer.stop()
         self._drop_container()
+        cut_tile(*size)
         QProcess.startDetached("FvwmCommand", [
             "ShelfPagerLaunch %d %d" % size,
         ])
