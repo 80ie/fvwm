@@ -20,6 +20,7 @@ Two things are deliberate:
 """
 
 import os
+import configparser
 
 from PyQt6.QtCore import QRect, Qt
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPixmap
@@ -86,12 +87,53 @@ ROW_H = 25  # a launcher row, its divider included
 GUTTER_W = 28  # the icon column of a launcher row
 
 
-def font(size=10, bold=False, fnt="Iosevka Curly"):
+
+
+QT6CT_CONF = os.path.expanduser("~/.config/qt6ct/qt6ct.conf")
+QT_WEIGHTS = {400: QFont.Weight.Normal, 500: QFont.Weight.Medium,
+              600: QFont.Weight.DemiBold, 700: QFont.Weight.Bold,
+              800: QFont.Weight.ExtraBold, 900: QFont.Weight.Black}
+_QT6CT_FONTS = None
+
+
+def qt6ct_fonts():
+    """(family, weight) pairs for qt6ct's "general" (interface) and
+    "fixed" fonts, read once per process; falls back to the shelf
+    defaults below when the entry or file is absent, because this app
+    disables the platform theme it would otherwise come from."""
+    global _QT6CT_FONTS
+    if _QT6CT_FONTS is not None:
+        return _QT6CT_FONTS
+    got = {"general": ("Iosevka Curly", QFont.Weight.Normal),
+           "fixed": ("Linux Libertine Mono", QFont.Weight.Normal)}
+    try:
+        cp = configparser.ConfigParser()
+        cp.read(QT6CT_CONF)
+        for role in got:
+            line = cp.get("Fonts", role, fallback=None)
+            if not line:
+                continue
+            parts = line.split(",")
+            got[role] = (parts[0],
+                         QT_WEIGHTS.get(int(parts[4]), QFont.Weight.Normal))
+    except Exception:
+        pass
+    _QT6CT_FONTS = got
+    return got
+
+
+def font(size=10, bold=False, fnt=None):
     """A shelf-sized font.  Point sizes, because the display is 96dpi and
     Photon's labels are small enough that hinting at fixed pixel sizes costs
     more than it buys."""
-    f = QFont(fnt, size)
-    f.setBold(bold)
+    if fnt == "fixed":
+        family, weight = qt6ct_fonts()["fixed"]
+    elif fnt is None:
+        family, weight = qt6ct_fonts()["general"]
+    else:
+        family, weight = fnt, QFont.Weight.Normal
+    f = QFont(family, size)
+    f.setWeight(QFont.Weight.Bold if bold else weight)
     return f
 
 

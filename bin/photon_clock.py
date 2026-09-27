@@ -54,7 +54,7 @@ class ClockWidget(QWidget):
         self.setPalette(pal)
         self.setAutoFillBackground(True)
 
-        self.font_clock = photon.font(CLOCK_PT, fnt="Linux Libertine Mono")
+        self.font_clock = photon.font(CLOCK_PT, fnt="fixed")
         self._text = self._now_text()
 
         self.resize(photon.SHELF_INNER, self.natural_height())
