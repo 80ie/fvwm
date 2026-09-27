@@ -126,6 +126,10 @@ to a comment that used to live in `FvwmScript-ShelfMedia`.)
 - `InfoStoreAdd` on an existing key replaces it, so re-reads recompute cleanly
 - Colorsets 0-21 are the warm brown/rust set; 30-37 are the Photon greys
 - Photon colors are defined only in `colorsets`, never as literal `QColor` values
+- Colors for every platform come from `palette/`: a wallust scheme in
+  `palette/schemes/` rendered through `palette/templates/` (`roles.j2` derives
+  every role). `bin/palette preview <scheme|image>` diffs; `apply` writes, backs up
+  and reloads. `colorsets` is one of its outputs, so edit the template, not it
 - Icons are 16x16 PNGs in `icons/`; backgrounds in `images/background/`
 - Sounds (MP3) in `sounds/` triggered by FvwmEvent modules
 

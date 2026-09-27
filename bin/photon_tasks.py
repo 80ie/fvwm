@@ -28,8 +28,17 @@ Event-driven like the pager: `PropertyChangeMask` on the root for the client
 list and active window, plus `PropertyChangeMask | StructureNotifyMask` on
 every listed client so a title edit, a state change or a page move repaints
 without polling.  Drained off Xlib's own connection through a
-`QSocketNotifier` so it shares the Qt event loop. Saved thumbnail files are
-checked once a second only while minimized windows are present.
+`QSocketNotifier` so it shares the Qt event loop. The root also selects
+`SubstructureNotify`: fvwm writes the client-list properties in the same X
+batch as its frame moves, so the refresh those properties trigger can read
+pre-move positions, and on a switch where focus does not move (sticky or
+empty target page) nothing else repaints until some coincidental later
+event.  Frame Configures re-test each tracked client against the view and
+coalesce the burst into one extra refresh.
+
+Saved thumbnail files are watched (the directory, plus each per-window PNG)
+with `QFileSystemWatcher`, so a freshly captured preview repaints as soon as
+the file lands, and only while minimized windows are present.
 """
 
 import os
@@ -41,7 +50,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import QRect, QSize, QSocketNotifier, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import (QFileSystemWatcher, QRect, QSize, QSocketNotifier,
+                          Qt, QTimer, pyqtSignal)
 from PyQt6.QtGui import QFontMetrics, QImage, QPainter, QPalette
 from PyQt6.QtWidgets import QApplication, QMenu, QWidget
 
@@ -105,9 +115,12 @@ class TasksWidget(QWidget):
         #  for five windows before this cache, 1ms after.
         self._icons = {}
         self._thumbs = {}
-        self._thumb_timer = QTimer(self)
-        self._thumb_timer.setInterval(1000)
-        self._thumb_timer.timeout.connect(self._poll_thumbnails)
+        #  QFileSystemWatcher drops a path the moment it fires, so
+        #  _assert_thumb_watches re-adds the directory and the per-window
+        #  PNGs on every refresh.
+        self._thumb_watcher = QFileSystemWatcher(self)
+        self._thumb_watcher.directoryChanged.connect(self._thumb_fs)
+        self._thumb_watcher.fileChanged.connect(self._thumb_fs)
         self._state_timer = QTimer(self)
         self._state_timer.setSingleShot(True)
         self._state_timer.setInterval(150)
@@ -119,8 +132,22 @@ class TasksWidget(QWidget):
         self.screen_h = self.dpy.screen().height_in_pixels
         self.atoms = {n: self.dpy.intern_atom(n)
                       for n in _ROOT_ATOMS + _EXTRA_ATOMS}
+        self._screen = QRect(0, 0, self.screen_w, self.screen_h)
+        #  Lazy frame tracking for the root's Configure events; see
+        #  _on_configure.  A window parked on another page is only ever
+        #  learned when it moves, which is exactly when we need it.
+        self._frame_wid = {}     # frame id -> client wid
+        self._frames = {}        # client wid -> frame id
+        self._off = {}           # client wid -> (dx, dy) within its frame
+        self._size = {}          # client wid -> (w, h)
+        self._vis = {}           # client wid -> in view at last sighting
+        self._move_timer = QTimer(self)
+        self._move_timer.setSingleShot(True)
+        self._move_timer.setInterval(10)
+        self._move_timer.timeout.connect(self.refresh)
 
-        self.root.change_attributes(event_mask=X.PropertyChangeMask)
+        self.root.change_attributes(
+            event_mask=X.PropertyChangeMask | X.SubstructureNotifyMask)
         self.dpy.flush()
         self._notifier = QSocketNotifier(
             self.dpy.fileno(), QSocketNotifier.Type.Read, self)
@@ -146,8 +173,16 @@ class TasksWidget(QWidget):
             stamp = (stat.st_mtime_ns, stat.st_size)
         except OSError:
             stamp = None
-        if wid not in self._thumbs or self._thumbs[wid][0] != stamp:
-            self._thumbs[wid] = (stamp, QImage(path) if stamp else QImage())
+        prev = self._thumbs.get(wid)
+        if prev is None or prev[0] != stamp:
+            image = QImage(path) if stamp else QImage()
+            #  The capture writes the PNG in place, so a watcher event can
+            #  arrive mid-write: a failed decode must hold the last good
+            #  image instead of blanking the preview.
+            if image.isNull() and stamp and prev is not None \
+                    and not prev[1].isNull():
+                image = prev[1]
+            self._thumbs[wid] = (stamp, image)
         return self._thumbs[wid][1]
 
     def _poll_thumbnails(self):
@@ -157,6 +192,21 @@ class TasksWidget(QWidget):
                 self._thumbnail(task.wid)
         if old != {wid: stamp for wid, (stamp, _) in self._thumbs.items()}:
             self.update()
+
+    def _thumb_fs(self, _path):
+        self._assert_thumb_watches()
+        self._poll_thumbnails()
+
+    def _assert_thumb_watches(self):
+        want = {THUMB_DIR} | {os.path.join(THUMB_DIR, f"0x{t.wid:x}.png")
+                             for t in self.tasks if t.iconified}
+        have = set(self._thumb_watcher.files()) | set(
+            self._thumb_watcher.directories())
+        for p in have - want:
+            self._thumb_watcher.removePath(p)
+        for p in want:
+            if os.path.exists(p) and p not in have:
+                self._thumb_watcher.addPath(p)
 
     def _rows(self):
         inner = self._interior()
@@ -180,9 +230,18 @@ class TasksWidget(QWidget):
         dirty = False
         try:
             for ev in photon.x_events(self.dpy):
+                if ev.type == X.ConfigureNotify:
+                    self._on_configure(ev)
+                if ev.type == X.DestroyNotify:
+                    self._drop_frame(getattr(ev.window, "id", None))
                 if ev.type in (X.PropertyNotify, X.ConfigureNotify,
                                X.DestroyNotify, X.UnmapNotify, X.MapNotify):
-                    dirty = True
+                    #  A tracked frame's Configure is already coalesced
+                    #  onto _move_timer by _on_configure; repainting it
+                    #  immediately too would storm on a page switch.
+                    dirty = dirty or not (
+                        ev.type == X.ConfigureNotify
+                        and ev.window.id in self._frame_wid)
                 if ev.type in (X.UnmapNotify, X.MapNotify) or (
                         ev.type == X.PropertyNotify
                         and ev.atom == self.atoms["_NET_WM_STATE"]):
@@ -198,6 +257,52 @@ class TasksWidget(QWidget):
             return
         if dirty:
             self.refresh()
+
+    def _in_view(self, x, y, w, h):
+        #  refresh()'s predicate, shared so the two paths cannot drift.
+        return QRect(-x, -y, w, h).intersects(self._screen)
+
+    def _on_configure(self, ev):
+        #  fvwm moves frames, not clients.  This is the signal that a
+        #  page's windows have actually landed; refresh again only when
+        #  the in-view set changed, coalesced onto one repaint.
+        fid = ev.window.id
+        wid = self._frame_wid.get(fid)
+        if wid is None:
+            try:
+                frame = self.dpy.create_resource_object("window", fid)
+                kids = frame.query_tree().children
+                if not kids:
+                    return
+                kid = getattr(kids[0], "id", kids[0])
+                client = self.dpy.create_resource_object("window", kid)
+                off = client.translate_coords(frame, 0, 0)
+                g = client.get_geometry()
+            except (xerror.XError, OSError):
+                return
+            self._frame_wid[fid] = kid
+            self._frames[kid] = fid
+            self._off[kid] = (off.x, off.y)
+            self._size[kid] = (g.width, g.height)
+            self._vis[kid] = self._in_view(ev.x + off.x, ev.y + off.y,
+                                           g.width, g.height)
+            return
+        off = self._off[wid]
+        size = self._size.get(wid)
+        if size is None:
+            return
+        now = self._in_view(ev.x + off[0], ev.y + off[1], size[0], size[1])
+        if self._vis.get(wid) is None:
+            self._vis[wid] = now
+        elif now != self._vis[wid]:
+            self._vis[wid] = now
+            self._move_timer.start()
+
+    def _drop_frame(self, fid):
+        wid = self._frame_wid.pop(fid, None)
+        if wid is not None:
+            for d in (self._frames, self._off, self._size, self._vis):
+                d.pop(wid, None)
 
     def _prop(self, window, name, type=X.AnyPropertyType):
         try:
@@ -256,7 +361,6 @@ class TasksWidget(QWidget):
     def refresh(self):
         active = self._prop(self.root, "_NET_ACTIVE_WINDOW")
         active = active[0] if active else 0
-        screen = QRect(0, 0, self.screen_w, self.screen_h)
 
         found = []
         for wid in self._prop(self.root, "_NET_CLIENT_LIST") or []:
@@ -270,9 +374,10 @@ class TasksWidget(QWidget):
                 #  window into; translate_coords gives the true root origin,
                 #  same trick as photon_pager.py.
                 t = win.translate_coords(self.root, 0, 0)
-                rect = QRect(-t.x, -t.y, g.width, g.height)
-                if not rect.intersects(screen):
+                if not self._in_view(t.x, t.y, g.width, g.height):
                     continue
+                self._size[wid] = (g.width, g.height)
+                self._vis[wid] = True
                 win.change_attributes(
                     event_mask=X.PropertyChangeMask | X.StructureNotifyMask)
                 cls = win.get_wm_class()
@@ -303,12 +408,9 @@ class TasksWidget(QWidget):
         self.dpy.flush()
         resized = len(found) != len(self.tasks)
         self.tasks = found
+        self._assert_thumb_watches()
         if any(t.iconified for t in found):
-            if not self._thumb_timer.isActive():
-                self._thumb_timer.start()
             self._poll_thumbnails()
-        else:
-            self._thumb_timer.stop()
         self.update()
         if resized:
             self.natural_height_changed.emit()

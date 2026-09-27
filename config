@@ -15,11 +15,12 @@ InfoStoreAdd filemanager /usr/bin/dolphin
 InfoStoreAdd calculator /usr/bin/speedcrunch
 InfoStoreAdd media_output @DEFAULT_SINK@
 
-InfoStoreAdd bg $[FVWM_USERDIR]/images/background/bg.png
+InfoStoreAdd bg $[FVWM_USERDIR]/images/bg/bg.png
+
 #InfoStoreAdd bg $[FVWM_USERDIR]/images/background/ussr2.png
 
 
-InfoStoreAdd pager_bg $[FVWM_USERDIR]/images/background/bg_pager.png
+InfoStoreAdd pager_bg $[FVWM_USERDIR]/images/bg/bg_pager.png
 InfoStoreAdd pager_scale 18
 
 InfoStoreAdd title_height 22
@@ -638,7 +639,13 @@ Style * StackTransientParent, NoDecorHint #NoFuncHint
 Style * !FPGrabFocusTransient, FPReleaseFocusTransient
 Style * FPSortWindowlistByFocus
 #                                                            }}}3
-##   │ ├ WindowShade                                         {{{3
+##   │ ├ EWMH                                               {{{3
+# App EWMH fullscreen promotes the window to the top layer (over the
+# panel, layer 5) and restores its layer on exit; also honors
+# _NET_WM_RESTACK_WINDOW requests.
+Style * EWMHUseStackingOrderHints
+##                                                           }}}3
+##   │ ├ WindowShade                                       {{{3
 Style * WindowShadeScrolls, WindowShadeSteps 10
 ##                                                           }}}3
 ##   │ ├ Borders                                             {{{3
@@ -707,6 +714,11 @@ Style audacious !Title, !Borders
 ##                                                           }}}1
 ##  Colorsets                                                {{{1
 Read $[FVWM_USERDIR]/colorsets
+
+Colorset 40 fg #aa8664, bg #2c2a21, hi, sh, Plain, NoShape
+Colorset 41 fg #ffa733, bg #532a24, hi, sh, Plain, NoShape
+Style * Colorset 40, HilightColorset 41, \
+        BorderColorset 40, HilightBorderColorset 41
 ##                                                           }}}1
 ##  Menus                                                    {{{1
 ##   ├ Root Menu                                             {{{2
@@ -900,6 +912,6 @@ DestroyModuleConfig ShelfPager:*
 ##   ├ Shelf                                                 {{{2
 Style "ShelfPanel" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
     Sticky, WindowListSkip, CirculateSkip, NeverFocus, \
-    FixedPosition, FixedSize, Layer $[infostore.toplayer] 
+    FixedPosition, FixedSize, Layer 5
 ##                                                           }}}2
 ##                                                           }}}1
