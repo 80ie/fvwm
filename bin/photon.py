@@ -113,6 +113,7 @@ def qt6ct_fonts():
             line = cp.get("Fonts", role, fallback=None)
             if not line:
                 continue
+            line = line.strip().strip('"')
             parts = line.split(",")
             got[role] = (parts[0],
                          QT_WEIGHTS.get(int(parts[4]), QFont.Weight.Normal))
