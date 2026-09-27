@@ -224,7 +224,7 @@ AddToFunc PagerNavigate
 # Step $0 pages in x only; wrapx wraps within the row, row itself never changes.
 DestroyFunc PagerNavigateSeq
 AddToFunc PagerNavigateSeq
-+ I GotoPage wrapx $0p 0p
++ I GotoPage $0 0
 
 ##                                                           }}}3
 ##   │ ├ Edge                                                {{{3

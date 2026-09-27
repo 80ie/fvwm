@@ -133,8 +133,8 @@ Silent Key Up    WTSF S4 MoveToPage wrapx wrapy 0p -1p
 Silent Key Down  WTSF S4 MoveToPage wrapx wrapy 0p +1p
 
 # Tab walks all 9 pages in reading order; arrows move on the grid
-Silent Key Tab A S4 PagerNavigateSeq -1
-Silent Key Tab A 4  PagerNavigateSeq +1
+Silent Key Tab A S4 PagerNavigateSeq -1p
+Silent Key Tab A 4  PagerNavigateSeq +1p
 Silent Key Tab A C4  PagerNavigate 0p +1p
 Silent Key Tab A SC4 PagerNavigate 0p -1p
 Silent Key Right A 4 PagerNavigate +1p 0p
