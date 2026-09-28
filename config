@@ -20,10 +20,6 @@ InfoStoreAdd bg $[FVWM_USERDIR]/images/bg/bg.png
 #InfoStoreAdd bg $[FVWM_USERDIR]/images/background/ussr2.png
 
 
-InfoStoreAdd pager_bg $[FVWM_USERDIR]/images/bg/bg_pager.png
-InfoStoreAdd pager_scale 18
-
-
 InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
 SetEnv TILE_MASTER_PERCENT 55

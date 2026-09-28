@@ -33,63 +33,63 @@ SetEnv FVWM_PHOTON_THUMB_HI     "#e5e1dd"
 SetEnv FVWM_PHOTON_THUMB_LO     "$[FVWM_PHOTON_HEADER_CELL]"
 SetEnv FVWM_PHOTON_TICK_HI      "$[FVWM_PHOTON_BTN_LO]"
 SetEnv FVWM_PHOTON_TICK_LO      "#5f5a55"
-SetEnv FVWM_PHOTON_FILL_CPU     "#735c40"
-SetEnv FVWM_PHOTON_FILL_MEM     "#7c4330"
+SetEnv FVWM_PHOTON_FILL_CPU     "#864437"
+SetEnv FVWM_PHOTON_FILL_MEM     "#787131"
 SetEnv FVWM_PHOTON_INK          "#080807"
 SetEnv FVWM_PHOTON_INK_OFF      "$[FVWM_PHOTON_GROOVE]"
 SetEnv FVWM_PHOTON_PAGER_SECTION "$[FVWM_PHOTON_WELL_SH]"
-SetEnv FVWM_PHOTON_PAGER_DESK    "#8f7965"
-SetEnv FVWM_PHOTON_PAGER_DESK_HI "#c7bcb2"
+SetEnv FVWM_PHOTON_PAGER_DESK    "#573227"
+SetEnv FVWM_PHOTON_PAGER_DESK_HI "#ab9993"
 SetEnv FVWM_PHOTON_PAGER_WIN     "#a79e96"
 SetEnv FVWM_PHOTON_PAGER_WIN_EDGE "#706a64"
-SetEnv FVWM_PHOTON_PAGER_FOCUS    "#86625b"
-SetEnv FVWM_PHOTON_PAGER_FOCUS_EDGE "#5a423d"
+SetEnv FVWM_PHOTON_PAGER_FOCUS    "#735026"
+SetEnv FVWM_PHOTON_PAGER_FOCUS_EDGE "#4d3619"
 SetEnv FVWM_PHOTON_PAGER_GRID       "$[FVWM_PHOTON_HI]"
 SetEnv FVWM_PHOTON_FILL_DISK        "$[FVWM_PHOTON_PAGER_DESK]"
+SetEnv FVWM_PHOTON_PAGER_PAGE       "#aba299"
+SetEnv FVWM_PHOTON_PAGER_PAGE_HI    "#d1cac3"
 
 # Window frame and title colors are pinned in `config`; their former
 # colorsets (0 - 4: window/border decor, 15: close button face) are no
 # longer rendered here.
 #~~~~~~~ 5 - Menu - Inactive Item
-Colorset 5 fg #574641, bg #231c1a, hi, sh, Plain, NoShape
+Colorset 5 fg #8f643d, bg #392818, hi, sh, Plain, NoShape
 #~~~~~~~ 6 - Menu - Active Item
-Colorset 6 fg #beb4aa, bg #73695e, hi, sh, Plain, NoShape
+Colorset 6 fg #beb4aa, bg #7a605a, hi, sh, Plain, NoShape
 #~~~~~~~ 7 - Menu - Grayed Item
-Colorset 7 fg #beb4aa, bg #918e8c, hi, sh, Plain, NoShape
+Colorset 7 fg #beb4aa, bg #9c948c, hi, sh, Plain, NoShape
 #~~~~~~~ 8 - Menu - Title
-Colorset 8 fg #beb4aa, bg #221b19, hi, sh, Plain, NoShape
+Colorset 8 fg #beb4aa, bg #372717, hi, sh, Plain, NoShape
 
 #~~~~~~~ 10 - Module Default [PlainColorset]
-Colorset 10 fg #574641, bg #1e1816, hi, sh, Plain, NoShape
+Colorset 10 fg #8f643d, bg #312215, hi, sh, Plain, NoShape
 #~~~~~~~ 11 - Module Hilight
-Colorset 11 fg #735c40, bg #342a27, hi, sh, Plain, NoShape
+Colorset 11 fg #864437, bg #563c25, hi, sh, Plain, NoShape
 #~~~~~~~ 12 - Module ActiveButton (Mouse Hover)
-Colorset 12 fg #574641, bg #251d14, hi, sh, Plain, NoShape
+Colorset 12 fg #8f643d, bg #2b1612, hi, sh, Plain, NoShape
 #~~~~~~~ 13 - FvwmPager Active Page
-Colorset 13 fg #574641, bg #231c1a, hi, sh, Plain, NoShape
+Colorset 13 fg #8f643d, bg #392818, hi, sh, Plain, NoShape
 #~~~~~~~ 14 - FvwmIconMan Iconified Button
-Colorset 14 fg #574641, bg #1e1816, hi, sh, Plain, NoShape
+Colorset 14 fg #8f643d, bg #312215, hi, sh, Plain, NoShape
 
 #~~~~~~~ 16 - FvwmPager Default
-Colorset 16 fg #73695e, bg #342a27, hi, sh, Plain, NoShape
+Colorset 16 fg #7a605a, bg #563c25, hi, sh, Plain, NoShape
 #~~~~~~~ 17 - FvwmPager Page Highlight
-Colorset 17 fg #584638, bg #574641, hi, sh, Plain, NoShape
+Colorset 17 fg #794932, bg #8f643d, hi, sh, Plain, NoShape
 #~~~~~~~ 18 - FvwmPager Window Highlight
-Colorset 18 fg #584638, bg #292117, hi, sh, Plain, NoShape
+Colorset 18 fg #794932, bg #301814, hi, sh, Plain, NoShape
 #~~~~~~~ 19 - FvwmPager Window Default
-Colorset 19 fg #201a12, bg #675e54, hi, sh, Plain, NoShape
+Colorset 19 fg #26130f, bg #6d5651, hi, sh, Plain, NoShape
 
-# 20 - FvwmPager Active Page, 21 - Default: wallpaper tiled once per
-# page; re-cut to one page cell by bin/photon_pager.py on every launch.
-Colorset 20 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint #584638 35, Dither
-Colorset 21 fg Contrast, bg Average, hi, sh, TiledPixmap $[infostore.pager_bg], Tint #231c1a 10, Dither
+#~~~~~~~ 20 - FvwmPager Active Page (shelf), 21 - Default page
+Colorset 20 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_PAGE_HI], hi, sh, Plain, NoShape
+Colorset 21 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_PAGE], hi, sh, Plain, NoShape
 
-# 30-37: QNX Photon shelf and pager
+
+# 30-33: QNX Photon shelf; 36-37: pager windows
 Colorset 30 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 Colorset 31 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE_HI], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 Colorset 32 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_HEADER], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 Colorset 33 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_WELL], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
-Colorset 34 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_DESK], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
-Colorset 35 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_DESK_HI], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 Colorset 36 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_WIN], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_WIN_EDGE], Plain, NoShape
 Colorset 37 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_FOCUS], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_FOCUS_EDGE], Plain, NoShape
