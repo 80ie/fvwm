@@ -712,11 +712,12 @@ Style audacious !Title, !Borders
 ##  Colorsets                                                {{{1
 Read $[FVWM_USERDIR]/colorsets
 
+# Inactive Title 
 Colorset 40 fg #aa8664, bg #2c2a21, hi, sh, Plain, NoShape
+# Active Title
 Colorset 41 fg #ffa733, bg #532a24, hi, sh, Plain, NoShape
-# 15: active window close button (ButtonStyle 2 Active Colorset 15),
-# matched to the active titlebar above.
-Colorset 15 fg #ffa733, bg #532a24, hi, sh, Plain, NoShape
+# Close button
+Colorset 15 fg white, bg #ffa733, hi, sh, Plain, NoShape
 Style * Colorset 40, HilightColorset 41, \
         BorderColorset 40, HilightBorderColorset 41
 ##                                                           }}}1
