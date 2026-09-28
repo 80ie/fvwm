@@ -905,6 +905,7 @@ DestroyModuleConfig ShelfPager:*
 *ShelfPager: Window3DBorders
 *ShelfPager: WindowBorderWidth 1
 *ShelfPager: WindowMinSize 3
+*ShelfPager: HideSmallWindows
 *ShelfPager: UseSkipList
 *ShelfPager: Mouse 1 ChangePage
 *ShelfPager: Mouse 2 MoveWindow FlipFocus NoWarp
