@@ -33,63 +33,71 @@ SetEnv FVWM_PHOTON_THUMB_HI     "#e5e1dd"
 SetEnv FVWM_PHOTON_THUMB_LO     "$[FVWM_PHOTON_HEADER_CELL]"
 SetEnv FVWM_PHOTON_TICK_HI      "$[FVWM_PHOTON_BTN_LO]"
 SetEnv FVWM_PHOTON_TICK_LO      "#5f5a55"
-SetEnv FVWM_PHOTON_FILL_CPU     "#864437"
-SetEnv FVWM_PHOTON_FILL_MEM     "#787131"
+SetEnv FVWM_PHOTON_FILL_CPU     "#865349"
+SetEnv FVWM_PHOTON_FILL_MEM     "#787241"
 SetEnv FVWM_PHOTON_INK          "#080807"
 SetEnv FVWM_PHOTON_INK_OFF      "$[FVWM_PHOTON_GROOVE]"
+# ShelfPager (config: *ShelfPager: ...) reads these; each var below names
+# the colorset it feeds. PAGE_HI is the active/current page (HilightColorset
+# 20); FOCUS is the focused window swatch (FocusColorset 37).
 SetEnv FVWM_PHOTON_PAGER_SECTION "$[FVWM_PHOTON_WELL_SH]"
-SetEnv FVWM_PHOTON_PAGER_DESK    "#573227"
-SetEnv FVWM_PHOTON_PAGER_DESK_HI "#ab9993"
-SetEnv FVWM_PHOTON_PAGER_WIN     "#a79e96"
-SetEnv FVWM_PHOTON_PAGER_WIN_EDGE "#706a64"
-SetEnv FVWM_PHOTON_PAGER_FOCUS    "#735026"
-SetEnv FVWM_PHOTON_PAGER_FOCUS_EDGE "#4d3619"
+SetEnv FVWM_PHOTON_PAGER_DESK    "#573c34"      # bin/photon_pager.py WorldView bg (no fvwm Colorset)
+SetEnv FVWM_PHOTON_PAGER_DESK_HI "#ab9e9a"   # unused by fvwm or shelf currently
+SetEnv FVWM_PHOTON_PAGER_WIN     "#a79e96"       # colorset 36 bg: normal window swatch
+SetEnv FVWM_PHOTON_PAGER_WIN_EDGE "#706a64" # colorset 36 sh
+SetEnv FVWM_PHOTON_PAGER_FOCUS    "#7a6662"      # colorset 37 bg: focused/active window swatch
+SetEnv FVWM_PHOTON_PAGER_FOCUS_EDGE "#524442" # colorset 37 sh
 SetEnv FVWM_PHOTON_PAGER_GRID       "$[FVWM_PHOTON_HI]"
 SetEnv FVWM_PHOTON_FILL_DISK        "$[FVWM_PHOTON_PAGER_DESK]"
-SetEnv FVWM_PHOTON_PAGER_PAGE       "#aba299"
-SetEnv FVWM_PHOTON_PAGER_PAGE_HI    "#d1cac3"
+SetEnv FVWM_PHOTON_PAGER_PAGE       "#aba299"     # colorset 21 bg: default page
+SetEnv FVWM_PHOTON_PAGER_PAGE_HI    "#d1cac3"  # colorset 20 bg: active/current page
 
 # Window frame and title colors are pinned in `config`; their former
 # colorsets (0 - 4: window/border decor, 15: close button face) are no
 # longer rendered here.
 #~~~~~~~ 5 - Menu - Inactive Item
-Colorset 5 fg #8f643d, bg #392818, hi, sh, Plain, NoShape
+Colorset 5 fg #8f6e51, bg #392c20, hi, sh, Plain, NoShape
 #~~~~~~~ 6 - Menu - Active Item
-Colorset 6 fg #beb4aa, bg #7a605a, hi, sh, Plain, NoShape
+Colorset 6 fg #beb4aa, bg #7a6662, hi, sh, Plain, NoShape
 #~~~~~~~ 7 - Menu - Grayed Item
-Colorset 7 fg #beb4aa, bg #9c948c, hi, sh, Plain, NoShape
+Colorset 7 fg #beb4aa, bg #9c9690, hi, sh, Plain, NoShape
 #~~~~~~~ 8 - Menu - Title
-Colorset 8 fg #beb4aa, bg #372717, hi, sh, Plain, NoShape
+Colorset 8 fg #beb4aa, bg #372b1f, hi, sh, Plain, NoShape
 
 #~~~~~~~ 10 - Module Default [PlainColorset]
-Colorset 10 fg #8f643d, bg #312215, hi, sh, Plain, NoShape
+Colorset 10 fg #8f6e51, bg #31251c, hi, sh, Plain, NoShape
 #~~~~~~~ 11 - Module Hilight
-Colorset 11 fg #864437, bg #563c25, hi, sh, Plain, NoShape
+Colorset 11 fg #865349, bg #564231, hi, sh, Plain, NoShape
 #~~~~~~~ 12 - Module ActiveButton (Mouse Hover)
-Colorset 12 fg #8f643d, bg #2b1612, hi, sh, Plain, NoShape
-#~~~~~~~ 13 - FvwmPager Active Page
-Colorset 13 fg #8f643d, bg #392818, hi, sh, Plain, NoShape
+Colorset 12 fg #8f6e51, bg #2b1b17, hi, sh, Plain, NoShape
+#~~~~~~~ 13 - FvwmFormDefault ItemColorset
+Colorset 13 fg #8f6e51, bg #392c20, hi, sh, Plain, NoShape
 #~~~~~~~ 14 - FvwmIconMan Iconified Button
-Colorset 14 fg #8f643d, bg #312215, hi, sh, Plain, NoShape
+Colorset 14 fg #8f6e51, bg #31251c, hi, sh, Plain, NoShape
 
+# 16-19: unused legacy FvwmPager palette, superseded by ShelfPager (20/21/36/37) below
 #~~~~~~~ 16 - FvwmPager Default
-Colorset 16 fg #7a605a, bg #563c25, hi, sh, Plain, NoShape
+Colorset 16 fg #7a6662, bg #564231, hi, sh, Plain, NoShape
 #~~~~~~~ 17 - FvwmPager Page Highlight
-Colorset 17 fg #794932, bg #8f643d, hi, sh, Plain, NoShape
+Colorset 17 fg #795443, bg #8f6e51, hi, sh, Plain, NoShape
 #~~~~~~~ 18 - FvwmPager Window Highlight
-Colorset 18 fg #794932, bg #301814, hi, sh, Plain, NoShape
+Colorset 18 fg #795443, bg #301e1a, hi, sh, Plain, NoShape
 #~~~~~~~ 19 - FvwmPager Window Default
-Colorset 19 fg #26130f, bg #6d5651, hi, sh, Plain, NoShape
+Colorset 19 fg #261714, bg #6d5b58, hi, sh, Plain, NoShape
 
-#~~~~~~~ 20 - FvwmPager Active Page (shelf), 21 - Default page
+# ShelfPager (config: *ShelfPager: Colorset/HilightColorset), the live shelf pager
+#~~~~~~~ 20 - ShelfPager HilightColorset: active/current page
 Colorset 20 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_PAGE_HI], hi, sh, Plain, NoShape
+#~~~~~~~ 21 - ShelfPager Colorset: default page
 Colorset 21 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_PAGE], hi, sh, Plain, NoShape
 
 
-# 30-33: QNX Photon shelf; 36-37: pager windows
+# 30-33: QNX Photon shelf chrome; 36-37: ShelfPager Window/FocusColorset (window swatches)
 Colorset 30 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 Colorset 31 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE_HI], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 Colorset 32 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_HEADER], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 Colorset 33 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_WELL], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
+#~~~~~~~ 36 - ShelfPager WindowColorset: normal window swatch
 Colorset 36 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_WIN], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_WIN_EDGE], Plain, NoShape
+#~~~~~~~ 37 - ShelfPager FocusColorset: focused/active window swatch
 Colorset 37 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_FOCUS], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_FOCUS_EDGE], Plain, NoShape

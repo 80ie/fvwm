@@ -12,7 +12,7 @@ ModulePath +:${HOME}/.fvwm/lib:$[FVWM_MODULEDIR]
 
 InfoStoreAdd terminal /usr/bin/kitty
 InfoStoreAdd filemanager /usr/bin/dolphin
-InfoStoreAdd calculator /usr/bin/speedcrunch
+InfoStoreAdd calculator /usr/bin/qalculate-qt
 InfoStoreAdd media_output @DEFAULT_SINK@
 
 InfoStoreAdd bg $[FVWM_USERDIR]/images/bg/bg.png
@@ -62,7 +62,7 @@ AddToFunc   StartFunction
 + I Module FvwmEvent TileEvent
 + I Module FvwmMFL
 + I Module FvwmPerl
-+ I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; sleep 2; pkill -KILL -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
++ I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; pkill -x stalonetray; sleep 2; pkill -KILL -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
 + I Test (Init) Exec exec lxqt-policykit-agent
@@ -220,7 +220,7 @@ AddToFunc PagerNavigate
 # Step $0 pages in x only; wrapx wraps within the row, row itself never changes.
 DestroyFunc PagerNavigateSeq
 AddToFunc PagerNavigateSeq
-+ I GotoPage $0 0
++ I GotoPage $0 +0p
 
 ##                                                           }}}3
 ##   │ ├ Edge                                                {{{3
