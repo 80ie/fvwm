@@ -129,7 +129,9 @@ to a comment that used to live in `FvwmScript-ShelfMedia`.)
 - Colors for every platform come from `palette/`: a wallust scheme in
   `palette/schemes/` rendered through `palette/templates/` (`roles.j2` derives
   every role). `bin/palette preview <scheme|image>` diffs; `apply` writes, backs up
-  and reloads. `colorsets` is one of its outputs, so edit the template, not it
+  and reloads. `colorsets` is one of its outputs, so edit the template, not it.
+  Every render also writes `~/.cache/palette/key.html`, a visual key of each
+  color, its role and where it lands; `qt.j2` slot names are its labels.
 - Icons are 16x16 PNGs in `icons/`; backgrounds in `images/background/`
 - Sounds (MP3) in `sounds/` triggered by FvwmEvent modules
 

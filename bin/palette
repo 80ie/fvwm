@@ -8,11 +8,14 @@
 Both render into ~/.cache/palette/preview; wallust never writes a live file.
 `apply` backs up what it replaces in ~/.fvwm/palette/history beside a
 restore.sh and a pre-apply screen.png so you can tell backups apart.
+Both also write ~/.cache/palette/key.html: each color, the role it comes
+from, and every place it lands.
 """
 
 import argparse
 import datetime
 import difflib
+import html
 import os
 import re
 import shlex
@@ -47,21 +50,185 @@ def source_cmd(source):
     return ["wallust", "run", str(path)]
 
 
-def render(source, extra):
-    shutil.rmtree(PREVIEW, ignore_errors=True)
-    PREVIEW.mkdir(parents=True)
+def wallust(source, extra, tpl_dir, targets):
     with tempfile.TemporaryDirectory(prefix="palette-") as work:
         work = Path(work)
-        (work / "templates").symlink_to(ROOT / "templates")
+        (work / "templates").symlink_to(tpl_dir)
         lines = ["[templates]"] + [
-            f'{name} = {{ template = "{tpl}", target = "{PREVIEW / name}" }}'
-            for name, (tpl, _) in templates().items()
+            f'{name} = {{ template = "{tpl}", target = "{out}" }}'
+            for name, (tpl, out) in targets.items()
         ]
         (work / "wallust.toml").write_text("\n".join(lines) + "\n")
         cmd = source_cmd(source) + ["-s", "--no-hooks", "-q", "-d", str(work)]
         subprocess.run(cmd + extra, check=True)
+
+
+def render(source, extra):
+    shutil.rmtree(PREVIEW, ignore_errors=True)
+    PREVIEW.mkdir(parents=True)
+    wallust(source, extra, ROOT / "templates",
+            {name: (tpl, PREVIEW / name) for name, (tpl, _) in templates().items()})
     for path in PREVIEW.iterdir():
         path.write_text(HEX.sub(lambda m: m[0].lower(), path.read_text()))
+    write_key(source, extra)
+    print(f"Key: {KEY}")
+
+
+# The key renders an instrumented copy of every template: each {{ }} is
+# wrapped in markers, so each color is found where it actually landed.
+KEY = CACHE / "key.html"
+MARK = re.compile(r"\x02(\d+)\x03|\x04")
+TAG = re.compile(r"\{\{-?\s*(.*?)\s*-?\}\}(?:\{#\s*(.*?)\s*#\})?", re.S)
+SCHEME = ["background", "foreground", "cursor"] + [f"color{i}" for i in range(16)]
+
+
+def parse_color(value):
+    value = value.strip().lower()
+    if m := re.fullmatch(r"#?(?:ff)?([0-9a-f]{6})", value):
+        return "#" + m[1]
+    if m := re.fullmatch(r"(\d+),\s*(\d+),\s*(\d+)", value):
+        return "#" + "".join(f"{int(c):02x}" for c in m.groups())
+    return None
+
+
+def instrument(text, sites):
+    def mark(m):
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        seg_start = max(line_start, text.rfind("}", line_start, m.start()) + 1)
+        label = m[2] or text[seg_start:m.start()].strip(" \t\"',;:=({")
+        sites.append({"expr": m[1], "label": label})
+        return f"\x02{len(sites) - 1}\x03{m[0]}\x04"
+    return TAG.sub(mark, text)
+
+
+def section(lines, row):
+    """Nearest header (comment, [group] or `selector {`) in the row's paragraph."""
+    for line in reversed(lines[:row]):
+        s = line.strip()
+        if not s:
+            return ""
+        if m := re.fullmatch(r"(?:#+|!|//|/\*)[\s~=*-]*(.*?)[\s*/]*", s):
+            return m[1]
+        if m := re.fullmatch(r"\[(.+)\]|([^{}]+?)\s*\{", s):
+            return m[1] or m[2]
+    return ""
+
+
+def harvest(target, text, sites, uses):
+    """Record each color-valued marker not nested inside another one."""
+    plain = MARK.sub("", text)
+    lines = plain.splitlines()
+    stack, spans, offset = [], [], 0
+    for m in MARK.finditer(text):
+        if m[1]:
+            offset += len(m[0])
+            stack.append((int(m[1]), m.end() - offset))
+            continue
+        site, start = stack.pop()
+        end = m.start() - offset
+        offset += len(m[0])
+        if color := parse_color(plain[start:end]):
+            spans.append((start, end, site, color))
+    for start, end, site, color in spans:
+        if any(s <= start and end <= e and (s, e) != (start, end)
+               for s, e, _, _ in spans):
+            continue
+        row = plain.count("\n", 0, start)
+        uses.append({"target": target, "site": site, "color": color,
+                     "line": lines[row].strip(), "section": section(lines, row)})
+
+
+def write_key(source, extra):
+    formulas = dict(re.findall(r"\{%-?\s*set (\w+) = (.+?)\s*-?%\}",
+                               (ROOT / "templates" / "roles.j2").read_text()))
+    sites, uses = [], []
+    with tempfile.TemporaryDirectory(prefix="palette-key-") as tmp:
+        tmp = Path(tmp)
+        tpl = tmp / "templates"
+        tpl.mkdir()
+        for src in (ROOT / "templates").iterdir():
+            (tpl / src.name).write_text(instrument(src.read_text(), sites))
+        (tpl / "_roles").write_text(instrument('{% include "roles.j2" %}\n' + "".join(
+            f"{{{{ {n} }}}}{{# {n} #}}\n" for n in SCHEME + list(formulas)), sites))
+        targets = {name: (t, tmp / name) for name, (t, _) in templates().items()}
+        targets["_roles"] = ("_roles", tmp / "_roles")
+        wallust(source, extra, tpl, targets)
+        for name, (_, out) in targets.items():
+            harvest(name, out.read_text(), sites, uses)
+
+    role = {sites[u["site"]]["label"]: u["color"] for u in uses if u["target"] == "_roles"}
+    rows, used_in = {}, {}
+    for u in uses:
+        if u["target"] == "_roles":
+            continue
+        site = sites[u["site"]]
+        row = rows.setdefault(u["target"], {}).setdefault(
+            (u["site"], u["color"], u["section"]), {**u, **site, "lines": []})
+        line = HEX.sub(lambda m: m[0].lower(), u["line"])
+        if len(line) > 90 and (m := re.match(r"\s*([^\s=:]+)\s*[=:]", line)):
+            line = m[1]
+        if line not in row["lines"]:
+            row["lines"].append(line)
+        row["roles"] = [w for w in re.findall(r"\w+", site["expr"]) if w in role] or [
+            n for n, c in role.items() if c == u["color"] and n in formulas]
+        for n in row["roles"]:
+            used_in.setdefault(n, set()).add(u["target"])
+    KEY.write_text(key_html(source, role, formulas, rows, used_in))
+
+
+def key_html(source, role, formulas, rows, used_in):
+    esc = html.escape
+
+    def chip(color):
+        r, g, b = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+        ink = "#000" if 0.299 * r + 0.587 * g + 0.114 * b > 140 else "#fff"
+        return f'<span class="chip" style="background:{color};color:{ink}">{color}</span>'
+
+    def targets(names):
+        return " ".join(f'<a href="#{t}">{t}</a>' for t in sorted(names))
+
+    out = [KEY_HEAD, f"<h1>Palette key</h1><p class=meta>{esc(str(source))} · "
+           f"{datetime.datetime.now():%Y-%m-%d %H:%M} · "
+           f"{' '.join(f'<a href=#{t}>{t}</a>' for t in rows)}</p>",
+           "<h2>Scheme</h2><div class=grid>"]
+    out += [f"<div>{chip(role[n])}<b>{n}</b></div>" for n in SCHEME if n in role]
+    out.append("</div><h2>Roles <small>palette/templates/roles.j2</small></h2><table>")
+    out += [f"<tr><td>{chip(role[n])}</td><td><b>{n}</b></td><td><code>{esc(f)}</code></td>"
+            f"<td>{targets(used_in.get(n, ()))}</td></tr>"
+            for n, f in formulas.items() if n in role]
+    out.append("</table>")
+    for target, live in ((t, p) for t, (_, p) in templates().items() if t in rows):
+        out.append(f'<h2 id="{target}">{target} <small>{esc(str(live))}</small></h2><table>')
+        for r in rows[target].values():
+            where = esc(r["label"]) + (f' <small>{esc(r["section"])}</small>' if r["section"] else "")
+            line = "<br>".join(esc(x[:90]) for x in r["lines"])
+            out.append(f"<tr><td>{chip(r['color'])}</td><td>{where}</td>"
+                       f"<td><code>{esc(r['expr'])}</code></td>"
+                       f"<td>{'' if r['roles'] == [r['expr']] else ' '.join(r['roles'])}</td>"
+                       f"<td class=line><code>{line}</code></td></tr>")
+        out.append("</table>")
+    return "\n".join(out) + "\n"
+
+
+KEY_HEAD = """<!doctype html><meta charset=utf-8><title>Palette key</title>
+<style>
+:root { --bg: #f5f3f0; --fg: #1c1a18; --dim: #6b655f; --rule: #d9d4ce; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1c1a18; --fg: #e8e4df; --dim: #9a938b; --rule: #38342f; } }
+body { background: var(--bg); color: var(--fg); font: 14px/1.4 sans-serif;
+       margin: 24px auto; max-width: 1200px; padding: 0 16px; }
+h2 { border-bottom: 1px solid var(--rule); padding-bottom: 4px; margin-top: 32px; }
+small, .meta { color: var(--dim); font-weight: normal; }
+a { color: inherit; }
+table { border-collapse: collapse; width: 100%; }
+td { padding: 3px 10px 3px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+code { font-size: 12px; }
+.line code { color: var(--dim); }
+.chip { display: inline-block; width: 76px; padding: 6px 0; text-align: center;
+        font: 12px monospace; border: 1px solid #0005; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.grid b { display: block; font-size: 12px; }
+</style>"""
 
 
 def changes():

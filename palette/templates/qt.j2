@@ -1,7 +1,28 @@
-{#- One QPalette row in qt5ct/qt6ct role order; `text` differs only when disabled. -#}
+{#- One QPalette row in qt5ct/qt6ct role order; `text` differs only when disabled.
+    Light/Midlight/Dark/Shadow are spread wide for the Windows-style double bevel. -#}
 {%- include "roles.j2" -%}
 {%- macro argb(c) %}#ff{{ c | strip }}{% endmacro -%}
 {%- macro row(text, accent) -%}
-{{ argb(text) }}, {{ argb(face) }}, {{ argb(hi) }}, {{ argb(well_lip) }}, {{ argb(frame_mid) }}, {{ argb(btn_lo) }}, {{ argb(text) }}, {{ argb(hi) }}, {{ argb(text) }}, {{ argb(field) }}, {{ argb(face) }}, {{ argb(dark) }}, {{ argb(select) }}, {{ argb(hi) }}, {{ argb(color4) }}, {{ argb(color5) }}, {{ argb(well_lip) }}, {{ argb(ink) }}, {{ argb(tooltip) }}, {{ argb(ink) }}, {{ argb(groove) }}
-{%- if accent %}, {{ argb(select) }}{% endif %}
+{{ argb(text) }}{# WindowText #},
+{#- #} {{ argb(face) }}{# Button #},
+{#- #} {{ argb(field) }}{# Light #},
+{#- #} {{ argb(btn_hi) }}{# Midlight #},
+{#- #} {{ argb(groove) }}{# Dark #},
+{#- #} {{ argb(btn_lo) }}{# Mid #},
+{#- #} {{ argb(text) }}{# Text #},
+{#- #} {{ argb(hi) }}{# BrightText #},
+{#- #} {{ argb(text) }}{# ButtonText #},
+{#- #} {{ argb(field) }}{# Base #},
+{#- #} {{ argb(face) }}{# Window #},
+{#- #} {{ argb(ink) }}{# Shadow #},
+{#- #} {{ argb(select) }}{# Highlight #},
+{#- #} {{ argb(hi) }}{# HighlightedText #},
+{#- #} {{ argb(color4) }}{# Link #},
+{#- #} {{ argb(color5) }}{# LinkVisited #},
+{#- #} {{ argb(well_lip) }}{# AlternateBase #},
+{#- #} {{ argb(ink) }}{# NoRole #},
+{#- #} {{ argb(tooltip) }}{# ToolTipBase #},
+{#- #} {{ argb(ink) }}{# ToolTipText #},
+{#- #} {{ argb(groove) }}{# PlaceholderText #}
+{%- if accent %}, {{ argb(select) }}{# Accent #}{% endif %}
 {%- endmacro -%}
