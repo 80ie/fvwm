@@ -270,7 +270,7 @@ class Panel(QWidget):
         self.setPalette(pal)
         self.setMouseTracking(True)
 
-        self.font_header = photon.font(8, bold=True)
+        self.font_header = photon.font(bold=True)
         self.state = read_state()
         self.side = panel_side(self.state)
         self.groups = read_spec(SPEC)
