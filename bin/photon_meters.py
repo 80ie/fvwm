@@ -38,13 +38,13 @@ import photon
 #  has to sample -- there is no "the CPU changed" signal to subscribe to --
 #  but sampling is not the same as repainting: paintEvent only runs when a
 #  bar's pixel width actually moves.
-INTERVAL_MS = 750 
+INTERVAL_MS = 750
 
 #  Measured off ~/Desktop/qnx621-1-1.png at x=1000, rows 475..533.
-BAR_H = 16            # CPU and MEM: outline, 14 rows of interior, outline
-THIN_H = 7            # each of the filesystem row's two bars
-GAP = 4               # between rows
-THIN_GAP = 1          # between the two thin bars
+BAR_H = 16  # CPU and MEM: outline, 14 rows of interior, outline
+THIN_H = 7  # each of the filesystem row's two bars
+GAP = 4  # between rows
+THIN_GAP = 1  # between the two thin bars
 ICON = 16
 
 #  The reference shows a tan CPU bar and a green memory bar and its
@@ -79,12 +79,11 @@ def filesystems():
 
 
 class MetersWidget(QWidget):
-
     def __init__(self, parent=None):
         super().__init__(parent)
 
         pal = self.palette()
-        pal.setColor(QPalette.ColorRole.Window, photon.FACE)
+        pal.setColor(QPalette.ColorRole.Window, photon.WELL)
         self.setPalette(pal)
         self.setAutoFillBackground(True)
 
@@ -92,7 +91,7 @@ class MetersWidget(QWidget):
         self.cpu = 0.0
         self.mem = 0.0
         self.disks = [0.0] * len(self.mounts)
-        self._widths = None       # last painted fill widths, to skip repaints
+        self._widths = None  # last painted fill widths, to skip repaints
 
         #  Primes psutil's CPU counter: the first call always reads 0.
         psutil.cpu_percent(interval=None)
@@ -114,28 +113,30 @@ class MetersWidget(QWidget):
         rows = GAP + BAR_H + GAP + BAR_H + GAP
         rows += len(self.mounts) * THIN_H
         rows += max(0, len(self.mounts) - 1) * THIN_GAP
-        return rows + GAP
+        #  Plus the well's two-pixel interior, top and bottom.
+        return rows + GAP + 4
 
     #  -- geometry --
 
     def _relayout(self):
-        w = self.width()
+        ox, oy = 2, 2  # the sunken well's interior
+        w = self.width() - 2 * ox
         pad = 4
         self.r_icons = []
         self.r_bars = []
 
-        bar_x = pad + ICON + 4
-        bar_w = max(20, w - bar_x - pad - 1)
+        bar_x = ox + pad + ICON + 4
+        bar_w = max(20, w - bar_x - ox - pad - 1)
 
-        y = GAP
+        y = oy + GAP
         for name in ("cpu", "mem"):
-            self.r_icons.append(QRect(pad, y + (BAR_H - ICON) // 2, ICON, ICON))
+            self.r_icons.append(QRect(ox + pad, y + (BAR_H - ICON) // 2, ICON, ICON))
             self.r_bars.append([QRect(bar_x, y, bar_w, BAR_H)])
             y += BAR_H + GAP
 
         #  One icon for the filesystem row, however many bars it has.
         block = len(self.mounts) * THIN_H + max(0, len(self.mounts) - 1) * THIN_GAP
-        self.r_icons.append(QRect(pad, y + (block - ICON) // 2, ICON, ICON))
+        self.r_icons.append(QRect(ox + pad, y + (block - ICON) // 2, ICON, ICON))
         thin = []
         for i in range(len(self.mounts)):
             thin.append(QRect(bar_x, y + i * (THIN_H + THIN_GAP), bar_w, THIN_H))
@@ -185,13 +186,14 @@ class MetersWidget(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(), photon.FACE)
+        photon.sunken(p, self.rect(), photon.WELL)
 
         names = ("audio-card", "media-flash-memory-stick", "drive-harddisk")
         colours = (photon.FILL_CPU, photon.FILL_MEM, FILL_DISK)
 
         for icon_r, row, name, colour, values in zip(
-                self.r_icons, self.r_bars, names, colours, self._values()):
+            self.r_icons, self.r_bars, names, colours, self._values()
+        ):
             #  Haiku's nearest equivalents to Photon's chip, memory module
             #  and disk.  No Photon icon set exists for any toolkit, and
             #  these are the closest installed set in the same flat idiom.
@@ -200,8 +202,11 @@ class MetersWidget(QWidget):
                 photon.trough(p, r)
                 width = self._fill_w(r, value)
                 if width > 0:
-                    photon.bar_fill(p, QRect(r.left() + 1, r.top() + 1,
-                                             width, r.height() - 3), colour)
+                    photon.bar_fill(
+                        p,
+                        QRect(r.left() + 1, r.top() + 1, width, r.height() - 3),
+                        colour,
+                    )
 
 
 def main():
