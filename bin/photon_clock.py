@@ -38,7 +38,7 @@ from PyQt6.QtWidgets import QApplication, QWidget
 
 import photon
 
-DATE_FORMAT = "%a %d-%m-%y"
+DATE_FORMAT = "%a %m-%d-%y"
 TIME_FORMAT = "%I:%M%p"
 
 CLOCK_PT = 11
