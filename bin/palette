@@ -4,8 +4,10 @@
   palette preview photon            a scheme from palette/schemes/
   palette preview ~/wall.png -- -p light16   an image; args after -- go to wallust
   palette apply photon
+  palette save my-favorite          the live palette, as palette/schemes/my-favorite.json
+  palette list
 
-Both render into ~/.cache/palette/preview; wallust never writes a live file.
+preview and apply render into ~/.cache/palette/preview; wallust never writes a live file.
 `apply` backs up what it replaces in ~/.fvwm/palette/history beside a
 restore.sh and a pre-apply screen.png so you can tell backups apart.
 Both also write ~/.cache/palette/key.html: each color, the role it comes
@@ -16,6 +18,7 @@ import argparse
 import datetime
 import difflib
 import html
+import json
 import os
 import re
 import shlex
@@ -327,6 +330,36 @@ def apply(args):
     print("Qt and GTK apps pick the new colors up when they next start.")
 
 
+XRES = re.compile(r"^\*\.(\w+):\s*(#[0-9A-Fa-f]{6})\s*$", re.M)
+
+
+def save(args):
+    """Write the live palette as a scheme, read back from the Xresources apply
+    rendered: it holds the resolved colors as they are, whether they came
+    from a scheme or an image."""
+    if not re.fullmatch(r"[\w-]+", args.name):
+        sys.exit(f"palette: {args.name!r} is not a usable scheme name")
+    scheme = ROOT / "schemes" / f"{args.name}.json"
+    if scheme.exists() and not args.force:
+        sys.exit(f"palette: {scheme.name} exists; --force replaces it")
+    live = templates()["xresources"][1]
+    if not live.is_file():
+        sys.exit("palette: nothing has been applied yet")
+    got = {k: v.lower() for k, v in XRES.findall(live.read_text())}
+    scheme.write_text(json.dumps({
+        "special": {"background": got["background"],
+                    "foreground": got["foreground"],
+                    "cursor": got["cursorColor"]},
+        "colors": {f"color{i}": got[f"color{i}"] for i in range(16)},
+    }, indent=2) + "\n")
+    print(f"saved {scheme}")
+
+
+def list_schemes(args):
+    for path in sorted((ROOT / "schemes").glob("*.json")):
+        print(path.stem)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(required=True)
@@ -335,6 +368,11 @@ def main():
         cmd.add_argument("source", help="scheme name, scheme .json, or image")
         cmd.add_argument("wallust", nargs="*", help="extra wallust args, after --")
         cmd.set_defaults(fn=fn)
+    cmd = sub.add_parser("save", help="save the live palette as a named scheme")
+    cmd.add_argument("name")
+    cmd.add_argument("--force", action="store_true", help="replace an existing scheme")
+    cmd.set_defaults(fn=save)
+    sub.add_parser("list", help="list saved schemes").set_defaults(fn=list_schemes)
     args = parser.parse_args()
     args.fn(args)
 
