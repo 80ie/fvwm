@@ -33,7 +33,7 @@ Name=Wallust
 {{ group(tooltip, tooltip, ink, groove) }}
 
 [Colors:View]
-{{ group(field, well_lip, ink, groove) }}
+{{ group(field, field_alt, ink, groove) }}
 
 [Colors:Window]
 {{ group(face, well_lip, ink, groove) }}
