@@ -20,8 +20,8 @@ file: the marquee (which stops when the title fits) and one abort guard per
 in-flight art fetch. That is what removes the once-a-second white flash:
 there is no once-a-second anything left. The one exception is the browser's
 picture-in-picture window: nothing in X announces when one appears, so the
-monitor polls the managed-window list; every other path here is event-
-driven.
+monitor polls the managed-window list, and a faster tick watches a floating
+one for a drop on the widget; every other path here is event-driven.
 
 Run it standalone to look at it -- it is an ordinary window until something
 swallows it.
@@ -596,6 +596,7 @@ class PipMonitor(QObject):
     H_MIN, H_MAX = 90, 700
     R_MIN, R_MAX = 1.2, 2.6  # video-ish aspect only
     BROWSERS = ("firefox", "chromium", "chrome")
+    BUTTONS = X.Button1Mask | X.Button2Mask | X.Button3Mask
 
     changed = pyqtSignal()
 
@@ -627,6 +628,28 @@ class PipMonitor(QObject):
                 return f.read().strip()
         except OSError:
             return ""
+
+    def released_in(self, rect):
+        """True when the window's centre is inside `rect` (root coords) and
+        no button is down: a drag that has ended there."""
+        try:
+            root = self.dpy.screen().root
+            if root.query_pointer().mask & self.BUTTONS:
+                return False
+            c = root.translate_coords(self._win, self.width // 2, self.height // 2)
+        except xerror.XError:
+            return False
+        return rect.contains(c.x, c.y)
+
+    def win_drag(self):
+        """The pointer (root coords) while Win+button 1 is held, else None."""
+        try:
+            q = self.dpy.screen().root.query_pointer()
+        except xerror.XError:
+            return None
+        if q.mask & X.Mod4Mask and q.mask & X.Button1Mask:
+            return QPoint(q.root_x, q.root_y)
+        return None
 
     def _wm_pid(self, win):
         try:
@@ -772,6 +795,14 @@ class MediaWidget(QWidget):
         self._pip_geom = None  # last geometry sent, so embed + the
         # standalone resize it triggers cannot
         # issue it twice
+        self._drop = QTimer(self)  # runs while a PiP floats, unembedded
+        self._drop.setInterval(120)
+        self._drop.timeout.connect(self._try_drop)
+        self._grab = QTimer(self)  # runs while a PiP is embedded
+        self._grab.setInterval(50)
+        self._grab.timeout.connect(self._watch_drag)
+        self._pip_size = (0, 0)  # its size before the embed shrank it
+        self._press = None  # where Win+drag began: a QPoint, or False if off the PiP
         self._has_art = False  # the well is up; a flip or a side change relays
         self._side = None  # the side the last natural_height_changed was for
         #  Mpris already rescan'd during its own __init__ -- before this
@@ -946,6 +977,27 @@ class MediaWidget(QWidget):
             self.natural_height_changed.emit()
         self._position_pip()
 
+    def moveEvent(self, event):
+        self._position_pip()
+
+    #  The PiP is a child of the panel's window, not ours, so it does not go
+    #  away when a collapsed group hides this widget.
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._map_pip(True)
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._map_pip(False)
+
+    def _map_pip(self, on):
+        if self._pip_xid is not None:
+            try:
+                self.pip._win.map() if on else self.pip._win.unmap()
+                self.pip.dpy.flush()
+            except xerror.XError:
+                pass
+
     #  -- state in --
 
     def _on_mpris(self):
@@ -953,30 +1005,40 @@ class MediaWidget(QWidget):
         self._measure_title()
         self.update()
 
-    #  The monitor found (or lost) a PiP window.  The window becomes a child
-    #  of this widget's own X window and is placed on the well; no frame, no
-    #  repaint trickery -- the browser keeps drawing it exactly where the
-    #  cover art would sit.
+    #  The monitor found (or lost) a PiP window.  It floats until the user
+    #  drops it on this widget, then becomes a child of the panel window placed on
+    #  the well; no frame, the browser keeps drawing it where the cover art
+    #  would sit.
     def _on_pip(self):
         xid = self.pip.window_id
         if xid is None:
+            self._drop.stop()
+            self._grab.stop()
             if self._pip_xid is not None:
                 self._pip_xid = None
                 self._pip_geom = None
                 self._refresh_well()
             return
         if xid != self._pip_xid:
-            self._embed_pip(xid)
-        if self._pip_xid is None:
+            self._drop.start()
             return
         self._refresh_well()
         self._position_pip()
 
+    def _try_drop(self):
+        rect = QRect(self.mapToGlobal(QPoint(0, 0)), self.size())
+        if self.isVisible() and self.pip.released_in(rect):
+            self._drop.stop()
+            self._embed_pip(self.pip.window_id)
+
     def _embed_pip(self, xid):
+        self._pip_size = (self.pip.width, self.pip.height)
         try:
-            #  winId() is a sip voidptr in PyQt6, not an int: Xlib's
-            #  request packing rejects it.
-            self.pip._win.reparent(int(self.winId()), 0, 0)
+            #  The top-level's id, never our own: winId() on a child widget
+            #  makes it and its siblings native, and those new windows stack
+            #  over the pager and tray already embedded.  It is a sip
+            #  voidptr, not an int; Xlib's request packing rejects it.
+            self.pip._win.reparent(int(self.window().winId()), 0, 0)
         except xerror.XError:
             #  The window refuses the move (input-class or visual mismatch,
             #  or it died between the poll and now): leave it floating and
@@ -985,20 +1047,65 @@ class MediaWidget(QWidget):
             return
         self._pip_xid = xid
         self._pip_geom = None
+        self._press = None
+        self._grab.start()
+        self._refresh_well()
+        self._position_pip()
+
+    #  fvwm's Win+drag grab is on the panel's window, so a drag that starts on
+    #  the embedded PiP never reaches the browser -- and moves nothing, the
+    #  panel being FixedPosition.  This notices it and hands the PiP back.
+    def _watch_drag(self):
+        p = self.pip.win_drag()
+        if p is None or not self.isVisible():
+            self._press = None
+        elif self._press is None:
+            rect = QRect(self.mapToGlobal(self.r_art.topLeft()), self.r_art.size())
+            self._press = p if rect.contains(p) else False
+        elif self._press and (p - self._press).manhattanLength() >= 4:
+            self._eject_pip(p)
+
+    def _eject_pip(self, p):
+        """Back to the root, centred on the pointer, and fvwm's to move."""
+        w, h = self._pip_size
+        x, y = p.x() - w // 2, p.y() - h // 2
+        win = self.pip._win
+        win.unmap()
+        win.configure(width=w, height=h)
+        win.reparent(self.pip.dpy.screen().root, x, y)
+        win.map()
+        self.pip.dpy.flush()
+        #  Once fvwm has framed it: place it under the pointer, then move it
+        #  interactively for as long as the button is down.
+        QProcess.startDetached(
+            "FvwmCommand",
+            [
+                "Schedule 120 WindowId 0x%x Move %dp %dp" % (win.id, x, y),
+                "Schedule 200 WindowId 0x%x Move" % win.id,
+            ],
+        )
+        self.pip.width, self.pip.height = w, h
+        self._grab.stop()
+        self._pip_xid = None
+        self._pip_geom = None
+        self._refresh_well()
+        self._drop.start()
 
     def _position_pip(self):
-        #  Child coordinates are relative to our window; r_art is in the
-        #  same space.
+        #  Child coordinates are relative to the top-level's window.
         if self._pip_xid is None or self.r_art is None:
             return
         r = self.r_art
-        if (r.x(), r.y(), r.width(), r.height()) == self._pip_geom:
+        p = self.mapTo(self.window(), r.topLeft())
+        geom = (p.x(), p.y(), r.width(), r.height())
+        if geom == self._pip_geom:
             return
-        self._pip_geom = (r.x(), r.y(), r.width(), r.height())
+        self._pip_geom = geom
         try:
-            self.pip._win.configure(
-                x=r.x(), y=r.y(), width=r.width(), height=r.height()
-            )
+            self.pip._win.configure(x=p.x(), y=p.y(), width=r.width(), height=r.height())
+            #  Xlib buffers; without this the reparent above waits for the
+            #  monitor's next poll.
+            self.pip.dpy.flush()
         except xerror.XError:
             pass
 
