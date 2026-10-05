@@ -24,6 +24,7 @@ InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
 SetEnv TILE_MASTER_PERCENT 55
 SetEnv TILING_0-0-0 on
+PipeRead "$[FVWM_USERDIR]/bin/tile-floats list" quiet
 
 # QNX Photon shelf, down either screen edge -- there is no taskbar row
 # below it any more.  It is one program -- bin/shelf-panel -- which owns its
@@ -157,11 +158,13 @@ AddToFunc SavePageFocus
 + I All (CurrentPage) State $[FocusPage] False
 + I Current State $[FocusPage] True
 
+# Never move the viewport: plain Focus on an iconic window jumps to its
+# phantom (NoIcon) icon, and on a straddling window to the page it centres on.
 DestroyFunc RestorePageFocus
 AddToFunc RestorePageFocus
 + I Current (CurrentPage) Break 1
-+ I Next (CurrentPage, State $[FocusPage]) Focus
-+ I None (CurrentPage, Focused) Prev (CurrentPage) Focus
++ I Next (CurrentPage, !Iconic, State $[FocusPage]) Focus NoWarp
++ I None (CurrentPage, Focused) Prev (CurrentPage, !Iconic) Focus NoWarp
 
 DestroyModuleConfig EventRestoreFocus:*
 *EventRestoreFocus: Cmd
@@ -331,6 +334,7 @@ AddToFunc TileQueueArrange
 
 DestroyFunc TileAdmit
 AddToFunc TileAdmit
++ I PipeRead "$[FVWM_USERDIR]/bin/tile-floats admit $0" quiet
 + I Test (!EnvMatch TILING_$[desk.n]-$[page.nx]-$[page.ny] on) Break
 + I WindowId $0 (CurrentPage, AcceptsFocus, !Transient, !State 12, !State 14) KeepRc \
     All (CurrentPage, State 13) State 13 False
@@ -393,6 +397,7 @@ DestroyFunc TileDisable
 AddToFunc TileDisable
 + I SetEnv TILING_$[desk.n]-$[page.nx]-$[page.ny] off
 + I All (CurrentPage, State 11) Maximize False
++ I All (CurrentPage, State 13) Maximize False
 + I All (CurrentPage, State 11) State 11 False
 + I All (CurrentPage, State 13) State 13 False
 
@@ -409,6 +414,20 @@ AddToFunc TileJoin
 + I State 12 False
 + I State 13 True
 + I TileArrange
+
+DestroyFunc TileFloatClassToggle
+AddToFunc TileFloatClassToggle
++ I PipeRead "$[FVWM_USERDIR]/bin/tile-floats toggle"
+
+DestroyFunc TileFloatClassOn
+AddToFunc TileFloatClassOn
++ I TileFloat
++ I PipeRead "$[FVWM_USERDIR]/bin/tile-floats list"
+
+DestroyFunc TileFloatClassOff
+AddToFunc TileFloatClassOff
++ I TileJoin
++ I PipeRead "$[FVWM_USERDIR]/bin/tile-floats list"
 
 DestroyFunc TileFloat
 AddToFunc TileFloat
@@ -755,7 +774,8 @@ AddToMenu   MenuWindowOps
 + "StaysOnBottom"       Pick (CirculateHit) Layer 0 2
 + "" Nop
 + "Sticky"              Stick Toggle
-+ "Toggle Title"        ToggleTitle
++ "Floating"            TileFloatClassToggle
++ "Titlebar"            ToggleTitle
 + "" Nop
 + "More..."   Menu MenuWindowOpsLong This 0 0
 

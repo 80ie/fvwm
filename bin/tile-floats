@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""Persistent per-class tiling float list.
+
+State: $FVWM_USERDIR/.tile-floats, one WM_CLASS per line (# = comment).
+
+Subcommands (emitted lines are fvwm commands for PipeRead):
+  list                 SetEnv TILE_FLOATS "Class1 Class2 ..."
+  admit <window-id>    WindowId <id> State 12 True  (if class is listed)
+  toggle               TileFloatClassOn | TileFloatClassOff
+                       (toggles the class of the window under the pointer)
+"""
+import os
+import sys
+import tempfile
+
+USERDIR = os.environ.get('FVWM_USERDIR') or os.path.expanduser('~/.fvwm')
+FILE = os.path.join(USERDIR, '.tile-floats')
+
+
+def classes():
+    if not os.path.exists(FILE):
+        return []
+    out = []
+    with open(FILE) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and line not in out:
+                out.append(line)
+    return out
+
+
+def save(items):
+    fd, tmp = tempfile.mkstemp(dir=USERDIR, prefix='.tile-floats.')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write(''.join(c + '\n' for c in items))
+        os.replace(tmp, FILE)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+def wm_class(win):
+    try:
+        cls = win.get_wm_class()
+    except Exception:
+        return None
+    if cls and (cls[0] or cls[1]):
+        return cls[1] or cls[0]
+    return None
+
+
+def class_under_pointer(d):
+    w = d.screen().root.query_pointer().child
+    if w is None:
+        w = d.get_input_focus().focus
+    while w is not None:
+        cls = wm_class(w)
+        if cls:
+            return cls
+        try:
+            w = w.query_tree().parent
+        except Exception:
+            return None
+    return None
+
+
+def cmd_list():
+    print('SetEnv TILE_FLOATS "%s"' % ' '.join(classes()))
+
+
+def cmd_admit(wid):
+    from Xlib import display
+    d = display.Display()
+    try:
+        win = d.create_resource_object('window', int(wid, 16))
+        cls = wm_class(win)
+    finally:
+        d.close()
+    if cls and cls in classes():
+        print('WindowId %s State 12 True' % wid)
+
+
+def cmd_toggle():
+    from Xlib import display
+    d = display.Display()
+    try:
+        cls = class_under_pointer(d)
+    finally:
+        d.close()
+    if not cls:
+        return
+    cur = classes()
+    if cls in cur:
+        save([c for c in cur if c != cls])
+        print('TileFloatClassOff')
+    else:
+        save(cur + [cls])
+        print('TileFloatClassOn')
+
+
+def main():
+    args = sys.argv[1:]
+    try:
+        if args and args[0] == 'list':
+            cmd_list()
+        elif args and args[0] == 'admit' and len(args) > 1:
+            cmd_admit(args[1])
+        elif args and args[0] == 'toggle':
+            cmd_toggle()
+    except Exception:
+        # fvwm side must degrade to a no-op, never an error
+        pass
+
+
+if __name__ == '__main__':
+    main()

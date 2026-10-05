@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""Check the shelf tray stays put when a RandR change reaches stalonetray.
+
+Runs photon_tray.py in a private Xvfb inside a PID namespace, so its
+`pkill -x stalonetray` cannot reach the live session, then cycles the output.
+"""
+
+import os
+import subprocess
+import sys
+import time
+
+from Xlib import Xatom, display, error as xerror
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+IN_NS = "TRAY_RIG_IN_NS"
+
+
+def ensure_isolated():
+    if os.environ.get(IN_NS):
+        return
+    os.environ[IN_NS] = "1"
+    os.execvp("unshare", ["unshare", "-Urpf", "--mount-proc", sys.executable,
+                          os.path.abspath(__file__), *sys.argv[1:]])
+
+
+def start_xvfb():
+    r, w = os.pipe()
+    proc = subprocess.Popen(
+        ["Xvfb", "-displayfd", str(w), "-screen", "0", "1280x800x24",
+         "+extension", "RANDR", "+xinerama", "-nolisten", "tcp"],
+        pass_fds=[w], stderr=subprocess.DEVNULL)
+    os.close(w)
+    num = os.read(r, 16).decode().strip()
+    os.close(r)
+    if not num:
+        raise RuntimeError("Xvfb did not start")
+    return proc, ":" + num
+
+
+def find_tray(root):
+    stack = list(root.query_tree().children)
+    while stack:
+        win = stack.pop()
+        try:
+            cls = win.get_wm_class()
+            if cls and "stalonetray" in cls:
+                return win
+            stack.extend(win.query_tree().children)
+        except xerror.XError:
+            pass
+    return None
+
+
+def wait_embedded(dpy, root):
+    """No window manager here, so publish _NET_CLIENT_LIST ourselves."""
+    atom = dpy.intern_atom("_NET_CLIENT_LIST")
+    settled = 0
+    end = time.time() + 12
+    while time.time() < end:
+        win = find_tray(root)
+        if win is not None:
+            root.change_property(atom, Xatom.WINDOW, 32, [win.id])
+            dpy.flush()
+            settled = settled + 1 if win.query_tree().parent.id != root.id else 0
+            if settled > 15:
+                return win
+        time.sleep(0.1)
+    return None
+
+
+def main():
+    ensure_isolated()
+    xvfb, disp = start_xvfb()
+    env = dict(os.environ, DISPLAY=disp, QT_QPA_PLATFORM="xcb")
+    env.pop("FVWMMFL_SOCKET", None)
+    env.pop("FVWMMFL_SOCKET_PATH", None)
+    tray = None
+    try:
+        dpy = display.Display(disp)
+        root = dpy.screen().root
+        tray = subprocess.Popen(
+            [sys.executable, os.path.join(HERE, "photon_tray.py")], env=env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        win = wait_embedded(dpy, root)
+        if win is None:
+            print("FAIL: tray never embedded")
+            return 2
+
+        g = win.get_geometry()
+        before = (g.x, g.y)
+        # --off emits its RandR events, then errors resizing the screen to 0
+        for args in (["--off"], ["--auto"]):
+            subprocess.run(["xrandr", "--output", "screen", *args], env=env,
+                           stderr=subprocess.DEVNULL)
+            time.sleep(0.5)
+        time.sleep(1.5)
+        g = win.get_geometry()
+        after = (g.x, g.y)
+
+        ok = before == after
+        print("%s: tray at %s before, %s after an output off/on"
+              % ("PASS" if ok else "FAIL", before, after))
+        return 0 if ok else 1
+    finally:
+        if tray is not None:
+            tray.terminate()
+        xvfb.terminate()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
