@@ -216,6 +216,7 @@ class TrayWidget(QWidget):
             for ev in photon.x_events(self.dpy):
                 if (ev.type == X.ConfigureNotify
                         and getattr(ev.window, "id", None) == self.tray_xid):
+                    self._pin_position(ev)
                     self._sync_tray_height()
         except (xerror.ConnectionClosedError, OSError):
             self._x_notifier.setEnabled(False)
@@ -223,6 +224,19 @@ class TrayWidget(QWidget):
             return
         except Exception:
             return
+
+    def _pin_position(self, ev):
+        """stalonetray re-places itself on RandR changes (a monitor power
+        cycle) as if it were top-level, which lands it at the panel's origin.
+        Qt only positions it when the container moves, so restore it here."""
+        want = self.mapTo(self.window(), self.container.pos())
+        if (ev.x, ev.y) == (want.x(), want.y()):
+            return
+        try:
+            self.tray_win.configure(x=want.x(), y=want.y())
+            self.dpy.flush()
+        except xerror.XError:
+            pass
 
     def _sync_tray_height(self):
         """Size the tray from its icon children after Qt reparents it."""
