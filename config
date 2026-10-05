@@ -174,7 +174,7 @@ DestroyModuleConfig EventNewDesk:*
 
 DestroyFunc EventDeIcon
 AddToFunc EventDeIcon
-+ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible, !fvwm-alttab) \
++ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible) \
         SendToModule Thumbnail capture $[w.id]
 + I ThisWindow Layer 0 $[infostore.putlayer]
 
@@ -194,7 +194,7 @@ DestroyModuleConfig EventIcon:*
 
 DestroyFunc FocusChange
 AddToFunc FocusChange
-+ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible, !fvwm-alttab) \
++ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible) \
     SendToModule Thumbnail capture $[w.id]
 
 DestroyModuleConfig EventChangeFocus:*
@@ -305,15 +305,6 @@ AddToFunc SwitchToWindow
 + I WindowListFunc
 DestroyMenuStyle WindowList
 MenuStyle WindowList SelectOnRelease Alt_L
-
-# Alt-Tab: live-thumbnail picker (Perl+Gtk3). Replaces the text WindowList.
-# Focus commit target — shared by the picker via WindowId <wid> AltTabFocus.
-DestroyFunc AltTabFocus
-AddToFunc AltTabFocus
-+ I Iconify off
-+ I FlipFocus
-+ I ChangeFocus
-+ I Raise
 
 ##                                                           }}}3
 ##   │ ├ Automatic tiling                                   {{{3
@@ -660,13 +651,10 @@ Style * Font "xft:LibreCaslonText:size=10:antialias=True"
 ##                                                           }}}2
 ##   ├ Icons                                                 {{{2
 # Iconified windows draw nothing on the desktop; the shelf pager and
-# alt-tab are the window list.
+# window list are how you reach them.
 Style * NoIcon
 ##                                                           }}}2
 ##   ├ Overrides                                             {{{2
-Style fvwm-alttab !Title, !Handles, BorderWidth 1, WindowListSkip, CirculateSkip, \
-    Sticky, StaysOnTop, PositionPlacement Center, FixedPPosition, \
-    Layer $[infostore.abovetoplayer]
 Style ConfirmQuit !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer
 Style ConfirmReboot !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]
 Style ConfirmShutdown !Title, PositionPlacement Center, WindowListSkip, Layer $[infostore.toplayer]

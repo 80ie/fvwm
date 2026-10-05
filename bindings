@@ -43,8 +43,9 @@ Silent Key T WTFS S4 ToggleTitle
 Silent Key I A 4 Exec exec FvwmCommand FvwmIdent
 Silent Key S WFST S4 ThisWindow IconifyWindow
 Silent Key D A 4 ShowDesktop "prev RestoreDesktop"
-Silent Key Tab A M  Exec exec $[FVWM_USERDIR]/bin/fvwm-alttab
-Silent Key Tab A SM Exec exec $[FVWM_USERDIR]/bin/fvwm-alttab --reverse
+Silent Key Tab A M WindowList (CurrentPage *) \
+    NoGeometryWithInfo, CurrentAtEnd, NoCurrentDeskTitle, NoDeskNum, \
+    ShowPage, NotAlphabetic, MaxLabelWidth 25, NoOnBottom "Prev SwitchToWindow"
 ##                                                           }}}3
 ##   │ ├ FVWM controls                                       {{{3
 IgnoreModifiers L25
