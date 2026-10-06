@@ -398,9 +398,6 @@ from documentation prose.
   found between `EWMH_fullscreen()` and layer assignment, so this is governed by
   our own `Style`/`Layer` rules and needs a live test.
 - RandR/multi-monitor strut behaviour, untested (single head here).
-- `AGENTS.md` has drifted — it still describes 18 colorsets, a 4x2 page layout
-  and `FvwmScript-DateTime` as a live widget. `CLAUDE.md` is current. Worth
-  reconciling, separately from this work.
 
 ## Cover art in the Media group (2026-09-21, a deliberate departure)
 

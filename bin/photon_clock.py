@@ -19,7 +19,7 @@ strip is enlarged beyond the reference for readability.  No group header
 either; `panel.items` names this section `bare`.
 
 A QTimer, but armed to the next minute boundary rather than ticking every
-second and throwing most of the ticks away -- CLAUDE.md's "almost nothing
+second and throwing most of the ticks away -- AGENTS.md's "almost nothing
 polls" applies to a display that only ever shows minutes too.
 """
 
