@@ -8,10 +8,16 @@ FVWM3 window manager configuration. `~/.fvwm` is a symlink to `dotfiles/.fvwm`. 
 
 ## Testing Changes
 
-There is no build or test system. To apply changes:
+There is no build system. To apply changes:
 - `FvwmCommand Restart` — reload the entire config (restarts FVWM in place)
 - `FvwmCommand <command>` — execute a single FVWM command without full restart
 - `FvwmConsole` — interactive FVWM command shell for testing commands live
+
+The only automated checks are `cd bin && QT_QPA_PLATFORM=offscreen python3 -m
+unittest test_photon_tasks` and `bin/tray-randr-test`. `FvwmCommand` follows
+`$FVWMMFL_SOCKET`, not `$DISPLAY`, so a scratch Xvfb rig reaches the live fvwm
+(and `pkill` ignores `$DISPLAY`) unless it runs in a PID namespace as
+`bin/tray-randr-test` does (`unshare -Urpf --mount-proc`).
 
 ## Architecture
 
@@ -21,18 +27,21 @@ There is no build or test system. To apply changes:
 - Menus (root Toolchest, window ops, session control, SendTo)
 - Styles (global defaults + per-application overrides)
 - Colorset loading
-- Key & Mouse bindings (numpad tiling, page navigation, window ops)
-- Module configs (FvwmEvent, FvwmPager, FvwmPerl, Thumbnail)
+- Module configs (FvwmEvent, ShelfPager, FvwmPerl, Thumbnail)
+
+**bindings** — every `Key`/`Mouse` binding (numpad tiling, page navigation,
+window ops), pulled in by `Read bindings`. `bin/fvwm-keys` serves a local web
+page to browse and edit it and re-applies the file live.
 
 **colorsets** — FVWM colorsets 0-37 and the canonical QNX Photon palette. The
 palette is exported as `FVWM_PHOTON_*` values inherited by the shelf; direct
 component launches fall back to reading the same file.
 
-**The shelf is one program** — `bin/shelf-panel`, a PyQt6 window down the
-right edge. It draws its own frame, group headers, launcher rows, pager,
+**The shelf is one program** — `bin/shelf-panel`, a PyQt6 window down either
+screen edge (`ShelfToLeft`/`ShelfToRight`). It draws its own frame, group headers, launcher rows, pager,
 meters and media widget; reads its sections from `panel.items`; and keeps its
-width and collapse state in `.panel.state`. fvwm keeps the `Style` rule, the
-`EwmhBaseStruts` reservation and launching, and nothing else.
+side, width and collapse state in `.panel.state`. fvwm keeps the `Style` rule
+(layer 5), the `EwmhBaseStruts` reservation and launching, and nothing else.
 
 It stopped being FvwmButtons because three things were out of reach there and
 all three are free here (`PANEL-DESIGN.md` has the measurements):
@@ -70,13 +79,19 @@ window.
 | file | what it is |
 |---|---|
 | `bin/photon.py` | the shared Photon look: palette, bevels, themed icons |
+| `bin/photon_palette.py` | loads and validates the `FVWM_PHOTON_*` palette from `colorsets` |
 | `bin/shelf-panel` | the window: frame, headers, launchers, resize, layout |
 | `bin/photon_media.py` | MPRIS transport, marquee title, cover art, volume slider |
 | `bin/photon_meters.py` | CPU / memory / filesystem meters, via `psutil` |
-| `bin/photon_pager.py` | World View, drawn from EWMH rather than swallowed |
-| `bin/photon_tasks.py` | the window list, drawn from EWMH like the pager |
-| `bin/photon_tray.py` | the system tray: stalonetray reparented in via Qt's foreign-window container — the one piece here that is swallowed rather than drawn |
+| `bin/photon_pager.py` | World View: the `ShelfPager` FvwmPager module, reparented in via Qt's foreign-window container and relaunched (`ShelfPagerLaunch`) at each width step |
+| `bin/photon_tasks.py` | the window list, drawn from EWMH; shows `lib/Thumbnail` previews for minimized windows |
+| `bin/photon_tray.py` | the system tray: stalonetray reparented in via Qt's foreign-window container |
 | `bin/photon_clock.py` | the clock field that used to be a taskbar cell |
+
+The pager and the tray are the two pieces that are swallowed rather than drawn.
+FvwmPager's highlight window has no border option and no way to get one that
+stays even-width and unclipped; an `SGradient` ring in `HilightColorset` was
+tried and dropped, so the current page is marked by fill colour alone.
 
 Three bevel vocabularies, one function each in `photon.py`: soft-bevelled
 chrome (`raised`), hard-outlined sunken wells (`sunken`, `trough`, `groove`),
@@ -87,61 +102,68 @@ made. Every painter's docstring names the pixel it was measured from.
 Almost nothing polls. Media takes D-Bus `PropertiesChanged` (matched on the
 sender's *unique* bus name, never the well-known `org.mpris.MediaPlayer2.*`
 one), a long-lived `pactl subscribe`, and it fetches cover art when a track
-names one -- a request that ends with its image or its timeout; the pager
-takes root-window
-`PropertyNotify` through a `QSocketNotifier` on Xlib's own connection. Only
-the meters sample, because a CPU has no change signal, and they repaint only
-when a bar lands on a different pixel.
+names one -- a request that ends with its image or its timeout; the window
+list takes root-window `PropertyNotify` through a `QSocketNotifier` on Xlib's
+own connection. Only the meters sample, because a CPU has no change signal,
+and they repaint only when a bar lands on a different pixel.
 
-A component owns no geometry beyond a size hint and never talks to fvwm.
-That is the rule that let the media and meters widgets move from being
-swallowed windows to being child widgets without a line changing in either.
+A component owns no geometry beyond a size hint. The few that call back into
+fvwm do it through `FvwmCommand` (the pager's launch/kill, media output
+selection, the shelf's struts). That is the rule that let the media and
+meters widgets move from being swallowed windows to being child widgets
+without a line changing in either.
+
+**Other `bin/` tools** — `palette` (below), `fvwm-keys` (see **bindings**),
+`tile-floats` (the persistent per-WM_CLASS tiling float list in
+`.tile-floats`; `TILE-FLOATS.md` has the design) and `tray-randr-test`.
 
 **bin/fvwmscript-icontest** — regression check: FvwmScript's `Icon` property is
 broken in fvwm3 1.1.2, and a widget carrying one fails to draw *and takes every
 later widget with it*. Re-run after an fvwm upgrade. FvwmScript also has no
-hover event, which is why the shelf is FvwmButtons. (Its `HScrollBar` *does*
-emit on drag — the trap is that `SingleClic` is `#define -1`, so a `1 :` case
-label never matches. `PANEL-DESIGN.md` has the detail; this is the correction
-to a comment that used to live in `FvwmScript-ShelfMedia`.)
+hover event. Its `HScrollBar` *does* emit on drag — the trap is that
+`SingleClic` is `#define -1`, so a `1 :` case label never matches.
+`PANEL-DESIGN.md` has the detail.
 
-**lib/Thumbnail** — custom Perl module using Image::Magick for window thumbnail generation (200x180px, cached in `.thumbs/` with 100s expiry). Loaded via `ModulePath` and recycled every 300s.
+**lib/Thumbnail** — custom Perl module using Image::Magick for window thumbnail generation (up to 320x240px, cached in `images/thumbs/` with 15s expiry; `StartFunction` prunes files older than 7 days). Loaded via `ModulePath` and recycled every 300s.
 
 **FvwmScript-\*** — small UI dialogs (Confirm{Quit,Reboot,Shutdown}).
 `FvwmScript-DateTime` is no longer used for the clock (that's now
 `bin/photon_clock.py`, a Qt widget in the shelf) but is kept.
 
-**scripts/** — shell scripts: `onLock.sh` (xsecurelock), `onSuspend.sh`, `onReboot.sh`, `onShutdown.sh`, `toggle_whiskermenu.sh` (xdotool-based).
+**scripts/** — shell scripts: `onLock.sh` (xsecurelock), `onSuspend.sh`, `onReboot.sh`, `onShutdown.sh`.
 
 ## Key Conventions
 
 - Functions follow Destroy-then-Add pattern: `DestroyFunc Name` / `AddToFunc Name`
 - Module configs follow: `DestroyModuleConfig Mod:*` / `*Mod: Option Value`
 - Window styles use FVWM3 syntax: `Style "pattern" opts...`
-- Desktop layout is 3x3 pages on one desk with 5 layers (1/2/4/6/11)
+- Desktop layout is 3x3 pages on one desk with 5 layers (1/2/4/6/11); the shelf sits at 5
 - Default terminal: kitty (`$[infostore.terminal]`)
 - Paths use `$[FVWM_USERDIR]` env var pointing to `~/.fvwm`
 - A `*Module: option` config line does **not** expand `$[...]`; anything needing
   a computed value (Geometry, ButtonGeometry) goes through `PipeRead "echo ..."`
 - `InfoStoreAdd` on an existing key replaces it, so re-reads recompute cleanly
-- Colorsets 0-21 are the warm brown/rust set; 30-37 are the Photon greys
+- Colorsets 0-19 are the warm brown/rust set; 20-21 and 30-37 are the Photon
+  set (ShelfPager page/window colours and the shelf chrome)
 - Photon colors are defined only in `colorsets`, never as literal `QColor` values
 - Colors for every platform come from `palette/`: a wallust scheme in
   `palette/schemes/` rendered through `palette/templates/` (`roles.j2` derives
   every role). `bin/palette preview <scheme|image>` diffs; `apply` writes, backs up
   and reloads; `save <name>` stores the live palette as a scheme (`apply <name>`
-  restores it) and `list` names them. `colorsets` is one of its outputs, so edit
-  the template, not it.
+  restores it) and `list` names them. `colorsets` and `stalonetrayrc` are among
+  its outputs (alongside Qt, KDE, GTK 3/4, kitty and Xresources), so edit the
+  template, not them. Each `apply` leaves a backup and `restore.sh` in
+  `palette/history/<timestamp>/`.
   Every render also writes `~/.cache/palette/key.html`, a visual key of each
   color, its role and where it lands; `qt.j2` slot names are its labels.
-- Icons are 16x16 PNGs in `icons/`; backgrounds in `images/background/`
+- Icons are 16x16 PNGs in `icons/`; backgrounds in `images/bg/`
 - Sounds (MP3) in `sounds/` triggered by FvwmEvent modules
 
 ## Documentation Reference
 
-All FVWM documentation is in `doc/`. **Always consult these files before answering configuration questions.**
+All FVWM documentation is in `docs/`. **Always consult these files before answering configuration questions.**
 
-### Man Pages (`doc/Man/`)
+### Man Pages (`docs/Man/`)
 
 | File | Contents |
 |------|----------|
@@ -168,9 +190,9 @@ All FVWM documentation is in `doc/`. **Always consult these files before answeri
 | `fvwm-perllib.html` | Perl library for FVWM modules |
 | `fvwm-menu-desktop.html` | XDG/desktop menu generator |
 
-### Wiki (`doc/Wiki/`)
+### Wiki (`docs/Wiki/`)
 
-Practical how-tos with config examples. Each entry is `<dir>/index.md`.
+Practical how-tos with config examples. Each entry is `<dir>/index.md` (a few, such as `Config/Functions` and `Modules/SendToFvwm`, are `index.html`).
 
 **Config/** — syntax and how-to for each major config area:
 - `Bindings/` — Key/Mouse syntax, contexts (R/W/T/F/S/I), modifiers
