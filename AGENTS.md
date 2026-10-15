@@ -158,8 +158,9 @@ hover event. Its `HScrollBar` *does* emit on drag — the trap is that
   Every render also writes `~/.cache/palette/key.html`, a visual key of each
   color, its role and where it lands; `qt.j2` slot names are its labels.
   `palette sweep <images|schemes> --vary palette=a,b --vs live` draws the shelf
-  for every source and flag set (the axes are the `AXES` table) into
-  `~/.cache/palette/sweep/index.html`, collapsing identical palettes and never
+  for every source and flag set into `~/.cache/palette/sweep/index.html`
+  (axes are `AXIS_SPECS`, values read from the installed wallust's `run -h`,
+  so it works on 3.5 and 4.x), collapsing identical palettes and never
   touching a live file; `--interactive` serves it on localhost with image drop
   and per-cell save, and `save <name> --from <src> -- <flags>` keeps a variant.
 - Icons are 16x16 PNGs in `icons/`; backgrounds in `images/bg/`

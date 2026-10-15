@@ -66,7 +66,7 @@ body.fit .card img { zoom: 1; height: calc(100vh - 170px); width: auto; }
   <div id="sources"></div>
   <div>Add a scheme <select id="scheme"><option value="">choose</option></select>
     <label><input id="live" type="checkbox"> vs live</label></div>
-  <input id="spec" spellcheck="false" placeholder="palette=dark16,softlight backend=kmeans   (a bare axis name means all its values; Enter sweeps)">
+  <input id="spec" spellcheck="false" placeholder="(a bare axis name means all its values; Enter sweeps)">
   <div id="axes"></div>
   <div><button id="run" type="button">Sweep</button>
     <label><input id="auto" type="checkbox" checked> sweep on every change</label>
@@ -126,16 +126,18 @@ async function interactive() {
   $("#live").checked = state.live;
   for (const name of cfg.schemes) $("#scheme").add(new Option(name, name));
 
-  const presets = {
-    palette: { light: v => v.includes("light"), dark: v => v.includes("dark") },
-  };
   const axes = $("#axes");
+  const eg = Object.entries(cfg.axes).slice(0, 2).map(([a, v]) => `${a}=${v.slice(0, 2).join(",")}`);
+  $("#spec").placeholder = `${eg.join(" ")}   ${$("#spec").placeholder}`;
   for (const [axis, values] of Object.entries(cfg.axes)) {
     const fs = document.createElement("fieldset");
     fs.className = axis;
     const legend = document.createElement("legend");
     legend.textContent = axis;
-    const picks = { all: () => true, none: () => false, ...presets[axis] };
+    const picks = { all: () => true, none: () => false };
+    //  wallust 3.5 folds light/dark into its long palette list; 4.x has a style axis instead.
+    for (const t of ["light", "dark"])
+      if (values.length > 2 && values.some(v => v.includes(t))) picks[t] = v => v.includes(t);
     for (const [name, keep] of Object.entries(picks)) {
       const b = Object.assign(document.createElement("button"), { type: "button", textContent: name });
       b.addEventListener("click", () => { setAxis(axis, values.filter(keep)); changed(); });

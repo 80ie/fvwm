@@ -2,14 +2,14 @@
 """Render palette/ templates with wallust, then preview the diff or apply it.
 
   palette preview photon            a scheme from palette/schemes/
-  palette preview ~/wall.png -- -p light16   an image; args after -- go to wallust
+  palette preview ~/wall.png -- -k   an image; args after -- go to wallust
   palette apply photon
   palette save my-favorite          the live palette, as palette/schemes/my-favorite.json
-  palette save my-favorite --from ~/wall.png -- -p dark16   a variant, without applying it
+  palette save my-favorite --from ~/wall.png -- -t 20   a variant, without applying it
   palette list
   palette sweep a.png b.png tang-cats                 the shelf in each, side by side
-  palette sweep wall.png --vary palette=dark16,softdark --vary backend=kmeans,resized
-  palette sweep wall.png --axis colorspace --vs live  every value of one axis, and the live palette
+  palette sweep wall.png --vary backend=full,resized --vary contrast=off,on
+  palette sweep wall.png --axis palette --vs live  every value of one axis, and the live palette
   palette sweep --interactive [same options]          a local page: drop images, pick axes, save
 
 preview and apply render into ~/.cache/palette/preview; wallust never writes a live file.
@@ -23,6 +23,7 @@ from, and every place it lands.
 
 import argparse
 import datetime
+import functools
 import difflib
 import hashlib
 import html
@@ -416,31 +417,45 @@ MAX_VARIANTS = 64
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 
-def _valued(flag, values):
-    return {v: (flag, v) for v in values}
+#  (axis, flag, values): None reads the values from `wallust run -h`, () is an
+#  off/on switch.  Axes whose flag the installed wallust lacks are dropped, so
+#  3.5 gets colorspace and fallback, 4.x gets style and use16cols.
+AXIS_SPECS = (
+    ("palette", "-p", None),
+    ("style", "-S", None),
+    ("backend", "-b", None),
+    ("colorspace", "-c", None),
+    ("fallback", "-f", None),
+    ("threshold", "-t", ("5", "10", "15", "20", "30")),
+    ("saturation", "--saturation", ("20", "40", "60", "80")),
+    ("contrast", "-k", ()),
+    ("use16cols", "--use16cols", ()),
+)
 
 
-#  Axis -> value -> the wallust flags it adds, per `wallust run --help` (3.5.1).
-AXES = {
-    "palette": _valued("-p", (
-        "dark", "dark16", "darkcomp", "darkcomp16", "ansidark", "ansidark16",
-        "harddark", "harddark16", "harddarkcomp", "harddarkcomp16",
-        "saliencedark", "saliencedark16", "saliencedarkbalanced",
-        "saliencedarkbalanced16", "saliencedarkdistributed",
-        "saliencedarkdistributed16", "saliencedarklow", "saliencedarklow16",
-        "light", "light16", "lightcomp", "lightcomp16", "softdark", "softdark16",
-        "softdarkcomp", "softdarkcomp16", "softlight", "softlight16",
-        "softlightcomp", "softlightcomp16", "saliencelight", "saliencelight16",
-        "saliencelightbalanced", "saliencelightbalanced16",
-        "saliencelightdistributed", "saliencelightdistributed16",
-        "saliencelightlow", "saliencelightlow16")),
-    "backend": _valued("-b", ("full", "resized", "wal", "thumb", "fastresize", "kmeans")),
-    "colorspace": _valued("-c", ("lab", "labmixed", "lch", "lchmixed", "salience", "lchansi")),
-    "fallback": _valued("-f", ("interpolate", "complementary")),
-    "threshold": _valued("-t", ("5", "10", "15", "20", "30")),
-    "saturation": _valued("--saturation", ("20", "40", "60", "80")),
-    "contrast": {"off": (), "on": ("-k",)},
-}
+@functools.cache
+def axes():
+    """Axis -> value -> the wallust flags it adds."""
+    try:
+        text = subprocess.run(["wallust", "run", "-h"], capture_output=True, text=True).stdout
+    except OSError:
+        text = ""
+    opts = {}
+    for entry in re.split(r"\n(?= {2,6}-)", text):
+        m = re.match(r"\s*(?:(-\w), )?(--[\w-]+)", entry)
+        if m:
+            found = re.search(r"\[possible values: ([^\]]+)\]", " ".join(entry.split()))
+            for flag in filter(None, m.groups()):
+                opts[flag] = found[1].split(", ") if found else None
+    out = {}
+    for axis, flag, values in AXIS_SPECS:
+        if flag not in opts:
+            continue
+        if values == ():
+            out[axis] = {"off": (), "on": (flag,)}
+        elif values or opts[flag]:
+            out[axis] = {v: (flag, v) for v in values or opts[flag]}
+    return out
 
 
 def is_image(source):
@@ -487,17 +502,17 @@ class Variant:
 
 def check_vary(vary):
     for axis, values in vary.items():
-        if axis not in AXES:
-            sys.exit(f"palette: no axis {axis!r}; one of {', '.join(AXES)}")
+        if axis not in axes():
+            sys.exit(f"palette: no axis {axis!r}; one of {', '.join(axes())}")
         for value in values:
-            if value not in AXES[axis]:
+            if value not in axes()[axis]:
                 sys.exit(f"palette: {axis} has no value {value!r}; "
-                         f"one of {', '.join(AXES[axis])}")
+                         f"one of {', '.join(axes()[axis])}")
     return {axis: list(dict.fromkeys(values)) for axis, values in vary.items() if values}
 
 
 def parse_vary(specs, axes):
-    vary = {axis: list(AXES.get(axis, ())) for axis in axes}
+    vary = {axis: list(axes().get(axis, ())) for axis in axes}
     for spec in specs:
         axis, _, values = spec.partition("=")
         vary.setdefault(axis, []).extend(values.split(","))
@@ -507,7 +522,7 @@ def parse_vary(specs, axes):
 def plan(sources, vary, vs_live):
     """The flag-set columns, and every variant: one per image and flag set,
     one per scheme (wallust cs takes no generation flags), one for live."""
-    columns = [tuple(f for axis, value in zip(vary, combo) for f in AXES[axis][value])
+    columns = [tuple(f for axis, value in zip(vary, combo) for f in axes()[axis][value])
                for combo in itertools.product(*vary.values())]
     sources = list(dict.fromkeys(normal_source(s) for s in sources))
     variants = [Variant(s, flags) for s in sources
@@ -706,7 +721,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/config":
             return self.reply({
-                "axes": {axis: list(values) for axis, values in AXES.items()},
+                "axes": {axis: list(values) for axis, values in axes().items()},
                 "vary": self.server.vary, "vs_live": self.server.vs_live,
                 "sources": self.server.sources, "max": MAX_VARIANTS,
                 "schemes": sorted(p.stem for p in (ROOT / "schemes").glob("*.json"))})
@@ -824,7 +839,7 @@ def main():
     cmd = sub.add_parser("sweep", help="draw the shelf across sources and wallust flags")
     cmd.add_argument("sources", nargs="*", help="scheme names, scheme .json files, or images")
     cmd.add_argument("--vary", action="append", default=[], metavar="AXIS=V1,V2",
-                     help=f"cross these values; axes: {', '.join(AXES)}")
+                     help=f"cross these values; axes: {', '.join(axes())}")
     cmd.add_argument("--axis", action="append", default=[], help="vary one axis across all its values")
     cmd.add_argument("--vs", choices=["live"], help="add the live palette, unchanged")
     cmd.add_argument("--interactive", action="store_true", help="serve a local page instead")
