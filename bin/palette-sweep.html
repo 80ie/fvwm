@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Palette sweep</title>
+<style>
+:root { --bg: #f5f3f0; --fg: #1c1a18; --dim: #6b655f; --rule: #d9d4ce; --field: #fff; --accent: #8a4b2a; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1c1a18; --fg: #e8e4df; --dim: #9a938b; --rule: #38342f; --field: #262320; --accent: #d08a5f; } }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.4 sans-serif; margin: 0; padding: 16px; }
+h1 { font-size: 18px; margin: 0 0 4px; display: flex; gap: 16px; align-items: baseline; }
+h1 label { font-size: 12px; font-weight: normal; color: var(--dim); }
+small, .meta { color: var(--dim); font-weight: normal; }
+code, .cmd { font: 11px monospace; }
+button { font: inherit; padding: 2px 10px; }
+[hidden] { display: none !important; }
+
+#controls { border: 1px solid var(--rule); padding: 12px; margin: 12px 0; display: grid; gap: 10px; }
+#drop { border: 2px dashed var(--rule); padding: 18px; text-align: center; color: var(--dim); cursor: pointer; }
+#drop.over { border-color: var(--accent); color: var(--fg); }
+#sources { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--rule); padding: 2px 4px 2px 8px; border-radius: 3px; }
+.chip button { border: 0; background: none; color: var(--dim); padding: 0 4px; cursor: pointer; }
+#axes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+fieldset { border: 1px solid var(--rule); margin: 0; padding: 4px 8px 6px; }
+legend { font-weight: bold; }
+legend button { font-size: 11px; font-weight: normal; padding: 0 6px; margin-left: 4px; }
+#spec { width: 100%; font: 12px monospace; padding: 4px 6px; background: var(--field); color: var(--fg); border: 1px solid var(--rule); }
+#spec.bad { border-color: #c03a2b; }
+fieldset label { display: inline-block; margin: 1px 8px 1px 0; white-space: nowrap; }
+fieldset.palette { grid-column: 1 / -1; }
+#count.over, #msg.bad { color: #c03a2b; }
+
+.sweep { display: flex; flex-wrap: wrap; gap: 24px 32px; align-items: flex-start; }
+.group h2 { font-size: 13px; margin: 0 0 6px; max-width: 100%; overflow-wrap: anywhere; }
+.group h2 small { margin-left: 6px; }
+.cards { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.card .flags { font-weight: bold; }
+.card { width: min-content; min-width: 120px; display: grid; gap: 4px; }
+.card img { zoom: var(--zoom, 1); justify-self: start; cursor: zoom-in; outline: 1px solid var(--rule); }
+.card .also { color: var(--dim); }
+.err { height: 120px; display: grid; place-items: center; text-align: center;
+              border: 1px dashed var(--rule); color: var(--dim); padding: 8px; }
+.err { color: #c03a2b; font: 11px monospace; overflow: auto; word-break: break-word; place-items: start; }
+.strip { display: grid; grid-template-columns: repeat(16, 1fr); height: 14px; border: 1px solid var(--rule); }
+.cmd { width: 100%; background: var(--field); color: var(--fg); border: 1px solid var(--rule); padding: 2px 4px; cursor: copy; }
+.cmd.copied { border-color: var(--accent); }
+.save { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.save .name { flex: 1 1 100%; width: 100%; min-width: 0; font: 11px monospace; }
+.card .flags, .card .also { overflow-wrap: anywhere; }
+.save .status { font-size: 11px; color: var(--dim); }
+body[data-mode="static"] .save { display: none; }
+
+body.fit .card img { zoom: 1; height: calc(100vh - 170px); width: auto; }
+#lightbox { position: fixed; inset: 0; background: #000c; overflow: auto; display: flex;
+            justify-content: center; align-items: flex-start; padding: 16px; cursor: zoom-out; }
+#lightbox img { max-width: none; image-rendering: pixelated; }
+</style>
+</head>
+<body data-mode="static">
+<h1>Palette sweep <label>panel size <select id="zoom"><option value="fit">fit height</option><option value="1">100%</option><option value="0.5">50%</option><option value="0.35">35%</option></select></label></h1>
+<section id="controls" hidden>
+  <div id="drop">Drop images here, or click to choose<input id="file" type="file" accept="image/*" multiple hidden></div>
+  <div id="sources"></div>
+  <div>Add a scheme <select id="scheme"><option value="">choose</option></select>
+    <label><input id="live" type="checkbox"> vs live</label></div>
+  <input id="spec" spellcheck="false" placeholder="palette=dark16,softlight backend=kmeans   (a bare axis name means all its values; Enter sweeps)">
+  <div id="axes"></div>
+  <div><button id="run" type="button">Sweep</button>
+    <label><input id="auto" type="checkbox" checked> sweep on every change</label>
+    <span id="count"></span> <span id="msg"></span></div>
+</section>
+<div id="grid"><!--grid--></div>
+<div id="lightbox" hidden></div>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const token = location.hash.slice(1);
+const box = $("#lightbox");
+
+document.addEventListener("click", e => {
+  const img = e.target.closest(".card img");
+  if (img) {
+    const big = Object.assign(new Image(), { src: img.src });
+    big.onload = () => { big.style.width = big.naturalWidth * 2 + "px"; };
+    box.replaceChildren(big);
+    box.hidden = false;
+    return;
+  }
+  if (e.target.closest("#lightbox")) { box.hidden = true; return; }
+  const cmd = e.target.closest(".cmd");
+  if (cmd) {
+    cmd.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(cmd.value) : Promise.reject())
+      .catch(() => document.execCommand("copy"));
+    cmd.classList.add("copied");
+    setTimeout(() => cmd.classList.remove("copied"), 800);
+  }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") box.hidden = true; });
+
+const zoom = $("#zoom");
+try { zoom.value = localStorage.getItem("zoom") || "fit"; } catch { zoom.value = "fit"; }
+const setZoom = () => {
+  document.body.classList.toggle("fit", zoom.value === "fit");
+  document.body.style.setProperty("--zoom", zoom.value === "fit" ? 1 : zoom.value);
+};
+zoom.addEventListener("change", () => { setZoom(); try { localStorage.setItem("zoom", zoom.value); } catch {} });
+setZoom();
+
+if (document.body.dataset.mode === "interactive") interactive();
+
+async function api(path, body, headers = {}) {
+  const res = await fetch(path, { method: body === undefined ? "GET" : "POST",
+    headers: { "X-Token": token, ...headers }, body });
+  const data = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok || data.error) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+async function interactive() {
+  const cfg = await api("/api/config");
+  const state = { sources: cfg.sources, vary: cfg.vary, live: cfg.vs_live };
+  $("#controls").hidden = false;
+  $("#live").checked = state.live;
+  for (const name of cfg.schemes) $("#scheme").add(new Option(name, name));
+
+  const presets = {
+    palette: { light: v => v.includes("light"), dark: v => v.includes("dark") },
+  };
+  const axes = $("#axes");
+  for (const [axis, values] of Object.entries(cfg.axes)) {
+    const fs = document.createElement("fieldset");
+    fs.className = axis;
+    const legend = document.createElement("legend");
+    legend.textContent = axis;
+    const picks = { all: () => true, none: () => false, ...presets[axis] };
+    for (const [name, keep] of Object.entries(picks)) {
+      const b = Object.assign(document.createElement("button"), { type: "button", textContent: name });
+      b.addEventListener("click", () => { setAxis(axis, values.filter(keep)); changed(); });
+      legend.append(b);
+    }
+    fs.append(legend);
+    for (const v of values) {
+      const label = document.createElement("label");
+      const box = Object.assign(document.createElement("input"), { type: "checkbox", value: v });
+      box.addEventListener("change", () => {
+        setAxis(axis, [...fs.querySelectorAll("input:checked")].map(i => i.value));
+        changed();
+      });
+      label.append(box, " " + v);
+      fs.append(label);
+    }
+    axes.append(fs);
+  }
+
+  function setAxis(axis, picked) {
+    if (picked.length) state.vary[axis] = picked; else delete state.vary[axis];
+    for (const box of axes.querySelectorAll(`fieldset.${axis} input`)) box.checked = picked.includes(box.value);
+  }
+
+  function specText() {
+    return Object.entries(state.vary).map(([axis, vs]) =>
+      vs.length === cfg.axes[axis].length ? axis : `${axis}=${vs.join(",")}`).join(" ");
+  }
+
+  function parseSpec(text) {
+    const vary = {};
+    for (const word of text.trim().split(/\s+/).filter(Boolean)) {
+      const [axis, list] = word.replace(/^--(vary|axis)=?/, "").split("=");
+      const all = cfg.axes[axis];
+      if (!all) throw new Error(`no axis ${axis}; one of ${Object.keys(cfg.axes).join(", ")}`);
+      const vs = list === undefined ? all : list.split(",").filter(Boolean);
+      const bad = vs.find(v => !all.includes(v));
+      if (bad) throw new Error(`${axis} has no value ${bad}`);
+      vary[axis] = [...new Set([...(vary[axis] || []), ...vs])];
+    }
+    return vary;
+  }
+
+  const spec = $("#spec");
+  spec.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    try {
+      const vary = parseSpec(spec.value);
+      for (const axis of Object.keys(cfg.axes)) setAxis(axis, vary[axis] || []);
+      spec.classList.remove("bad");
+      count();
+      run();
+    } catch (err) { spec.classList.add("bad"); say(err.message, true); }
+  });
+
+  let timer;
+  function changed() {
+    count();
+    clearTimeout(timer);
+    if ($("#auto").checked) timer = setTimeout(() => { if (ready()) run(); }, 400);
+  }
+
+  for (const axis of Object.keys(cfg.axes)) setAxis(axis, state.vary[axis] || []);
+
+  function drawSources() {
+    const el = $("#sources");
+    el.replaceChildren(...state.sources.map((s, i) => {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = s.label;
+      chip.title = s.source;
+      const x = Object.assign(document.createElement("button"), { type: "button", textContent: "×" });
+      x.addEventListener("click", () => { state.sources.splice(i, 1); drawSources(); changed(); });
+      chip.append(x);
+      return chip;
+    }));
+    count();
+  }
+
+  function variants() {
+    const columns = Object.values(state.vary).reduce((n, v) => n * v.length, 1);
+    return state.sources.reduce((t, s) => t + (s.kind === "image" ? columns : 1), 0) + (state.live ? 1 : 0);
+  }
+
+  function ready() { const n = variants(); return n > 0 && n <= cfg.max; }
+
+  function count() {
+    const n = variants();
+    const el = $("#count");
+    el.textContent = `${n} variant${n === 1 ? "" : "s"} (limit ${cfg.max})`;
+    el.classList.toggle("over", n > cfg.max);
+    if (document.activeElement !== spec) { spec.value = specText(); spec.classList.remove("bad"); }
+  }
+
+  function say(text, err) { const m = $("#msg"); m.textContent = text; m.classList.toggle("bad", !!err); }
+
+  let latest = 0;
+  async function run() {
+    const mine = ++latest;
+    say("rendering…");
+    try {
+      const res = await api("/api/sweep", JSON.stringify(
+        { sources: state.sources.map(s => s.source), vary: state.vary, vs_live: state.live }));
+      if (mine !== latest) return;
+      $("#grid").innerHTML = res.grid;
+      say("done");
+    } catch (e) { if (mine === latest) say(e.message, true); }
+  }
+
+  async function upload(files) {
+    try {
+      for (const f of files) {
+        const s = await api("/api/upload", f, { "X-Filename": encodeURIComponent(f.name) });
+        if (!state.sources.some(o => o.source === s.source)) state.sources.push(s);
+      }
+    } catch (e) { return say(e.message, true); }
+    drawSources();
+    run();
+  }
+
+  const drop = $("#drop");
+  drop.addEventListener("click", () => $("#file").click());
+  $("#file").addEventListener("change", e => upload([...e.target.files]));
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", e => {
+    e.preventDefault();
+    drop.classList.remove("over");
+    upload([...e.dataTransfer.files].filter(f => f.type.startsWith("image/")));
+  });
+  $("#scheme").addEventListener("change", e => {
+    const name = e.target.value;
+    if (name && !state.sources.some(s => s.source === name)) state.sources.push({ source: name, label: name, kind: "scheme" });
+    e.target.value = "";
+    drawSources();
+    changed();
+  });
+  $("#live").addEventListener("change", e => { state.live = e.target.checked; changed(); });
+  $("#run").addEventListener("click", run);
+
+  $("#grid").addEventListener("click", e => {
+    const save = e.target.closest(".save");
+    if (!save) return;
+    if (e.target.closest(".open")) {
+      $(".form", save).hidden = false;
+      $(".name", save).focus();
+    } else if (e.target.closest(".go, .replace")) {
+      saveAs(save, !!e.target.closest(".replace"));
+    }
+  });
+  $("#grid").addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target.closest(".save .name")) saveAs(e.target.closest(".save"), false);
+  });
+
+  async function saveAs(save, force) {
+    const status = $(".status", save);
+    const replace = $(".replace", save);
+    replace.hidden = true;
+    status.textContent = "saving…";
+    try {
+      const res = await api("/api/save", JSON.stringify({ key: save.dataset.key, name: $(".name", save).value, force }));
+      status.textContent = `saved ${res.path}`;
+    } catch (e) {
+      status.textContent = e.message;
+      replace.hidden = !/exists/.test(e.message);
+    }
+  }
+
+  drawSources();
+  if (state.sources.length || state.live) run();
+}
+</script>
+</body>
+</html>

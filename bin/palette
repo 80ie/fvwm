@@ -5,9 +5,16 @@
   palette preview ~/wall.png -- -p light16   an image; args after -- go to wallust
   palette apply photon
   palette save my-favorite          the live palette, as palette/schemes/my-favorite.json
+  palette save my-favorite --from ~/wall.png -- -p dark16   a variant, without applying it
   palette list
+  palette sweep a.png b.png tang-cats                 the shelf in each, side by side
+  palette sweep wall.png --vary palette=dark16,softdark --vary backend=kmeans,resized
+  palette sweep wall.png --axis colorspace --vs live  every value of one axis, and the live palette
+  palette sweep --interactive [same options]          a local page: drop images, pick axes, save
 
 preview and apply render into ~/.cache/palette/preview; wallust never writes a live file.
+sweep renders each variant into ~/.cache/palette/sweep/v/, draws the shelf with
+bin/shelf-snapshot, and writes ~/.cache/palette/sweep/index.html.
 `apply` backs up what it replaces in ~/.fvwm/palette/history beside a
 restore.sh and a pre-apply screen.png so you can tell backups apart.
 Both also write ~/.cache/palette/key.html: each color, the role it comes
@@ -17,19 +24,30 @@ from, and every place it lands.
 import argparse
 import datetime
 import difflib
+import hashlib
 import html
+import itertools
 import json
 import os
 import re
+import secrets
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote
 
-ROOT = Path(__file__).resolve().parent.parent / "palette"
+BIN = Path(__file__).resolve().parent
+ROOT = BIN.parent / "palette"
 CACHE = Path.home() / ".cache" / "palette"
 PREVIEW = CACHE / "preview"
 HEX = re.compile(r"#[0-9A-Fa-f]{6,8}\b")
@@ -62,8 +80,11 @@ def wallust(source, extra, tpl_dir, targets):
             for name, (tpl, out) in targets.items()
         ]
         (work / "wallust.toml").write_text("\n".join(lines) + "\n")
-        cmd = source_cmd(source) + ["-s", "--no-hooks", "-q", "-d", str(work)]
-        subprocess.run(cmd + extra, check=True)
+        cmd = source_cmd(source) + ["-s", "--no-hooks", "-q", "-d", str(work)] + extra
+        done = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
+        if done.returncode:
+            sys.stderr.write(done.stderr)
+            raise subprocess.CalledProcessError(done.returncode, cmd, stderr=done.stderr)
 
 
 def render(source, extra):
@@ -333,31 +354,456 @@ def apply(args):
 XRES = re.compile(r"^\*\.(\w+):\s*(#[0-9A-Fa-f]{6})\s*$", re.M)
 
 
-def save(args):
-    """Write the live palette as a scheme, read back from the Xresources apply
-    rendered: it holds the resolved colors as they are, whether they came
-    from a scheme or an image."""
-    if not re.fullmatch(r"[\w-]+", args.name):
-        sys.exit(f"palette: {args.name!r} is not a usable scheme name")
-    scheme = ROOT / "schemes" / f"{args.name}.json"
-    if scheme.exists() and not args.force:
+def render_into(source, flags, out, names):
+    """Render the templates `names` for one variant into out/, each file named
+    after its template.  LIVE copies what apply last wrote instead."""
+    targets = {n: (tpl, out / tpl) for n, (tpl, _) in templates().items() if n in names}
+    if source == LIVE:
+        for name, (_, dest) in targets.items():
+            live = templates()[name][1]
+            if live.is_file():
+                shutil.copyfile(live, dest)
+        return
+    extra = list(flags)
+    #  Parallel sweep renders would race on ~/.cache/wallust.
+    if is_image(source) and "-n" not in extra:
+        extra.append("-n")
+    wallust(source, extra, ROOT / "templates", targets)
+
+
+def save_variant(name, source, flags=(), force=False):
+    """Write a scheme from the Xresources a variant renders: it holds the
+    resolved colors as they are, whether they came from a scheme or an image."""
+    if not re.fullmatch(r"[\w-]+", name):
+        sys.exit(f"palette: {name!r} is not a usable scheme name")
+    scheme = ROOT / "schemes" / f"{name}.json"
+    if scheme.exists() and not force:
         sys.exit(f"palette: {scheme.name} exists; --force replaces it")
-    live = templates()["xresources"][1]
-    if not live.is_file():
-        sys.exit("palette: nothing has been applied yet")
-    got = {k: v.lower() for k, v in XRES.findall(live.read_text())}
+    with tempfile.TemporaryDirectory(prefix="palette-save-") as tmp:
+        xres = Path(tmp) / templates()["xresources"][0]
+        render_into(source, flags, Path(tmp), {"xresources"})
+        if not xres.is_file():
+            sys.exit("palette: nothing has been applied yet")
+        got = {k: v.lower() for k, v in XRES.findall(xres.read_text())}
     scheme.write_text(json.dumps({
         "special": {"background": got["background"],
                     "foreground": got["foreground"],
                     "cursor": got["cursorColor"]},
         "colors": {f"color{i}": got[f"color{i}"] for i in range(16)},
     }, indent=2) + "\n")
+    return scheme
+
+
+def save(args):
+    if args.wallust and not args.source:
+        sys.exit("palette: wallust args need --from")
+    scheme = save_variant(args.name, args.source or LIVE, tuple(args.wallust), args.force)
     print(f"saved {scheme}")
 
 
 def list_schemes(args):
     for path in sorted((ROOT / "schemes").glob("*.json")):
         print(path.stem)
+
+
+#  ---- sweep -----------------------------------------------------------------
+
+SWEEP = CACHE / "sweep"
+UPLOADS = SWEEP / "uploads"
+PAGE = BIN / "palette-sweep.html"
+LIVE = ":live"
+MAX_VARIANTS = 64
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+def _valued(flag, values):
+    return {v: (flag, v) for v in values}
+
+
+#  Axis -> value -> the wallust flags it adds, per `wallust run --help` (3.5.1).
+AXES = {
+    "palette": _valued("-p", (
+        "dark", "dark16", "darkcomp", "darkcomp16", "ansidark", "ansidark16",
+        "harddark", "harddark16", "harddarkcomp", "harddarkcomp16",
+        "saliencedark", "saliencedark16", "saliencedarkbalanced",
+        "saliencedarkbalanced16", "saliencedarkdistributed",
+        "saliencedarkdistributed16", "saliencedarklow", "saliencedarklow16",
+        "light", "light16", "lightcomp", "lightcomp16", "softdark", "softdark16",
+        "softdarkcomp", "softdarkcomp16", "softlight", "softlight16",
+        "softlightcomp", "softlightcomp16", "saliencelight", "saliencelight16",
+        "saliencelightbalanced", "saliencelightbalanced16",
+        "saliencelightdistributed", "saliencelightdistributed16",
+        "saliencelightlow", "saliencelightlow16")),
+    "backend": _valued("-b", ("full", "resized", "wal", "thumb", "fastresize", "kmeans")),
+    "colorspace": _valued("-c", ("lab", "labmixed", "lch", "lchmixed", "salience", "lchansi")),
+    "fallback": _valued("-f", ("interpolate", "complementary")),
+    "threshold": _valued("-t", ("5", "10", "15", "20", "30")),
+    "saturation": _valued("--saturation", ("20", "40", "60", "80")),
+    "contrast": {"off": (), "on": ("-k",)},
+}
+
+
+def is_image(source):
+    return source != LIVE and source_cmd(source)[1] == "run"
+
+
+def normal_source(source):
+    """Schemes by name, images by absolute path, so a variant's identity is stable."""
+    if source == LIVE or (ROOT / "schemes" / f"{source}.json").is_file():
+        return source
+    source = str(Path(source).expanduser().resolve())
+    source_cmd(source)
+    return source
+
+
+def source_label(source):
+    if source == LIVE:
+        return "live"
+    if (ROOT / "schemes" / f"{source}.json").is_file():
+        return source
+    path = Path(source)
+    name = path.with_name(path.name + ".name")
+    return name.read_text().strip() if path.parent == UPLOADS and name.is_file() else path.name
+
+
+def source_info(source):
+    return {"source": source, "label": source_label(source),
+            "kind": "image" if is_image(source) else "scheme"}
+
+
+@dataclass(frozen=True)
+class Variant:
+    source: str
+    flags: tuple = ()
+
+    @property
+    def key(self):
+        return hashlib.sha1(json.dumps([self.source, self.flags]).encode()).hexdigest()[:16]
+
+    @property
+    def dir(self):
+        return SWEEP / "v" / self.key
+
+
+def check_vary(vary):
+    for axis, values in vary.items():
+        if axis not in AXES:
+            sys.exit(f"palette: no axis {axis!r}; one of {', '.join(AXES)}")
+        for value in values:
+            if value not in AXES[axis]:
+                sys.exit(f"palette: {axis} has no value {value!r}; "
+                         f"one of {', '.join(AXES[axis])}")
+    return {axis: list(dict.fromkeys(values)) for axis, values in vary.items() if values}
+
+
+def parse_vary(specs, axes):
+    vary = {axis: list(AXES.get(axis, ())) for axis in axes}
+    for spec in specs:
+        axis, _, values = spec.partition("=")
+        vary.setdefault(axis, []).extend(values.split(","))
+    return check_vary(vary)
+
+
+def plan(sources, vary, vs_live):
+    """The flag-set columns, and every variant: one per image and flag set,
+    one per scheme (wallust cs takes no generation flags), one for live."""
+    columns = [tuple(f for axis, value in zip(vary, combo) for f in AXES[axis][value])
+               for combo in itertools.product(*vary.values())]
+    sources = list(dict.fromkeys(normal_source(s) for s in sources))
+    variants = [Variant(s, flags) for s in sources
+                for flags in (columns if is_image(s) else [()])]
+    if vs_live:
+        variants.append(Variant(LIVE))
+    if not variants:
+        sys.exit("palette: nothing to sweep; name an image or scheme, or --vs live")
+    if len(variants) > MAX_VARIANTS:
+        images = sum(map(is_image, sources))
+        sys.exit(f"palette: {len(variants)} variants ({images} image(s) x {len(columns)} "
+                 f"flag sets, plus schemes) is over the limit of {MAX_VARIANTS}; "
+                 "drop a --vary value or a source")
+    return columns, variants
+
+
+def render_variant(v):
+    shutil.rmtree(v.dir, ignore_errors=True)
+    v.dir.mkdir(parents=True)
+    (v.dir / "meta.json").write_text(json.dumps({"source": v.source, "flags": v.flags}))
+    for name in ("panel.items", "icons"):
+        (v.dir / name).symlink_to(BIN.parent / name)
+    #  A copy, so the preview matches the live width, side and collapsed groups.
+    if (BIN.parent / ".panel.state").is_file():
+        shutil.copyfile(BIN.parent / ".panel.state", v.dir / ".panel.state")
+    try:
+        render_into(v.source, v.flags, v.dir, {"fvwm", "xresources"})
+    except subprocess.CalledProcessError as e:
+        return e.stderr.strip() or f"wallust exited {e.returncode}"
+    if not (v.dir / "colorsets").is_file():
+        return "no colorsets rendered"
+    return None
+
+
+def snapshot(v):
+    done = subprocess.run(
+        [sys.executable, str(BIN / "shelf-snapshot"), "--out", str(v.dir / "panel.png")],
+        env={**os.environ, "FVWM_USERDIR": str(v.dir)}, capture_output=True, text=True)
+    if done.returncode:
+        return (done.stderr.strip().splitlines() or ["shelf-snapshot failed"])[-1]
+    return None
+
+
+def variant_from_key(key):
+    if not re.fullmatch(r"[0-9a-f]{16}", key or ""):
+        sys.exit("palette: no such variant")
+    try:
+        meta = json.loads((SWEEP / "v" / key / "meta.json").read_text())
+    except OSError:
+        sys.exit("palette: no such variant")
+    return Variant(meta["source"], tuple(meta["flags"]))
+
+
+def sweep(variants):
+    """Render every variant, collapse identical palettes within a source, and
+    snapshot the rest.  Each variant owns its own directory."""
+    with ThreadPoolExecutor(os.cpu_count()) as pool:
+        errors = dict(zip(variants, pool.map(render_variant, variants)))
+        first, same = {}, {}
+        for v in variants:
+            if errors[v] is None:
+                body = (v.dir / "colorsets").read_bytes()
+                if first.setdefault((v.source, body), v) is not v:
+                    same[v] = first[(v.source, body)]
+        todo = [v for v in variants if errors[v] is None and v not in same]
+        errors.update(zip(todo, pool.map(snapshot, todo)))
+
+    cells = []
+    for v in variants:
+        xres = v.dir / "Xresources"
+        got = dict(XRES.findall(xres.read_text())) if xres.is_file() else {}
+        cells.append({"key": v.key, "source": v.source, "label": source_label(v.source),
+                      "flags": v.flags, "error": errors[v],
+                      "same_as": same[v].flags if v in same else None,
+                      "colors": [got[c].lower() for c in SCHEME[3:] if c in got]})
+    return cells
+
+
+def slug(cell):
+    stem = Path(cell["label"]).stem if cell["source"] != LIVE else "live"
+    return re.sub(r"[^\w-]+", "-", "-".join([stem] + [f.lstrip("-") for f in cell["flags"]])
+                  ).strip("-")[:60] or "scheme"
+
+
+def commands(cell):
+    name = slug(cell)
+    if cell["source"] == LIVE:
+        return [f"palette save {name}"]
+    src = shlex.quote(cell["source"])
+    tail = f" -- {shlex.join(cell['flags'])}" if cell["flags"] else ""
+    return [f"palette apply {src}{tail}", f"palette save {name} --from {src}{tail}"]
+
+
+def grid_html(cells, url):
+    esc = html.escape
+
+    def flagtext(flags):
+        return esc(" ".join(flags) or "wallust defaults")
+
+    also = {}
+    for c in cells:
+        if c["same_as"] is not None:
+            also.setdefault((c["source"], tuple(c["same_as"])), []).append(c["flags"])
+
+    def card(c):
+        if c["error"]:
+            body = f'<div class=err>{esc(c["error"])}</div>'
+        else:
+            body = f'<img src="{esc(url(c["key"]))}" alt="{esc(c["label"])}">'
+        strip = "".join(f'<i style="background:{x}" title="color{i} {x}"></i>'
+                        for i, x in enumerate(c["colors"]))
+        cmds = "".join(f'<input class=cmd readonly value="{esc(cmd)}">' for cmd in commands(c))
+        dups = also.get((c["source"], tuple(c["flags"])), [])
+        same = "".join(f"<code class=also>= {flagtext(f)}</code>" for f in dups)
+        return (f'<div class=card><code class=flags>{flagtext(c["flags"])}</code>{same}{body}'
+                f'<div class=strip>{strip}</div>{cmds}'
+                f'<div class=save data-key={c["key"]}>'
+                '<button type=button class=open>Save as scheme</button>'
+                f'<span class=form hidden><input class=name value="{esc(slug(c))}" '
+                'spellcheck=false aria-label="scheme name"><button type=button class=go>Save</button>'
+                '<button type=button class=replace hidden>Replace</button></span>'
+                '<span class=status></span></div></div>')
+
+    groups = {}
+    for c in cells:
+        groups.setdefault(c["source"], []).append(c)
+    distinct = sum(c["same_as"] is None for c in cells)
+    out = [f'<p class=meta>{len(cells)} variants, {distinct} distinct · '
+           f'{datetime.datetime.now():%Y-%m-%d %H:%M}</p>',
+           "<div class=sweep>"]
+    for source, group in groups.items():
+        kind = "live palette" if source == LIVE else (
+            "image" if is_image(source) else "scheme: flags do not apply")
+        out.append(f'<section class=group><h2 title="{esc(source)}">{esc(group[0]["label"])} '
+                   f'<small>{kind}</small></h2><div class=cards>'
+                   + "".join(card(c) for c in group if c["same_as"] is None) + "</div></section>")
+    out.append("</div>")
+    return "\n".join(out)
+
+
+def page(mode, grid=""):
+    text = PAGE.read_text().replace("<!--grid-->", grid)
+    return text.replace('<body data-mode="static">', f'<body data-mode="{mode}">')
+
+
+def run_sweep(sources, vary, vs_live):
+    _, variants = plan(sources, vary, vs_live)
+    cells = sweep(variants)
+    (SWEEP / "index.html").write_text(
+        page("static", grid_html(cells, lambda key: f"v/{key}/panel.png")))
+    return cells
+
+
+def sweep_cmd(args):
+    vary = parse_vary(args.vary, args.axis)
+    if args.interactive:
+        return serve(args, vary)
+    run_sweep(args.sources, vary, args.vs == "live")
+    print(f"Sweep: {SWEEP / 'index.html'}")
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "palette-sweep"
+
+    def log_message(self, *a):
+        pass
+
+    def authed(self):
+        query = dict(p.split("=", 1) for p in self.path.partition("?")[2].split("&") if "=" in p)
+        token = self.headers.get("X-Token") or query.get("t", "")
+        if secrets.compare_digest(token, self.server.token):
+            return True
+        self.send_error(403, "bad token")
+        return False
+
+    def reply(self, body, ctype="application/json", status=200):
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body)
+        body = body.encode() if isinstance(body, str) else body
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def body(self):
+        return self.rfile.read(int(self.headers.get("Content-Length", 0)))
+
+    def do_GET(self):
+        self.server.touch()
+        path = self.path.split("?")[0]
+        if path == "/":
+            return self.reply(page("interactive"), "text/html; charset=utf-8")
+        if not self.authed():
+            return
+        if path == "/api/config":
+            return self.reply({
+                "axes": {axis: list(values) for axis, values in AXES.items()},
+                "vary": self.server.vary, "vs_live": self.server.vs_live,
+                "sources": self.server.sources, "max": MAX_VARIANTS,
+                "schemes": sorted(p.stem for p in (ROOT / "schemes").glob("*.json"))})
+        m = re.fullmatch(r"/v/([0-9a-f]{16})/panel\.png", path)
+        if m and (SWEEP / "v" / m[1] / "panel.png").is_file():
+            return self.reply((SWEEP / "v" / m[1] / "panel.png").read_bytes(), "image/png")
+        self.send_error(404)
+
+    def do_POST(self):
+        self.server.touch()
+        if not self.authed():
+            return
+        try:
+            if self.path == "/api/upload":
+                return self.reply(self.upload())
+            data = json.loads(self.body())
+            if self.path == "/api/sweep":
+                with self.server.sweep_lock:
+                    cells = run_sweep(data.get("sources", []),
+                                               check_vary(data.get("vary", {})),
+                                               bool(data.get("vs_live")))
+
+                def url(key):
+                    return f"/v/{key}/panel.png?t={self.server.token}"
+                for c in cells:
+                    c["png"] = None if c["error"] or c["same_as"] is not None else url(c["key"])
+                return self.reply({"grid": grid_html(cells, url), "cells": cells})
+            if self.path == "/api/save":
+                v = variant_from_key(data.get("key"))
+                path = save_variant(str(data.get("name", "")), v.source, v.flags,
+                                    bool(data.get("force")))
+                return self.reply({"ok": True, "path": str(path)})
+            self.send_error(404)
+        except SystemExit as e:
+            self.reply({"error": str(e.code)}, status=400)
+
+    def upload(self):
+        name = Path(unquote(self.headers.get("X-Filename", ""))).name
+        ext = Path(name).suffix.lower()
+        if ext not in IMAGE_EXTS:
+            sys.exit(f"palette: {name!r} is not an image ({', '.join(sorted(IMAGE_EXTS))})")
+        data = self.body()
+        UPLOADS.mkdir(parents=True, exist_ok=True)
+        path = UPLOADS / f"{hashlib.sha256(data).hexdigest()[:24]}{ext}"
+        if not path.exists():
+            path.write_bytes(data)
+        path.with_name(path.name + ".name").write_text(name)
+        return source_info(str(path))
+
+
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, addr, token, idle):
+        super().__init__(addr, Handler)
+        self.token = token
+        self.idle = idle
+        self.last = time.monotonic()
+        self.sweep_lock = threading.Lock()
+
+    def touch(self):
+        self.last = time.monotonic()
+
+    def watchdog(self):
+        while self.idle:
+            time.sleep(5)
+            if time.monotonic() - self.last > self.idle:
+                threading.Thread(target=self.shutdown, daemon=True).start()
+                return
+
+
+def serve(args, vary):
+    try:
+        srv = Server(("127.0.0.1", args.port), secrets.token_urlsafe(16), args.idle)
+    except OSError:
+        srv = Server(("127.0.0.1", 0), secrets.token_urlsafe(16), args.idle)
+    srv.vary = vary
+    srv.vs_live = args.vs == "live"
+    srv.sources = [source_info(normal_source(s)) for s in args.sources]
+    url = f"http://127.0.0.1:{srv.server_address[1]}/#{srv.token}"
+    rundir = Path(os.environ.get("XDG_RUNTIME_DIR") or CACHE)
+    urlfile = rundir / "palette-sweep.url"
+    #  The URL carries the token, so it never lands world-readable.
+    fd = os.open(urlfile, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(url)
+    print(url, flush=True)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    threading.Thread(target=srv.watchdog, daemon=True).start()
+    if not args.no_browser:
+        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        srv.serve_forever()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        urlfile.unlink(missing_ok=True)
 
 
 def main():
@@ -368,11 +814,24 @@ def main():
         cmd.add_argument("source", help="scheme name, scheme .json, or image")
         cmd.add_argument("wallust", nargs="*", help="extra wallust args, after --")
         cmd.set_defaults(fn=fn)
-    cmd = sub.add_parser("save", help="save the live palette as a named scheme")
+    cmd = sub.add_parser("save", help="save the live palette, or a variant, as a named scheme")
     cmd.add_argument("name")
+    cmd.add_argument("--from", dest="source", help="render this scheme or image instead of live")
+    cmd.add_argument("wallust", nargs="*", help="extra wallust args for --from, after --")
     cmd.add_argument("--force", action="store_true", help="replace an existing scheme")
     cmd.set_defaults(fn=save)
     sub.add_parser("list", help="list saved schemes").set_defaults(fn=list_schemes)
+    cmd = sub.add_parser("sweep", help="draw the shelf across sources and wallust flags")
+    cmd.add_argument("sources", nargs="*", help="scheme names, scheme .json files, or images")
+    cmd.add_argument("--vary", action="append", default=[], metavar="AXIS=V1,V2",
+                     help=f"cross these values; axes: {', '.join(AXES)}")
+    cmd.add_argument("--axis", action="append", default=[], help="vary one axis across all its values")
+    cmd.add_argument("--vs", choices=["live"], help="add the live palette, unchanged")
+    cmd.add_argument("--interactive", action="store_true", help="serve a local page instead")
+    cmd.add_argument("--port", type=int, default=8732)
+    cmd.add_argument("--idle", type=int, default=1800, help="exit after N idle seconds (0 = never)")
+    cmd.add_argument("--no-browser", action="store_true")
+    cmd.set_defaults(fn=sweep_cmd)
     args = parser.parse_args()
     args.fn(args)
 

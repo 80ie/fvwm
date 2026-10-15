@@ -8,7 +8,7 @@ from pathlib import Path
 
 PREFIX = "FVWM_PHOTON_"
 SETENV_RE = re.compile(
-    r'^\s*SetEnv\s+(FVWM_PHOTON_[A-Z0-9_]+)\s+"([^"]+)"\s*$'
+    r'^\s*SetEnv\s+(FVWM_PHOTON_[A-Z0-9_]+)\s+"([^"]+)"\s*(?:#.*)?$'
 )
 REF_RE = re.compile(r"^\$\[(FVWM_PHOTON_[A-Z0-9_]+)\]$")
 

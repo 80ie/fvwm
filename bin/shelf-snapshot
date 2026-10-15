@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""Render the shelf offscreen to a PNG, with canned content.
+
+  FVWM_USERDIR=<dir> shelf-snapshot --out panel.png [--width N] [--height N]
+
+The real Panel from bin/shelf-panel, with its real painters and the layout
+from <dir>/panel.items, drawn in the palette from <dir>/colorsets.  Every
+live source (X, D-Bus, pactl, psutil samples, FvwmPager, stalonetray, the
+clock) is swapped for fixed sample content, so a render touches nothing
+outside its output file and the same palette always gives the same pixels.
+`palette sweep` runs this once per variant: photon reads its palette at
+import time, so one process is one palette.
+"""
+
+import os
+import sys
+import tempfile
+
+#  Scrubbed before anything imports photon.  The live fvwm exports
+#  FVWM_PHOTON_*, which would beat the variant's colorsets, and FvwmCommand
+#  follows FVWMMFL_SOCKET, not DISPLAY.  The dead bus address stops Qt falling
+#  back to $XDG_RUNTIME_DIR/bus; the PATH makes any spawn we missed fail.
+for _key in list(os.environ):
+    if _key.startswith("FVWM_PHOTON_"):
+        del os.environ[_key]
+for _key in ("DISPLAY", "WAYLAND_DISPLAY", "FVWMMFL_SOCKET"):
+    os.environ.pop(_key, None)
+os.environ["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={os.devnull}"
+os.environ["PATH"] = os.devnull
+
+import argparse
+import importlib.util
+from datetime import datetime
+from importlib.machinery import SourceFileLoader
+
+BIN = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BIN)
+
+#  The pager's height follows the screen's aspect, so the offscreen screen is
+#  the size of the real one.
+SCREEN_W, SCREEN_H = 2560, 1440
+_screens = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+_screens.write('{"screens": [{"name": "snapshot", "x": 0, "y": 0, '
+               f'"width": {SCREEN_W}, "height": {SCREEN_H}, "logicalDpi": 96}}]}}')
+_screens.close()
+os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={_screens.name}"
+
+from PyQt6.QtCore import QObject, QRect, pyqtSignal
+from PyQt6.QtGui import QImage, QPainter, QPixmap
+from PyQt6.QtWidgets import QApplication
+
+APP = QApplication(sys.argv[:1])
+os.unlink(_screens.name)
+
+import photon
+import photon_media
+from photon_clock import ClockWidget
+from photon_meters import MetersWidget
+from photon_pager import WorldView
+from photon_tasks import TasksWidget, _Task
+from photon_tray import SLOT_SIZE, TrayWidget
+
+USERDIR = os.environ.get("FVWM_USERDIR", os.path.expanduser("~/.fvwm"))
+ICONS = os.path.join(USERDIR, "icons")
+NOW = datetime(2026, 10, 9, 23, 33)
+
+
+def icon(name):
+    return QImage(os.path.join(ICONS, f"16x16-{name}.png"))
+
+
+def window_picture(w, h):
+    """A stand-in screenshot for the minimized window's preview."""
+    img = QImage(w, h, QImage.Format.Format_RGB32)
+    img.fill(photon.FIELD)
+    p = QPainter(img)
+    p.fillRect(0, 0, w, 18, photon.HEADER)
+    for i, width in enumerate((0.7, 0.55, 0.8, 0.4, 0.65, 0.5, 0.75)):
+        p.fillRect(12, 32 + i * 18, int((w - 24) * width), 8, photon.INK_OFF)
+    p.end()
+    return img
+
+
+def cover_picture(side=240):
+    img = QImage(side, side, QImage.Format.Format_RGB32)
+    img.fill(photon.PAGER_DESK)
+    p = QPainter(img)
+    for i, colour in enumerate((photon.FILL_CPU, photon.FILL_MEM, photon.FILL_DISK)):
+        inset = 30 + i * 30
+        p.fillRect(inset, inset, side - 2 * inset, side - 2 * inset, colour)
+    p.end()
+    return QPixmap.fromImage(img)
+
+
+class Tasks(TasksWidget):
+    def _watch_x(self):
+        sample = (("kitty — ~/dotfiles", "xterm-color", True, False),
+                  ("Firefox", "msie1-2", False, False),
+                  ("Dolphin", "Explorer++", False, False),
+                  ("emacs", "emacs", False, True))
+        self.tasks = [_Task(wid=i + 1, win=None, title=title, focused=focused,
+                            iconified=iconified, maximized=False,
+                            icon=icon(name), cls=None)
+                      for i, (title, name, focused, iconified) in enumerate(sample)]
+
+    def _thumbnail(self, wid):
+        return window_picture(320, 200)
+
+
+class Mpris(QObject):
+    changed = pyqtSignal()
+    service = "org.mpris.MediaPlayer2.snapshot"
+    title = "Boards of Canada - Roygbiv"
+    status = "Playing"
+    art_url = trackid = ""
+    can_next = can_prev = can_control = True
+
+    def play_pause(self):
+        pass
+
+    stop = next = previous = play_pause
+
+
+class Sink(QObject):
+    changed = pyqtSignal()
+    outputs_changed = pyqtSignal()
+    volume = 0.6
+    muted = False
+    outputs = [(1, "Built-in Audio Analog Stereo", True)]
+
+    def set_volume(self, *_):
+        pass
+
+    toggle_mute = set_default_output = set_volume
+
+
+class Cover(QObject):
+    changed = pyqtSignal()
+    pixmap = None
+
+    def set_track(self, *_):
+        self.pixmap = self.pixmap or cover_picture()
+
+
+class Pip(QObject):
+    changed = pyqtSignal()
+    window_id = dpy = _win = None
+    width = height = 0
+
+
+class Media(photon_media.MediaWidget):
+    @staticmethod
+    def _publish_output(node_id):
+        pass
+
+
+class Meters(MetersWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._timer.stop()
+
+    def _sample(self):
+        self.mounts = ["/", "/home"]
+        self.cpu, self.mem, self.disks = 38.0, 62.0, [71.0, 45.0]
+        self._relayout()
+        self.update()
+
+
+class Clock(ClockWidget):
+    @staticmethod
+    def _now_text():
+        return NOW.strftime("%a %m-%d-%y"), NOW.strftime("%I:%M%p")
+
+    def _arm(self):
+        pass
+
+
+class Pager(WorldView):
+    """ShelfPager's 3x3 pages, in the roles config gives it: Colorset 21
+    and HilightColorset 20 for pages, 36 and 37 for windows, each with
+    Window3DBorders and a mini icon."""
+
+    WINDOWS = ((0, 0.10, 0.12, 0.55, 0.60, False, "xterm-color"),
+               (1, 0.30, 0.20, 0.50, 0.55, False, "emacs"),
+               (1, 0.05, 0.08, 0.40, 0.45, True, "xterm-color"),
+               (5, 0.20, 0.25, 0.60, 0.50, False, "Explorer++"),
+               (7, 0.50, 0.15, 0.40, 0.70, False, "discord"))
+    CURRENT = 1
+
+    def _queue_launch(self):
+        pass
+
+    def closeEvent(self, event):
+        event.accept()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        photon.sunken(p, self.rect(), photon.WELL)
+        inner = self._inner()
+        p.fillRect(inner, photon.colour("PAGER_PAGE"))
+        pages = [QRect(inner.left() + inner.width() * c // 3,
+                       inner.top() + inner.height() * r // 3,
+                       inner.width() * (c + 1) // 3 - inner.width() * c // 3,
+                       inner.height() * (r + 1) // 3 - inner.height() * r // 3)
+                 for r in range(3) for c in range(3)]
+        p.fillRect(pages[self.CURRENT], photon.colour("PAGER_PAGE_HI"))
+        for page, x, y, w, h, focused, name in self.WINDOWS:
+            r = pages[page]
+            win = QRect(r.left() + int(r.width() * x), r.top() + int(r.height() * y),
+                        int(r.width() * w), int(r.height() * h))
+            p.fillRect(win, photon.PAGER_FOCUS if focused else photon.PAGER_WIN)
+            p.setPen(photon.HI)
+            p.drawLine(win.topLeft(), win.topRight())
+            p.drawLine(win.topLeft(), win.bottomLeft())
+            p.setPen(photon.PAGER_FOCUS_EDGE if focused else photon.PAGER_WIN_EDGE)
+            p.drawLine(win.bottomLeft(), win.bottomRight())
+            p.drawLine(win.topRight(), win.bottomRight())
+            if win.width() > 18 and win.height() > 18:
+                p.drawImage(win.center().x() - 7, win.center().y() - 7, icon(name))
+        p.setPen(photon.PAGER_GRID)
+        for r in pages:
+            if r.left() > inner.left():
+                p.drawLine(r.left(), inner.top(), r.left(), inner.bottom())
+            if r.top() > inner.top():
+                p.drawLine(inner.left(), r.top(), inner.right(), r.top())
+
+
+class Tray(TrayWidget):
+    """stalonetray's slots: icons on the well, SLOT_SIZE apart."""
+
+    ICONS = ("Nextcloud", "discord", "bitwarden", "kleopatra")
+
+    def resizeEvent(self, event):
+        pass
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        p = QPainter(self)
+        inner = photon.sunken_interior(self.rect())
+        pad = (SLOT_SIZE - 16) // 2
+        for i, name in enumerate(self.ICONS):
+            x = inner.left() + i * SLOT_SIZE + pad
+            if x + 16 > inner.right():
+                break
+            p.drawImage(x, inner.top() + pad, icon(name))
+
+
+def load_panel():
+    path = os.path.join(BIN, "shelf-panel")
+    loader = SourceFileLoader("shelf_panel", path)
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader("shelf_panel", loader))
+    loader.exec_module(module)
+    return module
+
+
+def main():
+    shelf = load_panel()
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--width", type=int, default=shelf.panel_width(shelf.read_state()))
+    parser.add_argument("--height", type=int, default=1427)
+    args = parser.parse_args()
+
+    photon_media.Mpris, photon_media.Sink = Mpris, Sink
+    photon_media.CoverArt, photon_media.PipMonitor = Cover, Pip
+    shelf.WorldView, shelf.TasksWidget, shelf.MediaWidget = Pager, Tasks, Media
+    shelf.MetersWidget, shelf.TrayWidget, shelf.ClockWidget = Meters, Tray, Clock
+
+    panel = shelf.Panel()
+    panel._state_timer.stop()
+    panel.setGeometry(0, 0, args.width, args.height)
+    panel.relayout()
+    panel.show()
+    APP.processEvents()
+    if not panel.grab().save(args.out, "PNG"):
+        sys.exit(f"shelf-snapshot: could not write {args.out}")
+
+
+if __name__ == "__main__":
+    main()

@@ -114,7 +114,9 @@ without a line changing in either.
 
 **Other `bin/` tools** — `palette` (below), `fvwm-keys` (see **bindings**),
 `tile-floats` (the persistent per-WM_CLASS tiling float list in
-`.tile-floats`; `TILE-FLOATS.md` has the design) and `tray-randr-test`.
+`.tile-floats`; `TILE-FLOATS.md` has the design), `shelf-snapshot` (the real
+shelf drawn offscreen to a PNG from `$FVWM_USERDIR/colorsets`, every live
+source swapped for canned content) and `tray-randr-test`.
 
 **bin/fvwmscript-icontest** — regression check: FvwmScript's `Icon` property is
 broken in fvwm3 1.1.2, and a widget carrying one fails to draw *and takes every
@@ -155,6 +157,11 @@ hover event. Its `HScrollBar` *does* emit on drag — the trap is that
   `palette/history/<timestamp>/`.
   Every render also writes `~/.cache/palette/key.html`, a visual key of each
   color, its role and where it lands; `qt.j2` slot names are its labels.
+  `palette sweep <images|schemes> --vary palette=a,b --vs live` draws the shelf
+  for every source and flag set (the axes are the `AXES` table) into
+  `~/.cache/palette/sweep/index.html`, collapsing identical palettes and never
+  touching a live file; `--interactive` serves it on localhost with image drop
+  and per-cell save, and `save <name> --from <src> -- <flags>` keeps a variant.
 - Icons are 16x16 PNGs in `icons/`; backgrounds in `images/bg/`
 - Sounds (MP3) in `sounds/` triggered by FvwmEvent modules
 

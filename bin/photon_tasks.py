@@ -146,12 +146,6 @@ class TasksWidget(QWidget):
         self._state_timer.setInterval(150)
         self._state_timer.timeout.connect(self.refresh)
 
-        self.dpy = display.Display()
-        self.root = self.dpy.screen().root
-        self.screen_w = self.dpy.screen().width_in_pixels
-        self.screen_h = self.dpy.screen().height_in_pixels
-        self.atoms = {n: self.dpy.intern_atom(n) for n in _ROOT_ATOMS + _EXTRA_ATOMS}
-        self._screen = QRect(0, 0, self.screen_w, self.screen_h)
         #  Lazy frame tracking for the root's Configure events; see
         #  _on_configure.  A window parked on another page is only ever
         #  learned when it moves, which is exactly when we need it.
@@ -165,6 +159,16 @@ class TasksWidget(QWidget):
         self._move_timer.setInterval(10)
         self._move_timer.timeout.connect(self.refresh)
 
+        self._watch_x()
+
+    def _watch_x(self):
+        #  The one live source; bin/shelf-snapshot overrides it with canned tasks.
+        self.dpy = display.Display()
+        self.root = self.dpy.screen().root
+        self.screen_w = self.dpy.screen().width_in_pixels
+        self.screen_h = self.dpy.screen().height_in_pixels
+        self.atoms = {n: self.dpy.intern_atom(n) for n in _ROOT_ATOMS + _EXTRA_ATOMS}
+        self._screen = QRect(0, 0, self.screen_w, self.screen_h)
         self.root.change_attributes(
             event_mask=X.PropertyChangeMask | X.SubstructureNotifyMask
         )
