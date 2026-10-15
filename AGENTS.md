@@ -68,9 +68,8 @@ re-read and the panel coming back up.
 
 **Generated panel — retired.** The bottom `FvwmTaskBar` this fed is gone from
 `config`; the shelf now carries everything it held (window list, tray,
-clock). `bin/mk-taskbar` and `taskbar.items` are left on disk unused rather
-than deleted, in case a generated cell list is useful again, but nothing
-wires them in.
+clock). `taskbar.items`, the cell list `bin/mk-taskbar` used to render, is
+left on disk unused; nothing wires it in.
 
 **Shelf components** — everything the panel draws, split so each piece stays
 testable on its own. Run any of them directly and it comes up as an ordinary
