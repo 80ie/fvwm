@@ -25,7 +25,6 @@ hosts its own FvwmPager so its window-moving controls remain available.
 
 import json
 import os
-import shlex
 import signal
 import socket
 import subprocess
@@ -36,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
-from PyQt6.QtCore import (QPoint, QProcess, QRect, QSocketNotifier, Qt,
+from PyQt6.QtCore import (QProcess, QRect, QSocketNotifier, Qt,
                           QTimer)
 from PyQt6.QtGui import QFontMetrics, QPainter, QPalette, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
@@ -273,6 +272,7 @@ class Panel(QWidget):
         self.font_header = photon.font(bold=True)
         self.state = read_state()
         self.side = panel_side(self.state)
+        self.hidden = bool(self.state.get("hidden"))
         self.groups = read_spec(SPEC)
 
         for g in self.groups:
@@ -303,7 +303,7 @@ class Panel(QWidget):
 
         self._state_timer = QTimer(self)
         self._state_timer.setInterval(100)
-        self._state_timer.timeout.connect(self._reload_side)
+        self._state_timer.timeout.connect(self._reload_state)
         self._state_timer.start()
 
         self.resize(panel_width(self.state), 100)
@@ -329,16 +329,22 @@ class Panel(QWidget):
         self.setGeometry(x, s.top(), width, s.height())
         self.relayout()
 
-    def _reload_side(self):
+    def _reload_state(self):
         state = read_state()
         side = panel_side(state)
         width = panel_width(state)
-        if side == self.side and width == self.width():
+        if (side == self.side and width == self.width()
+                and bool(state.get("hidden")) == self.hidden):
             return
         self.state = state
         self.side = side
+        self.hidden = bool(state.get("hidden"))
         self.place(width)
-        self._push_strut()
+        if self.hidden:
+            self.hide()
+        else:
+            self.show()
+        self._push_strut(0 if self.hidden else width)
 
     def _natural_height(self, widget, w):
         if isinstance(widget, (WorldView, MediaWidget)):
@@ -496,7 +502,7 @@ class Panel(QWidget):
             write_state(self.state)
             self.relayout()
 
-    def _push_strut(self):
+    def _push_strut(self, width=None):
         """Tell fvwm how much edge the shelf is claiming.
 
         The side-specific function updates the working area and tiled page.
@@ -504,7 +510,9 @@ class Panel(QWidget):
         it.  FvwmTaskBar is gone, so there is no bottom strip left to claim.
         """
         QProcess.startDetached(
-            "FvwmCommand", [strut_command(self.state, self.width())])
+            "FvwmCommand",
+            [strut_command(self.state,
+                           self.width() if width is None else width)])
 
 
 def quit_on_sigterm(app):
@@ -546,9 +554,15 @@ def main():
         toggle_side()
         return
 
+    if "--toggle-hidden" in sys.argv:
+        state = read_state()
+        state["hidden"] = not state.get("hidden", False)
+        write_state(state)
+        return
+
     if "--print-struts" in sys.argv:
         state = read_state()
-        width = panel_width(state)
+        width = 0 if state.get("hidden") else panel_width(state)
         print(f"EwmhBaseStruts {width} 0 0 0" if panel_side(state) == "left"
               else f"EwmhBaseStruts 0 {width} 0 0")
         return
@@ -567,8 +581,9 @@ def main():
     _sigterm = quit_on_sigterm(app)
     panel = Panel()
     panel.setWindowTitle("ShelfPanel")
-    panel.show()
-    panel._push_strut()
+    if not panel.hidden:
+        panel.show()
+        panel._push_strut()
     sys.exit(app.exec())
 
 

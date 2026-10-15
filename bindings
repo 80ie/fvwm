@@ -37,6 +37,8 @@ Silent Key R A 4 Exec exec rofi -show drun
 ##                                                           }}}3
 ##   │ ├ Window controls                                     {{{3
 Silent Key A A 4 ThisWindow Stick Toggle
+Silent Key minus A S4 ThisWindow Layer -1
+Silent Key equal A S4 ThisWindow Layer +1
 Silent Key Q A S4 ThisWindow Delete
 Silent Key k A 4 Pick Destroy
 Silent Key T WTFS S4 ToggleTitle
@@ -57,6 +59,7 @@ Silent Key slash A 4 Exec exec $[FVWM_USERDIR]/bin/fvwm-keys
 Silent Key F A 4 FullscreenToggle
 Silent Key F W S4 Maximize 100 100 ewmhiwa
 Silent Key A A S4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-side
+Silent Key h A 4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-hidden
 Silent Key space A 4 TileToggle
 Silent Key space A S4 TileToggleFloating
 Silent Key Return A C4 TileSetMaster

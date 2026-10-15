@@ -40,7 +40,7 @@ component launches fall back to reading the same file.
 **The shelf is one program** — `bin/shelf-panel`, a PyQt6 window down either
 screen edge (`ShelfToLeft`/`ShelfToRight`). It draws its own frame, group headers, launcher rows, pager,
 meters and media widget; reads its sections from `panel.items`; and keeps its
-side, width and collapse state in `.panel.state`. fvwm keeps the `Style` rule
+side, width, visibility and collapse state in `.panel.state`. fvwm keeps the `Style` rule
 (layer 5), the `EwmhBaseStruts` reservation and launching, and nothing else.
 
 It stopped being FvwmButtons because three things were out of reach there and
