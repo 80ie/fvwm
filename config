@@ -734,10 +734,9 @@ Style * Colorset 40, HilightColorset 41, \
 ## The root menu will PopUp with a click in the root
 ## window or using alt-f1 (or menu).
 
-MenuStyle MenuFvwmRoot MenuColorset 5, ActiveColorset 6, GreyedColorset 7, TitleColorset 8
-MenuStyle MenuFvwmRoot Hilight3DThick, HilightBack, HilightTitleBack, SeparatorsLong
-MenuStyle MenuFvwmRoot TrianglesSolid, TrianglesUseFore
-ChangeMenuStyle MenuFvwmRoot
+MenuStyle * MenuColorset 5, ActiveColorset 6, GreyedColorset 7, TitleColorset 8
+MenuStyle * Hilight3DThick, HilightBack, HilightTitleBack, SeparatorsLong
+MenuStyle * TrianglesSolid, TrianglesUseFore
 
 DestroyMenu MenuFvwmRoot
 AddToMenu   MenuFvwmRoot "Toolchest" Title

@@ -55,25 +55,27 @@ SetEnv FVWM_PHOTON_PAGER_PAGE_HI    "{{ pager_page_hi }}"  # colorset 20 bg: act
 # Window frame and title colors are pinned in `config`; their former
 # colorsets (0 - 4: window/border decor, 15: close button face) are no
 # longer rendered here.
+# Menus and modules take the Photon roles (the shelf's), so they follow the
+# scheme; window decor stays pinned in `config`. Active/hover is groove on field.
 #~~~~~~~ 5 - Menu - Inactive Item
-Colorset 5 fg {{ chrome_alert }}, bg {{ chrome_bg }}, hi, sh, Plain, NoShape
+Colorset 5 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 #~~~~~~~ 6 - Menu - Active Item
-Colorset 6 fg {{ hi }}, bg {{ chrome_fg_dim }}, hi, sh, Plain, NoShape
+Colorset 6 fg $[FVWM_PHOTON_FIELD], bg $[FVWM_PHOTON_GROOVE], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 #~~~~~~~ 7 - Menu - Grayed Item
-Colorset 7 fg {{ hi }}, bg {{ chrome_bg_grey }}, hi, sh, Plain, NoShape
+Colorset 7 fg $[FVWM_PHOTON_GROOVE_MID], bg $[FVWM_PHOTON_FACE], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 #~~~~~~~ 8 - Menu - Title
-Colorset 8 fg {{ hi }}, bg {{ chrome_bg | darken(0.03) }}, hi, sh, Plain, NoShape
+Colorset 8 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_HEADER_CELL], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 
 #~~~~~~~ 10 - Module Default [PlainColorset]
-Colorset 10 fg {{ chrome_alert }}, bg {{ chrome_bg_dark }}, hi, sh, Plain, NoShape
+Colorset 10 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 #~~~~~~~ 11 - Module Hilight
-Colorset 11 fg {{ chrome_accent }}, bg {{ chrome_bg_lift }}, hi, sh, Plain, NoShape
+Colorset 11 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE_HI], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 #~~~~~~~ 12 - Module ActiveButton (Mouse Hover)
-Colorset 12 fg {{ chrome_alert }}, bg {{ chrome_accent | darken(0.68) }}, hi, sh, Plain, NoShape
+Colorset 12 fg $[FVWM_PHOTON_FIELD], bg $[FVWM_PHOTON_GROOVE], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 #~~~~~~~ 13 - FvwmFormDefault ItemColorset
-Colorset 13 fg {{ chrome_alert }}, bg {{ chrome_bg }}, hi, sh, Plain, NoShape
+Colorset 13 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FIELD], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 #~~~~~~~ 14 - FvwmIconMan Iconified Button
-Colorset 14 fg {{ chrome_alert }}, bg {{ chrome_bg_dark }}, hi, sh, Plain, NoShape
+Colorset 14 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_WELL], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 
 # 16-19: unused legacy FvwmPager palette, superseded by ShelfPager (20/21/36/37) below
 #~~~~~~~ 16 - FvwmPager Default

@@ -12,7 +12,7 @@
 # background <color>         # color can be specified as an HTML hex triplet or
                              # as a name from rgb.txt, note that '#' must be
                              # quoted
-background "#b4aba2"
+background "#9a8d83"
 
 # decorations <decspec>      # set trays window decorations; possible values for
                              # decspec are: all, title, border, none

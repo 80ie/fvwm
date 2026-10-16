@@ -21,7 +21,7 @@ Name=Wallust
 {{ group(face, well_lip, ink, groove) }}
 
 [Colors:Complementary]
-{{ group(chrome_bg, chrome_bg_lift, chrome_fg, chrome_fg_dim) }}
+{{ group(face, well_lip, ink, groove) }}
 
 [Colors:Header]
 {{ group(face, well_lip, ink, groove) }}
@@ -33,7 +33,7 @@ Name=Wallust
 {{ group(tooltip, tooltip, ink, groove) }}
 
 [Colors:View]
-{{ group(field, field_alt, ink, groove) }}
+{{ group(face_hi, well_lip, ink, groove) }}
 
 [Colors:Window]
 {{ group(face, well_lip, ink, groove) }}

@@ -144,8 +144,11 @@ hover event. Its `HScrollBar` *does* emit on drag — the trap is that
 - A `*Module: option` config line does **not** expand `$[...]`; anything needing
   a computed value (Geometry, ButtonGeometry) goes through `PipeRead "echo ..."`
 - `InfoStoreAdd` on an existing key replaces it, so re-reads recompute cleanly
-- Colorsets 0-19 are the warm brown/rust set; 20-21 and 30-37 are the Photon
-  set (ShelfPager page/window colours and the shelf chrome)
+- Colorsets 5-14 (menus, modules) and 20-21, 30-37 are the Photon set
+  (menus and modules, ShelfPager page/window colours, shelf chrome); 16-19 are
+  unused legacy. Window decor (40, 41, 15) is pinned in `config`, not themed.
+  Menus use the default style (`MenuStyle *`); a named style does nothing
+  without a `ChangeMenuStyle <style> <menu>` naming menus.
 - Photon colors are defined only in `colorsets`, never as literal `QColor` values
 - Colors for every platform come from `palette/`: a wallust scheme in
   `palette/schemes/` rendered through `palette/templates/` (`roles.j2` derives
