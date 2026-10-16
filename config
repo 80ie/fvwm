@@ -720,12 +720,10 @@ Style audacious !Title, !Borders
 ##  Colorsets                                                {{{1
 Read $[FVWM_USERDIR]/colorsets
 
-# Inactive Title 
-Colorset 40 fg #aa8664, bg #2c2a21, hi, sh, Plain, NoShape
-# Active Title
-Colorset 41 fg #ffa733, bg #532a24, hi, sh, Plain, NoShape
-# Close button
-Colorset 15 fg white, bg #ffa733, hi, sh, Plain, NoShape
+# Decor colors come from palette. To pin the old look, uncomment (they win, read last):
+#Colorset 40 fg #aa8664, bg #2c2a21, hi, sh, Plain, NoShape
+#Colorset 41 fg #ffa733, bg #532a24, hi, sh, Plain, NoShape
+#Colorset 15 fg white, bg #ffa733, hi, sh, Plain, NoShape
 Style * Colorset 40, HilightColorset 41, \
         BorderColorset 40, HilightBorderColorset 41
 ##                                                           }}}1

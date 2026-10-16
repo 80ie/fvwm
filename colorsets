@@ -52,11 +52,14 @@ SetEnv FVWM_PHOTON_FILL_DISK        "$[FVWM_PHOTON_PAGER_DESK]"
 SetEnv FVWM_PHOTON_PAGER_PAGE       "#92857c"     # colorset 21 bg: default page
 SetEnv FVWM_PHOTON_PAGER_PAGE_HI    "#bdb3ac"  # colorset 20 bg: active/current page
 
-# Window frame and title colors are pinned in `config`; their former
-# colorsets (0 - 4: window/border decor, 15: close button face) are no
-# longer rendered here.
+# Window decor: 40 inactive, 41 active (config's `Style *`), 15 close button.
+# config can pin them back; its Colorset lines run after this file is read.
+Colorset 40 fg #a2948a, bg #322d29, hi, sh, Plain, NoShape
+Colorset 41 fg #e47434, bg #481f06, hi, sh, Plain, NoShape
+Colorset 15 fg #e4e0dd, bg #e47434, hi, sh, Plain, NoShape
+
 # Menus and modules take the Photon roles (the shelf's), so they follow the
-# scheme; window decor stays pinned in `config`. Active/hover is groove on field.
+# scheme. Active/hover is groove on field.
 #~~~~~~~ 5 - Menu - Inactive Item
 Colorset 5 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE], hi $[FVWM_PHOTON_BTN_HI], sh $[FVWM_PHOTON_BTN_LO], Plain, NoShape
 #~~~~~~~ 6 - Menu - Active Item

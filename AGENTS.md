@@ -146,7 +146,8 @@ hover event. Its `HScrollBar` *does* emit on drag — the trap is that
 - `InfoStoreAdd` on an existing key replaces it, so re-reads recompute cleanly
 - Colorsets 5-14 (menus, modules) and 20-21, 30-37 are the Photon set
   (menus and modules, ShelfPager page/window colours, shelf chrome); 16-19 are
-  unused legacy. Window decor (40, 41, 15) is pinned in `config`, not themed.
+  unused legacy. Window decor (40, 41, 15) is rendered too; `config` can pin
+  it back with `Colorset` lines after the `Read colorsets` (the last one wins).
   Menus use the default style (`MenuStyle *`); a named style does nothing
   without a `ChangeMenuStyle <style> <menu>` naming menus.
 - Photon colors are defined only in `colorsets`, never as literal `QColor` values
