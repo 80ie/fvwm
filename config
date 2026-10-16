@@ -79,8 +79,8 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec telegram-desktop
 + I Test (Init) Exec exec aw-tauri
 + I Test (Init) Exec exec pactl load-module module-switch-on-connect
-+ I Test (Init) Exec exec solaar -w hide 
 + I Test (Init) Exec exec sxhkd
++ I Test (Init) Exec exec pulsar-mouse-gui
 + I Test (Init) Schedule 1000 Exec exec qlipper
 #+ I BugOpts QtDragnDropWorkaround True
 + I Exec exec find $[FVWM_USERDIR]/images/thumbs -maxdepth 1 -type f -mtime +7 -delete
