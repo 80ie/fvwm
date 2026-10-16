@@ -152,7 +152,7 @@ hover event. Its `HScrollBar` *does* emit on drag — the trap is that
   every role). `bin/palette preview <scheme|image>` diffs; `apply` writes, backs up
   and reloads; `save <name>` stores the live palette as a scheme (`apply <name>`
   restores it) and `list` names them. `colorsets` and `stalonetrayrc` are among
-  its outputs (alongside Qt, KDE, GTK 3/4, kitty and Xresources), so edit the
+  its outputs (alongside Qt, KDE, GTK 3/4 and Xresources), so edit the
   template, not them. Each `apply` leaves a backup and `restore.sh` in
   `palette/history/<timestamp>/`.
   Every render also writes `~/.cache/palette/key.html`, a visual key of each
@@ -161,8 +161,9 @@ hover event. Its `HScrollBar` *does* emit on drag — the trap is that
   for every source and flag set into `~/.cache/palette/sweep/index.html`
   (axes are `AXIS_SPECS`, values read from the installed wallust's `run -h`,
   so it works on 3.5 and 4.x), collapsing identical palettes and never
-  touching a live file; `--interactive` serves it on localhost with image drop
-  and per-cell save, and `save <name> --from <src> -- <flags>` keeps a variant.
+  touching a live file, and scaling any image over 64 MP down to a cached
+  copy first (wallust refuses to decode much more: "Memory limit exceeded");
+  `--interactive` serves it on localhost with image drop and per-cell save, and `save <name> --from <src> -- <flags>` keeps a variant.
 - Icons are 16x16 PNGs in `icons/`; backgrounds in `images/bg/`
 - Sounds (MP3) in `sounds/` triggered by FvwmEvent modules
 

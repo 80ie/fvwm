@@ -343,8 +343,6 @@ def apply(args):
         kde_merge(changed["kde"])
     if "xresources" in changed:
         subprocess.run(["xrdb", "-merge", str(changed["xresources"])])
-    if "kitty" in changed:
-        subprocess.run(["pkill", "-USR1", "-x", "kitty"])
     if "fvwm" in changed:
         subprocess.run(["FvwmCommand", "Restart"])
 
@@ -353,6 +351,39 @@ def apply(args):
 
 
 XRES = re.compile(r"^\*\.(\w+):\s*(#[0-9A-Fa-f]{6})\s*$", re.M)
+
+#  wallust's image crate refuses a ~512 MiB decode ("Memory limit exceeded"):
+#  8000x8000 loads, 12000x12000 does not.
+MAX_PIXELS = 64_000_000
+SCALED = CACHE / "sweep" / "scaled"
+fit_lock = threading.Lock()
+
+
+def fit(path):
+    """The image itself, or a cached copy scaled under MAX_PIXELS if wallust
+    could not load it.  Parallel renders of one image share the one copy."""
+    try:
+        size = subprocess.run(
+            ["magick", "identify", "-ping", "-format", "%w %h", f"{path}[0]"],
+            capture_output=True, text=True, check=True).stdout
+        width, height = map(int, size.split())
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        return path
+    if width * height <= MAX_PIXELS:
+        return path
+    st = os.stat(path)
+    key = hashlib.sha1(f"{path}\0{st.st_mtime_ns}\0{st.st_size}".encode()).hexdigest()[:16]
+    scaled = SCALED / f"{key}.png"
+    with fit_lock:
+        if not scaled.is_file():
+            print(f"palette: scaling {Path(path).name} ({width}x{height}) down for wallust",
+                  file=sys.stderr)
+            SCALED.mkdir(parents=True, exist_ok=True)
+            tmp = scaled.with_name(f"{key}.{os.getpid()}.png")
+            subprocess.run(["magick", f"{path}[0]", "-resize", f"{MAX_PIXELS}@>", str(tmp)],
+                           capture_output=True, text=True, check=True)
+            os.replace(tmp, scaled)
+    return str(scaled)
 
 
 def render_into(source, flags, out, names):
@@ -367,8 +398,10 @@ def render_into(source, flags, out, names):
         return
     extra = list(flags)
     #  Parallel sweep renders would race on ~/.cache/wallust.
-    if is_image(source) and "-n" not in extra:
-        extra.append("-n")
+    if is_image(source):
+        source = fit(source)
+        if "-n" not in extra:
+            extra.append("-n")
     wallust(source, extra, ROOT / "templates", targets)
 
 
