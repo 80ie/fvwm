@@ -172,6 +172,10 @@ DestroyModuleConfig EventRestoreFocus:*
 *EventRestoreFocus: new_page RestorePageFocus
 *EventRestoreFocus: focus_change SavePageFocus
 
+DestroyFunc ChangeDesk
+AddToFunc ChangeDesk
++ I Exec exec notify-send -t 1000 -a Fvwm "$[desk.name$[desk.n]]"
+
 DestroyModuleConfig EventNewDesk:*
 *EventNewDesk: PassID
 *EventNewDesk: new_desk ChangeDesk
@@ -484,7 +488,7 @@ AddToFunc ShelfPagerLaunch
 + I KillModule FvwmPager ShelfPager
 + I DestroyModuleConfig ShelfPager: Geometry
 + I PipeRead "echo '*ShelfPager: Geometry $0x$1'"
-+ I Schedule 100 Module FvwmPager ShelfPager
++ I Schedule 100 Module FvwmPager ShelfPager *
 ##                                                           }}}3
 ##   │ ├ Tile                                                {{{3
 ##
@@ -593,7 +597,8 @@ MoveThreshold 3
 ##                                                           }}}2
 ##   ├ Desktops                                              {{{2
 #
-# 9 pages on a single Desk (Desk 0). Cells show the Super+<n> binding.
+# Two desks, 0 Main and 1 School (Super+F1/F2), each 9 pages. Cells show
+# the Super+<n> binding, which acts on the current desk.
 #
 #       0   1   2   <- page x
 #     +---+---+---+
@@ -605,7 +610,9 @@ MoveThreshold 3
 #     +---+---+---+
 #   ^ page y
 #
-EwmhNumberOfDesktops 1 0
+EwmhNumberOfDesktops 2 0
+DesktopName 0 Main
+DesktopName 1 School
 DesktopSize 3x3
 EdgeScroll 100 100
 EdgeResistance -1
@@ -806,6 +813,9 @@ AddToMenu MenuSendTo
 + "Page &7"	MoveToPage 0 2
 + "Page &8"	MoveToPage 1 2
 + "Page &9"	MoveToPage 2 2
++ "" Nop
++ "&Main desk"	MoveToDesk 0 0
++ "&School desk"	MoveToDesk 0 1
 
 ##                                                           }}}2
 ##   ├ FvwmManPages                                          {{{2

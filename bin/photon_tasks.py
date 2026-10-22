@@ -76,6 +76,7 @@ _ROOT_ATOMS = (
     "_NET_CLIENT_LIST_STACKING",
     "_NET_ACTIVE_WINDOW",
     "_NET_DESKTOP_VIEWPORT",
+    "_NET_CURRENT_DESKTOP",
 )
 _EXTRA_ATOMS = (
     "_NET_WM_STATE",
@@ -85,6 +86,7 @@ _EXTRA_ATOMS = (
     "_NET_WM_STATE_MAXIMIZED_HORZ",
     "_NET_WM_NAME",
     "_NET_WM_ICON",
+    "_NET_WM_DESKTOP",
     "_NET_CLOSE_WINDOW",
     "UTF8_STRING",
     "WM_CHANGE_STATE",
@@ -397,6 +399,7 @@ class TasksWidget(QWidget):
     def refresh(self):
         active = self._prop(self.root, "_NET_ACTIVE_WINDOW")
         active = active[0] if active else 0
+        desk = self._prop(self.root, "_NET_CURRENT_DESKTOP") or [0]
 
         found = []
         for wid in self._prop(self.root, "_NET_CLIENT_LIST") or []:
@@ -404,6 +407,13 @@ class TasksWidget(QWidget):
                 win = self.dpy.create_resource_object("window", wid)
                 state = self._prop(win, "_NET_WM_STATE") or []
                 if self.atoms["_NET_WM_STATE_SKIP_TASKBAR"] in state:
+                    continue
+                #  An unmapped desk keeps its geometry, so the page test
+                #  alone would list it.  0xFFFFFFFF is sticky.
+                if (self._prop(win, "_NET_WM_DESKTOP") or desk)[0] not in (
+                    desk[0],
+                    0xFFFFFFFF,
+                ):
                     continue
                 g = win.get_geometry()
                 #  Geometry is relative to the frame fvwm reparented the
