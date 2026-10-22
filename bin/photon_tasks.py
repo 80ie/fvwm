@@ -82,6 +82,7 @@ _EXTRA_ATOMS = (
     "_NET_WM_STATE",
     "_NET_WM_STATE_SKIP_TASKBAR",
     "_NET_WM_STATE_HIDDEN",
+    "_NET_WM_STATE_STICKY",
     "_NET_WM_STATE_MAXIMIZED_VERT",
     "_NET_WM_STATE_MAXIMIZED_HORZ",
     "_NET_WM_NAME",
@@ -101,7 +102,10 @@ THUMB_DIR = os.path.join(
     os.environ.get("FVWM_USERDIR", os.path.expanduser("~/.fvwm")), "images", "thumbs"
 )
 
-_Task = namedtuple("_Task", "wid win title focused iconified maximized icon cls")
+_Task = namedtuple(
+    "_Task", "wid win title focused iconified maximized icon cls pinned",
+    defaults=(False,),
+)
 
 
 def thumbnail_heights(images, available):
@@ -115,6 +119,11 @@ def thumbnail_heights(images, available):
     return [
         visible + 18 if img is not None and not img.isNull() else 0 for img in images
     ]
+
+
+def order_tasks(tasks):
+    """Pinned tiles first, then rows with the minimized ones last."""
+    return sorted(tasks, key=lambda t: (not t.pinned, t.iconified))
 
 
 def tile_cols(width):
@@ -200,11 +209,13 @@ class TasksWidget(QWidget):
 
     #  -- size --
 
-    def natural_height(self):
-        return len(self.tasks) * photon.ROW_H + 2 * WELL_PAD
+    def natural_height(self, w=None):
+        pinned = sum(t.pinned for t in self.tasks)
+        strip = strip_height(pinned, (w or photon.SHELF_INNER) - 2 * WELL_PAD)
+        return strip + (len(self.tasks) - pinned) * photon.ROW_H + 2 * WELL_PAD
 
     def sizeHint(self):
-        return QSize(photon.SHELF_INNER, self.natural_height())
+        return QSize(photon.SHELF_INNER, self.natural_height(photon.SHELF_INNER))
 
     def _interior(self):
         return photon.sunken_interior(self.rect())
@@ -463,10 +474,10 @@ class TasksWidget(QWidget):
                     ),
                     icon=self._icons[wid],
                     cls=cls,
+                    pinned=self.atoms["_NET_WM_STATE_STICKY"] in state,
                 )
             )
 
-        found.sort(key=lambda task: task.iconified)
         live = {t.wid for t in found}
         self._icons = {w: i for w, i in self._icons.items() if w in live}
         self._thumbs = {w: i for w, i in self._thumbs.items() if w in live}
@@ -477,13 +488,19 @@ class TasksWidget(QWidget):
         self._top = next((w for w in reversed(stack) if w in live), 0)
 
         self.dpy.flush()
-        resized = len(found) != len(self.tasks)
-        self.tasks = found
+        self._set_tasks(found)
         self._assert_thumb_watches()
         if any(t.iconified for t in found):
             self._poll_thumbnails()
+
+    def _set_tasks(self, found):
+        def shape(tasks):
+            return len(tasks), sum(t.pinned for t in tasks)
+
+        before = shape(self.tasks)
+        self.tasks = order_tasks(found)
         self.update()
-        if resized:
+        if shape(self.tasks) != before:
             self.natural_height_changed.emit()
 
     #  -- X: acting --

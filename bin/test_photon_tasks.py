@@ -10,6 +10,8 @@ os.makedirs(os.path.join(_TMP, "images", "thumbs"), exist_ok=True)
 from photon_tasks import (
     TasksWidget,
     THUMB_DIR,
+    _Task,
+    order_tasks,
     strip_height,
     thumbnail_heights,
     tile_cols,
@@ -17,6 +19,24 @@ from photon_tasks import (
 )
 from PyQt6.QtCore import QRect
 from PyQt6.QtGui import QImage
+from PyQt6.QtWidgets import QApplication
+
+_APP = QApplication.instance() or QApplication([])
+
+
+def task(wid, pinned=False, iconified=False, title="t"):
+    return _Task(wid=wid, win=None, title=title, focused=False,
+                 iconified=iconified, maximized=False, icon=None, cls=None,
+                 pinned=pinned)
+
+
+class FakeTasks(TasksWidget):
+    def _watch_x(self):
+        self.atoms = {"_NET_WM_STATE_STICKY": 501}
+        self.sent = []
+
+    def _send(self, win, atom_name, data):
+        self.sent.append((atom_name, data))
 
 
 class ThumbnailLayoutTest(unittest.TestCase):
@@ -91,6 +111,30 @@ class StripGeometryTest(unittest.TestCase):
         self.assertEqual(tile_rect(0, 2, 2, 206), QRect(2, 2, 32, 32))
         self.assertEqual(tile_rect(1, 2, 2, 206), QRect(34, 2, 32, 32))
         self.assertEqual(tile_rect(6, 2, 2, 206), QRect(2, 34, 32, 32))
+
+
+class PinnedModelTest(unittest.TestCase):
+    def test_pinned_first_in_client_order_then_minimized_last(self):
+        found = [task(1, iconified=True), task(2, pinned=True),
+                 task(3), task(4, pinned=True, iconified=True)]
+        self.assertEqual([t.wid for t in order_tasks(found)], [2, 4, 3, 1])
+
+    def test_natural_height_follows_width(self):
+        w = FakeTasks()
+        w._set_tasks([task(i, pinned=True) for i in range(5)]
+                     + [task(10), task(11), task(12)])
+        self.assertEqual(w.natural_height(420), 32 + 3 * 25 + 4)
+        self.assertEqual(w.natural_height(100), 64 + 3 * 25 + 4)
+
+    def test_pin_change_alone_emits_height_change(self):
+        w = FakeTasks()
+        w._set_tasks([task(1), task(2)])
+        hits = []
+        w.natural_height_changed.connect(lambda: hits.append(1))
+        w._set_tasks([task(1), task(2)])
+        self.assertEqual(hits, [])
+        w._set_tasks([task(1, pinned=True), task(2)])
+        self.assertEqual(hits, [1])
 
 
 if __name__ == "__main__":

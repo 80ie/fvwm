@@ -348,7 +348,7 @@ class Panel(QWidget):
         self._push_strut(0 if self.hidden else width)
 
     def _natural_height(self, widget, w):
-        if isinstance(widget, (WorldView, MediaWidget)):
+        if isinstance(widget, (WorldView, MediaWidget, TasksWidget)):
             return widget.natural_height(w)
         if hasattr(widget, "natural_height"):
             return widget.natural_height()
