@@ -17,9 +17,11 @@ from photon_tasks import (
     tile_cols,
     tile_rect,
 )
-from PyQt6.QtCore import QRect
+from PyQt6.QtCore import QPoint, QRect
 from PyQt6.QtGui import QImage
 from PyQt6.QtWidgets import QApplication
+
+import photon
 
 _APP = QApplication.instance() or QApplication([])
 
@@ -119,6 +121,10 @@ class PinnedModelTest(unittest.TestCase):
                  task(3), task(4, pinned=True, iconified=True)]
         self.assertEqual([t.wid for t in order_tasks(found)], [2, 4, 3, 1])
 
+    def test_minimizing_a_tile_does_not_move_it(self):
+        found = [task(1, pinned=True, iconified=True), task(2, pinned=True)]
+        self.assertEqual([t.wid for t in order_tasks(found)], [1, 2])
+
     def test_natural_height_follows_width(self):
         w = FakeTasks()
         w._set_tasks([task(i, pinned=True) for i in range(5)]
@@ -135,6 +141,52 @@ class PinnedModelTest(unittest.TestCase):
         self.assertEqual(hits, [])
         w._set_tasks([task(1, pinned=True), task(2)])
         self.assertEqual(hits, [1])
+
+
+class TileLayoutTest(unittest.TestCase):
+    def setUp(self):
+        self.w = FakeTasks()
+        self.w.resize(210, 600)
+
+    def tearDown(self):
+        for wid in (1, 2):
+            path = os.path.join(THUMB_DIR, f"0x{wid:x}.png")
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_tiles_then_rows(self):
+        self.w._set_tasks([task(1, pinned=True), task(2, pinned=True), task(3)])
+        rects, _ = self.w._rows()
+        self.assertEqual(rects[0], QRect(2, 2, 32, 32))
+        self.assertEqual(rects[1], QRect(34, 2, 32, 32))
+        self.assertEqual(rects[2], QRect(2, 34, 206, 25))
+
+    def test_row_at_reaches_second_tile_row(self):
+        self.w._set_tasks([task(i, pinned=True) for i in range(7)] + [task(9)])
+        self.assertEqual(self.w._row_at(QPoint(18, 50)), 6)
+        self.assertEqual(self.w._row_at(QPoint(18, 80)), 7)
+
+    def test_pinned_thumbnails_are_neither_sized_nor_watched(self):
+        for wid in (1, 2):
+            QImage(4, 4, QImage.Format.Format_RGB32).save(
+                os.path.join(THUMB_DIR, f"0x{wid:x}.png"))
+        self.w._set_tasks([task(1, pinned=True, iconified=True),
+                           task(2, iconified=True)])
+        rects, images = self.w._rows()
+        self.assertIsNone(images[0])
+        self.assertEqual(rects[0].height(), 32)
+        self.assertGreater(rects[1].height(), 25)
+        self.assertEqual(self.w._thumb_wanted(),
+                         {os.path.join(THUMB_DIR, "0x2.png")})
+
+    def test_iconless_tile_draws_an_initial(self):
+        self.w._set_tasks([task(1, pinned=True, title="Zed")])
+        img = self.w.grab().toImage()
+        face = QRect(5, 5, 24, 24)  # the icon box, clear of row text
+        darkest = min(img.pixelColor(x, y).lightness()
+                      for x in range(face.left(), face.right())
+                      for y in range(face.top(), face.bottom()))
+        self.assertLess(darkest, photon.FACE.lightness() - 60)
 
 
 if __name__ == "__main__":

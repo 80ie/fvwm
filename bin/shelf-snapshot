@@ -66,7 +66,8 @@ NOW = datetime(2026, 10, 9, 23, 33)
 
 
 def icon(name):
-    return QImage(os.path.join(ICONS, f"16x16-{name}.png"))
+    img = QImage(os.path.join(ICONS, f"16x16-{name}.png"))
+    return None if img.isNull() else img
 
 
 def window_picture(w, h):
@@ -94,14 +95,17 @@ def cover_picture(side=240):
 
 class Tasks(TasksWidget):
     def _watch_x(self):
-        sample = (("kitty — ~/dotfiles", "xterm-color", True, False),
-                  ("Firefox", "msie1-2", False, False),
-                  ("Dolphin", "Explorer++", False, False),
-                  ("emacs", "emacs", False, True))
-        self.tasks = [_Task(wid=i + 1, win=None, title=title, focused=focused,
-                            iconified=iconified, maximized=False,
-                            icon=icon(name), cls=None)
-                      for i, (title, name, focused, iconified) in enumerate(sample)]
+        sample = (("kitty — ~/dotfiles", "xterm-color", True, False, False),
+                  ("Firefox", "msie1-2", False, False, False),
+                  ("Dolphin", "Explorer++", False, False, False),
+                  ("emacs", "emacs", False, True, False),
+                  ("Signal", "internet-chat", False, True, True),
+                  ("Spotify", "multimedia", False, False, True))
+        self._set_tasks([_Task(wid=i + 1, win=None, title=title, focused=focused,
+                               iconified=iconified, maximized=False,
+                               icon=icon(name), cls=None, pinned=pinned)
+                         for i, (title, name, focused, iconified, pinned)
+                         in enumerate(sample)])
 
     def _thumbnail(self, wid):
         return window_picture(320, 200)

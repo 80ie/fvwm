@@ -122,8 +122,8 @@ def thumbnail_heights(images, available):
 
 
 def order_tasks(tasks):
-    """Pinned tiles first, then rows with the minimized ones last."""
-    return sorted(tasks, key=lambda t: (not t.pinned, t.iconified))
+    """Pinned tiles first in client order, then rows, minimized ones last."""
+    return sorted(tasks, key=lambda t: (not t.pinned, t.iconified and not t.pinned))
 
 
 def tile_cols(width):
@@ -241,7 +241,7 @@ class TasksWidget(QWidget):
     def _poll_thumbnails(self):
         old = {wid: stamp for wid, (stamp, _) in self._thumbs.items()}
         for task in self.tasks:
-            if task.iconified:
+            if task.iconified and not task.pinned:
                 self._thumbnail(task.wid)
         if old != {wid: stamp for wid, (stamp, _) in self._thumbs.items()}:
             self.update()
@@ -250,12 +250,15 @@ class TasksWidget(QWidget):
         self._assert_thumb_watches()
         self._poll_thumbnails()
 
-    def _assert_thumb_watches(self):
-        want = {THUMB_DIR} | {
+    def _thumb_wanted(self):
+        return {
             os.path.join(THUMB_DIR, f"0x{t.wid:x}.png")
             for t in self.tasks
-            if t.iconified
+            if t.iconified and not t.pinned
         }
+
+    def _assert_thumb_watches(self):
+        want = {THUMB_DIR} | self._thumb_wanted()
         have = set(self._thumb_watcher.files()) | set(self._thumb_watcher.directories())
         for p in have - want:
             self._thumb_watcher.removePath(p)
@@ -264,14 +267,24 @@ class TasksWidget(QWidget):
                 self._thumb_watcher.addPath(p)
 
     def _rows(self):
+        """Tile cells for the pinned tasks (sorted first), then list rows."""
         inner = self._interior()
-        images = [self._thumbnail(t.wid) if t.iconified else None for t in self.tasks]
+        pinned = sum(t.pinned for t in self.tasks)
+        strip = strip_height(pinned, inner.width())
+        images = [
+            self._thumbnail(t.wid) if t.iconified and not t.pinned else None
+            for t in self.tasks
+        ]
         heights = thumbnail_heights(
-            images, inner.height() - len(self.tasks) * photon.ROW_H
+            images,
+            inner.height() - strip - (len(self.tasks) - pinned) * photon.ROW_H,
         )
-        y = inner.top()
+        y = inner.top() + strip
         rows = []
-        for extra in heights:
+        for i, (t, extra) in enumerate(zip(self.tasks, heights)):
+            if t.pinned:
+                rows.append(tile_rect(i, inner.left(), inner.top(), inner.width()))
+                continue
             rows.append(QRect(inner.left(), y, inner.width(), photon.ROW_H + extra))
             y += photon.ROW_H + extra
         return rows, images
@@ -311,7 +324,8 @@ class TasksWidget(QWidget):
                     ev.type == X.PropertyNotify
                     and ev.atom == self.atoms["_NET_WM_ICON"]
                 ):
-                    self._icons.pop(getattr(ev.window, "id", None), None)
+                    wid = getattr(ev.window, "id", None)
+                    self._icons = {k: v for k, v in self._icons.items() if k[0] != wid}
         except (xerror.ConnectionClosedError, OSError):
             self._notifier.setEnabled(False)
             QApplication.quit()
@@ -392,8 +406,8 @@ class TasksWidget(QWidget):
         except Exception:
             return ""
 
-    def _icon(self, win):
-        """Nearest-to-16px frame out of a possibly multi-size `_NET_WM_ICON`:
+    def _icon(self, win, size=16):
+        """Nearest-to-`size` frame out of a possibly multi-size `_NET_WM_ICON`:
         CARDINAL `w, h, w*h ARGB pixels`, repeated.  Masked to 32 bits because
         python-xlib hands format-32 properties back as platform longs."""
         try:
@@ -410,7 +424,7 @@ class TasksWidget(QWidget):
             i += 2
             if w <= 0 or h <= 0 or i + w * h > n:
                 break
-            if best is None or abs(w - 16) < abs(best[0] - 16):
+            if best is None or abs(w - size) < abs(best[0] - size):
                 best = (w, h, values[i : i + w * h])
             i += w * h
         if best is None:
@@ -458,8 +472,10 @@ class TasksWidget(QWidget):
             except Exception:
                 continue
 
-            if wid not in self._icons:
-                self._icons[wid] = self._icon(win)
+            pinned = self.atoms["_NET_WM_STATE_STICKY"] in state
+            key = (wid, TILE_ICON if pinned else 16)
+            if key not in self._icons:
+                self._icons[key] = self._icon(win, key[1])
 
             found.append(
                 _Task(
@@ -472,14 +488,14 @@ class TasksWidget(QWidget):
                         self.atoms["_NET_WM_STATE_MAXIMIZED_VERT"] in state
                         and self.atoms["_NET_WM_STATE_MAXIMIZED_HORZ"] in state
                     ),
-                    icon=self._icons[wid],
+                    icon=self._icons[key],
                     cls=cls,
-                    pinned=self.atoms["_NET_WM_STATE_STICKY"] in state,
+                    pinned=pinned,
                 )
             )
 
         live = {t.wid for t in found}
-        self._icons = {w: i for w, i in self._icons.items() if w in live}
+        self._icons = {k: i for k, i in self._icons.items() if k[0] in live}
         self._thumbs = {w: i for w, i in self._thumbs.items() if w in live}
 
         #  _NET_CLIENT_LIST_STACKING is bottom-to-top, so the last entry that
@@ -561,11 +577,11 @@ class TasksWidget(QWidget):
                     Qt.TransformationMode.SmoothTransformation,
                 )
             p.drawImage(box.left(), box.top(), img)
-            return
+            return True
         #  No _NET_WM_ICON: fall back to a theme lookup on WM_CLASS, same
         #  pattern as LauncherBody._draw_icon in shelf-panel.
         if not task.cls:
-            return
+            return False
         instance, klass = task.cls
         for name in (
             klass,
@@ -574,7 +590,36 @@ class TasksWidget(QWidget):
             instance.lower() if instance else None,
         ):
             if name and photon.draw_icon(p, name, box):
-                return
+                return True
+        return False
+
+    def _paint_tile(self, p, i, t, r, inner):
+        face = r.adjusted(0, 0, -2, -2)
+        if i == self._hover:
+            colour = photon.FACE_HI
+        elif t.iconified:
+            colour = photon.WELL
+        else:
+            colour = photon.FACE
+        p.fillRect(face, colour)
+        p.setPen(photon.SH)
+        p.drawLine(face.right() + 1, r.top(), face.right() + 1, face.bottom())
+        p.setPen(photon.HI)
+        p.drawLine(face.right() + 2, r.top(), face.right() + 2, face.bottom())
+        if r.left() == inner.left():
+            photon.divider(p, r.bottom() - 1, inner.left(), inner.right())
+
+        box = QRect(face.left() + 3, face.top() + 3, TILE_ICON, TILE_ICON)
+        p.setOpacity(0.6 if t.iconified else 1.0)
+        drawn = self._draw_icon(p, t, box)
+        p.setOpacity(1.0)
+        if not drawn:
+            p.setPen(photon.INK)
+            p.drawText(face, Qt.AlignmentFlag.AlignCenter, (t.title or "?")[:1])
+
+        if t.focused:
+            p.setPen(photon.DARK)
+            p.drawRect(QRect(face.left(), face.top(), face.width() - 1, face.height() - 1))
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -590,6 +635,9 @@ class TasksWidget(QWidget):
             r = rows[i]
             if r.top() > inner.bottom():
                 break
+            if t.pinned:
+                self._paint_tile(p, i, t, r, inner)
+                continue
 
             if i == self._hover:
                 face = photon.FACE_HI
