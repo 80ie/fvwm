@@ -83,7 +83,7 @@ window.
 | `bin/photon_media.py` | MPRIS transport, marquee title, cover art, volume slider |
 | `bin/photon_meters.py` | CPU / memory / filesystem meters, via `psutil` |
 | `bin/photon_pager.py` | World View: the `ShelfPager` FvwmPager module, reparented in via Qt's foreign-window container and relaunched (`ShelfPagerLaunch`) at each width step |
-| `bin/photon_tasks.py` | the window list, drawn from EWMH; shows `lib/Thumbnail` previews for minimized windows |
+| `bin/photon_tasks.py` | the window list, drawn from EWMH; sticky windows as an icon strip at the top; shows `lib/Thumbnail` previews for minimized windows |
 | `bin/photon_tray.py` | the system tray: stalonetray reparented in via Qt's foreign-window container |
 | `bin/photon_clock.py` | the clock field that used to be a taskbar cell |
 

@@ -189,5 +189,23 @@ class TileLayoutTest(unittest.TestCase):
         self.assertLess(darkest, photon.FACE.lightness() - 60)
 
 
+class PinActionTest(unittest.TestCase):
+    def test_pin_adds_and_unpin_removes_never_toggles(self):
+        w = FakeTasks()
+        w._pin(task(1))
+        w._pin(task(1, pinned=True))
+        self.assertEqual(w.sent, [("_NET_WM_STATE", [1, 501, 0, 2, 0]),
+                                  ("_NET_WM_STATE", [0, 501, 0, 2, 0])])
+
+    def test_tooltip_names_tiles_only(self):
+        w = FakeTasks()
+        w.resize(210, 600)
+        w._set_tasks([task(1, pinned=True, title="Signal (31)"),
+                      task(2, title="Firefox")])
+        self.assertEqual(w._tooltip(QPoint(18, 18)), "Signal (31)")
+        self.assertIsNone(w._tooltip(QPoint(18, 46)))
+        self.assertIsNone(w._tooltip(QPoint(150, 18)))
+
+
 if __name__ == "__main__":
     unittest.main()

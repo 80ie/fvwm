@@ -36,6 +36,13 @@ empty target page) nothing else repaints until some coincidental later
 event.  Frame Configures re-test each tracked client against the view and
 coalesce the burst into one extra refresh.
 
+Sticky windows are pinned: drawn as a strip of icon tiles at the top of the
+well, with their titles as tooltips.  The test is `_NET_WM_STATE_STICKY`,
+which fvwm sets only for a window sticky across pages *and* desks, so
+TileArrange's temporary pages-only stickiness never pins a tiled window.  Pin
+and Unpin send add and remove rather than toggle, because fvwm turns a toggle
+on a pages-only sticky window into "Stick on".
+
 Saved thumbnail files are watched (the directory, plus each per-window PNG)
 with `QFileSystemWatcher`, so a freshly captured preview repaints as soon as
 the file lands, and only while minimized windows are present.
@@ -51,6 +58,7 @@ os.environ.setdefault("QT_QPA_PLATFORMTHEME", "")
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false")
 
 from PyQt6.QtCore import (
+    QEvent,
     QFileSystemWatcher,
     QRect,
     QSize,
@@ -60,7 +68,7 @@ from PyQt6.QtCore import (
     pyqtSignal,
 )
 from PyQt6.QtGui import QFontMetrics, QImage, QPainter, QPalette
-from PyQt6.QtWidgets import QApplication, QMenu, QWidget
+from PyQt6.QtWidgets import QApplication, QMenu, QToolTip, QWidget
 
 from Xlib import X, display, protocol, error as xerror
 
@@ -558,6 +566,15 @@ class TasksWidget(QWidget):
             ],
         )
 
+    def _pin(self, task):
+        #  Add/remove, never toggle: fvwm turns a toggle on a pages-only
+        #  sticky window (TileArrange's) into "Stick on".
+        self._send(
+            task.win,
+            "_NET_WM_STATE",
+            [0 if task.pinned else 1, self.atoms["_NET_WM_STATE_STICKY"], 0, 2, 0],
+        )
+
     #  -- painting --
 
     def _row_at(self, pos):
@@ -692,6 +709,23 @@ class TasksWidget(QWidget):
 
     #  -- input --
 
+    def _tooltip(self, pos):
+        i = self._row_at(pos)
+        if i < 0 or not self.tasks[i].pinned:
+            return None
+        return self.tasks[i].title or "(untitled)"
+
+    def event(self, event):
+        if event.type() == QEvent.Type.ToolTip:
+            text = self._tooltip(event.pos())
+            if text:
+                QToolTip.showText(event.globalPos(), text, self)
+            else:
+                QToolTip.hideText()
+                event.ignore()
+            return True
+        return super().event(event)
+
     def mouseMoveEvent(self, event):
         i = self._row_at(event.position().toPoint())
         if i != self._hover:
@@ -733,6 +767,8 @@ class TasksWidget(QWidget):
             return
         t = self.tasks[i]
         menu = QMenu(self)
+        menu.addAction("Unpin" if t.pinned else "Pin", lambda: self._pin(t))
+        menu.addSeparator()
         menu.addAction(
             "Restore" if t.iconified else "Minimize",
             lambda: self._activate(t.win) if t.iconified else self._iconify(t.win),
