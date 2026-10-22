@@ -38,11 +38,14 @@ from PyQt6.QtWidgets import QApplication, QWidget
 
 import photon
 
-DATE_FORMAT = "%a %m-%d-%y"
+DATE_FORMAT = "%a %m.%d"
 TIME_FORMAT = "%I:%M%p"
 
-CLOCK_PT = 11
+CLOCK_PT = 11  # size at STRIP_H and a REF_W-wide strip; scales with width
+REF_W = 200
+MIN_PT = 8
 STRIP_H = 30
+PAD_L, PAD_R, GAP = 4, 3, 10
 
 
 class ClockWidget(QWidget):
@@ -56,7 +59,6 @@ class ClockWidget(QWidget):
         self.setPalette(pal)
         self.setAutoFillBackground(True)
 
-        self.font_clock = photon.font(CLOCK_PT, fnt="fixed")
         self._text = self._now_text()
 
         self.resize(photon.SHELF_INNER, self.natural_height())
@@ -67,8 +69,24 @@ class ClockWidget(QWidget):
         self._timer.timeout.connect(self._tick)
         self._arm()
 
-    def natural_height(self):
-        return STRIP_H
+    def _pt_for(self, w):
+        """CLOCK_PT scaled by w against the reference width, stepped down
+        until time and date fit side by side.  Scaling by the text instead
+        would blow a short date format up to fill the strip."""
+
+        def need(pt):
+            fm = QFontMetrics(photon.font(pt, fnt="fixed"))
+            return sum(fm.horizontalAdvance(t) for t in self._text)
+
+        avail = w - PAD_L - PAD_R - GAP
+        pt = round(CLOCK_PT * w / REF_W)
+        while pt > MIN_PT and need(pt) > avail:
+            pt -= 1
+        return max(MIN_PT, pt)
+
+    def natural_height(self, w=None):
+        w = photon.SHELF_INNER if w is None else w
+        return round(STRIP_H * self._pt_for(w) / CLOCK_PT)
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER, self.natural_height())
@@ -98,16 +116,17 @@ class ClockWidget(QWidget):
         p = QPainter(self)
         r = self.rect()
         p.fillRect(r, photon.FACE)
-        p.setFont(self.font_clock)
+        font = photon.font(self._pt_for(r.width()), fnt="fixed")
+        p.setFont(font)
         p.setPen(photon.INK)
-        fm = QFontMetrics(self.font_clock)
+        fm = QFontMetrics(font)
         date, time = self._text
-        field_w = max(1, (r.width() - 12) // 2)
-        date = photon.elide(date, self.font_clock, field_w)
-        time = photon.elide(time, self.font_clock, field_w)
+        avail = r.width() - PAD_L - PAD_R
+        time = photon.elide(time, font, avail)
+        date = photon.elide(date, font, avail - GAP - fm.horizontalAdvance(time))
         baseline = r.top() + (r.height() + fm.capHeight()) // 2
-        p.drawText(r.left() + 4, baseline, time)
-        p.drawText(r.right() - 3 - fm.horizontalAdvance(date), baseline, date)
+        p.drawText(r.left() + PAD_L, baseline, time)
+        p.drawText(r.right() + 1 - PAD_R - fm.horizontalAdvance(date), baseline, date)
 
 
 def main():
