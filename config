@@ -77,7 +77,7 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec gammastep-indicator
 + I Test (Init) Exec exec signal-desktop --use-tray-icon
 + I Test (Init) Exec exec telegram-desktop
-+ I Test (Init) Exec exec aw-tauri
++ I Test (Init) Exec exec ~/.scripts/aw-tauri-launch.sh
 + I Test (Init) Exec exec pactl load-module module-switch-on-connect
 + I Test (Init) Exec exec sxhkd
 + I Test (Init) Exec exec pulsar-mouse-gui
