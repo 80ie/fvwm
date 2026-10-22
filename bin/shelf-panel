@@ -76,7 +76,8 @@ class Group:
         self.items = []       # (label, icon, command)
         self.widget = None    # name, for a drawn section
         self.collapsed = False
-        self.bare = False     # no header at all -- see `bare` in panel.items
+        self.bar = True          # draws a header; see the flags in panel.items
+        self.collapsible = True  # never true without a bar
         self.flex = False     # absorbs the panel's leftover height
         #  Filled in at layout time.
         self.header = QRect()
@@ -97,11 +98,11 @@ def read_spec(path):
         head, _, rest = line.partition(" ")
         rest = rest.strip()
         if head == "group":
-            groups.append(Group(rest))
-        elif head == "bare":
-            g = Group(None)
-            g.bare = True
-            g.widget = rest
+            label, _, flags = rest.partition("|")
+            flags = flags.split()
+            g = Group(label.strip())
+            g.bar = "nobar" not in flags
+            g.collapsible = g.bar and "fixed" not in flags
             groups.append(g)
         elif head == "item" and groups:
             parts = [f.strip() for f in rest.split("|")]
@@ -276,7 +277,7 @@ class Panel(QWidget):
         self.groups = read_spec(SPEC)
 
         for g in self.groups:
-            if not g.bare:
+            if g.collapsible:
                 g.collapsed = bool(self.state.get("collapsed", {}).get(g.label))
             if g.widget == "worldview":
                 g.body_widget = WorldView(self)
@@ -356,12 +357,12 @@ class Panel(QWidget):
     def _body_w(self, g, w):
         """The width a section's *body* gets.
 
-        Bare sections -- the clock -- run the full width, as do widgets that
-        declare `full_width` because their own background has to continue
-        through the padding rather than giving way to shelf face.  Everything
-        else keeps PAD_R clear on the right.
+        Widgets that declare `full_width` -- the clock -- run the full width,
+        because their own background has to continue through the padding
+        rather than giving way to shelf face.  Everything else keeps PAD_R
+        clear on the right.
         """
-        if g.bare or getattr(g.body_widget, "full_width", False):
+        if getattr(g.body_widget, "full_width", False):
             return w
         return w - PAD_R
 
@@ -371,7 +372,7 @@ class Panel(QWidget):
     def _group_height(self, g, w):
         """A group's total height at its natural size, without placing it --
         used to size the bottom-pinned block before laying it out."""
-        h = 0 if g.bare else photon.HEADER_H
+        h = photon.HEADER_H if g.bar else 0
         if g.body_widget is not None and not g.collapsed:
             h += self._natural_height(g.body_widget, self._body_w(g, w))
         return h + (SEP_H if self._sep(g) else 0)
@@ -380,7 +381,7 @@ class Panel(QWidget):
         """Position one group at `y` and return the y just past it.  `height`
         overrides the widget's own natural height, which is how the flex
         group is handed its share of the leftover space."""
-        if g.bare:
+        if not g.bar:
             g.header = QRect(x, y, w, 0)
         else:
             g.header = QRect(x, y, w, photon.HEADER_H)
@@ -443,7 +444,7 @@ class Panel(QWidget):
         bottom_h = sum(self._group_height(g, w) for g in bottom)
         bottom_y = self.height() - bottom_h
 
-        chrome = (0 if flex.bare else photon.HEADER_H) \
+        chrome = (photon.HEADER_H if flex.bar else 0) \
             + (SEP_H if self._sep(flex) else 0)
         flex_natural = (self._natural_height(flex.body_widget,
                                              self._body_w(flex, w))
@@ -473,9 +474,9 @@ class Panel(QWidget):
                      "left" if self.side == "right" else "right")
         content_x = photon.FRAME_W if self.side == "right" else 0
         for g in self.groups:
-            if not g.bare:
+            if g.bar:
                 photon.group_header(p, g.header, g.label, g.collapsed,
-                                    self.font_header)
+                                    self.font_header, g.collapsible)
             if g.sep_y is not None:
                 photon.divider(p, g.sep_y, content_x,
                                content_x + self.width() - photon.FRAME_W - 1)
@@ -486,7 +487,7 @@ class Panel(QWidget):
 
     def _header_at(self, pos):
         for g in self.groups:
-            if not g.bare and g.header.contains(pos):
+            if g.collapsible and g.header.contains(pos):
                 return g
         return None
 

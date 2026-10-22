@@ -305,15 +305,18 @@ def toggle_glyph(p: QPainter, r: QRect, collapsed):
         p.fillRect(QRect(cx, cy - 2, 2, 6), HEADER_GLYPH)
 
 
-def group_header(p: QPainter, r: QRect, label, collapsed, fnt):
-    """A collapsible group's header: its own `#c7c7c7` toggle cell, the label
-    on a `#dbdbdb` face, and an etched divider along the bottom.
+def group_header(p: QPainter, r: QRect, label, collapsed, fnt, collapsible=True):
+    """A group's header: its own `#c7c7c7` toggle cell, the label on a
+    `#dbdbdb` face, and an etched divider along the bottom.  A group that
+    cannot collapse has no cell; the face takes its width.
     """
-    cell = QRect(r.left(), r.top(), TOGGLE_W, r.height() - 2)
-    face = QRect(r.left() + TOGGLE_W, r.top(), r.width() - TOGGLE_W, r.height() - 2)
-    p.fillRect(cell, HEADER_CELL)
+    cell_w = TOGGLE_W if collapsible else 0
+    face = QRect(r.left() + cell_w, r.top(), r.width() - cell_w, r.height() - 2)
+    if collapsible:
+        cell = QRect(r.left(), r.top(), TOGGLE_W, r.height() - 2)
+        p.fillRect(cell, HEADER_CELL)
+        toggle_glyph(p, cell, collapsed)
     p.fillRect(face, HEADER)
-    toggle_glyph(p, cell, collapsed)
 
     p.setFont(fnt)
     p.setPen(INK)

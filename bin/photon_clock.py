@@ -16,7 +16,7 @@ down the reference's bottom strip at x=150, y=292..314 is a flat run of
 #d9d9d9 with the glyphs straight on it -- the shelf's own face, no bevel, no
 #f4f4f4.  The only rule is the etched separator above it at y=290,291.  The
 strip is enlarged beyond the reference for readability.  No group header
-either; `panel.items` names this section `bare`.
+either; `panel.items` gives this section `nobar`.
 
 A QTimer, but armed to the next minute boundary rather than ticking every
 second and throwing most of the ticks away -- AGENTS.md's "almost nothing
@@ -46,6 +46,8 @@ STRIP_H = 30
 
 
 class ClockWidget(QWidget):
+    full_width = True  # shelf-panel: no PAD_R, the face runs to the frame
+
     def __init__(self, parent=None):
         super().__init__(parent)
 

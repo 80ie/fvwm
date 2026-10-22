@@ -7,18 +7,21 @@
 ##
 ##  Format, one directive per line:
 ##
-##    group <Label>        starts a collapsible group.  The label is also the
-##                         handle used in the state file, so keep it stable.
+##    group <Label> [| <flag>...]
+##                         starts a group, by default with a header bar that
+##                         collapses it.  The label is also the handle used in
+##                         the state file, so keep it stable.  Flags:
+##                           fixed  the bar stays, but has no -/+ and does
+##                                  not collapse.
+##                           nobar  no header at all, so no HEADER_H either,
+##                                  and never collapsed -- for a section that
+##                                  reads as part of the frame, like the clock.
 ##    item <Label> | <icon> | <command>
 ##                         a launcher row.  <icon> is a file in icons/, or a
 ##                         themed name looked up in the Haiku set.  <command>
 ##                         is run through the shell.
 ##    widget <name>        a shelf widget: worldview, meters, media, tasks,
 ##                         tray or clock.
-##    bare <name>          a widget section with no group header at all, so
-##                         it cannot be collapsed and costs no HEADER_H --
-##                         for a section that should read as part of the
-##                         frame rather than a titled group, like the clock.
 ##    flex                 marks the group *above* as the one that absorbs
 ##                         the panel's leftover height.  Sections above it
 ##                         stack from the top as usual; sections below it
@@ -50,10 +53,10 @@
 #item Screen Saver | 16x16-xscreensaver.png                   | xscreensaver-demo
 #item Appearance   | 16x16-menulibre.png                      | ${TERMINAL:-kitty} -e ${EDITOR:-vi} $FVWM_USERDIR/config
 
-group World View
+group World View | nobar
 widget worldview
 
-group Windows
+group Windows | nobar
 # Minimized windows stay last; show previews when they fit, else bars.
 # Task rows: left activate/minimize, middle close, right window actions.
 widget tasks
@@ -71,4 +74,5 @@ widget tray
 
 ##  No header: flush against the bottom of the panel, the last thing in the
 ##  stack.  Format and position both carried over from TaskbarClockTick.
-bare clock
+group Clock | nobar
+widget clock
