@@ -7,7 +7,15 @@ _TMP = tempfile.mkdtemp(prefix="photon_thumbs.")
 os.environ["FVWM_USERDIR"] = _TMP
 os.makedirs(os.path.join(_TMP, "images", "thumbs"), exist_ok=True)
 
-from photon_tasks import TasksWidget, THUMB_DIR, thumbnail_heights
+from photon_tasks import (
+    TasksWidget,
+    THUMB_DIR,
+    strip_height,
+    thumbnail_heights,
+    tile_cols,
+    tile_rect,
+)
+from PyQt6.QtCore import QRect
 from PyQt6.QtGui import QImage
 
 
@@ -64,6 +72,25 @@ class ThumbnailTornReadTest(unittest.TestCase):
         self.assertFalse(TasksWidget._thumbnail(self.me, 1).isNull())
         os.unlink(self.path)
         self.assertTrue(TasksWidget._thumbnail(self.me, 1).isNull())
+
+
+class StripGeometryTest(unittest.TestCase):
+    def test_columns_fit_the_interior(self):
+        self.assertEqual(tile_cols(206), 6)
+        self.assertEqual(tile_cols(96), 3)
+        self.assertEqual(tile_cols(10), 1)
+
+    def test_height_is_whole_tile_rows(self):
+        self.assertEqual(strip_height(0, 206), 0)
+        self.assertEqual(strip_height(2, 206), 32)
+        self.assertEqual(strip_height(6, 206), 32)
+        self.assertEqual(strip_height(7, 206), 64)
+        self.assertEqual(strip_height(5, 96), 64)
+
+    def test_cells_wrap_left_to_right(self):
+        self.assertEqual(tile_rect(0, 2, 2, 206), QRect(2, 2, 32, 32))
+        self.assertEqual(tile_rect(1, 2, 2, 206), QRect(34, 2, 32, 32))
+        self.assertEqual(tile_rect(6, 2, 2, 206), QRect(2, 34, 32, 32))
 
 
 if __name__ == "__main__":

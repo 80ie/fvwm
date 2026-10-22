@@ -95,6 +95,8 @@ _EXTRA_ATOMS = (
 WELL_PAD = 2  # what photon.sunken_interior eats off each edge
 MIN_THUMB_H = 64
 MAX_THUMB_H = 136
+TILE = 32  # a 30px face plus its 2px etch
+TILE_ICON = 24
 THUMB_DIR = os.path.join(
     os.environ.get("FVWM_USERDIR", os.path.expanduser("~/.fvwm")), "images", "thumbs"
 )
@@ -113,6 +115,20 @@ def thumbnail_heights(images, available):
     return [
         visible + 18 if img is not None and not img.isNull() else 0 for img in images
     ]
+
+
+def tile_cols(width):
+    return max(1, width // TILE)
+
+
+def strip_height(count, width):
+    return -(-count // tile_cols(width)) * TILE
+
+
+def tile_rect(i, left, top, width):
+    """The whole cell of pinned tile `i`, etch included."""
+    row, col = divmod(i, tile_cols(width))
+    return QRect(left + col * TILE, top + row * TILE, TILE, TILE)
 
 
 class TasksWidget(QWidget):
