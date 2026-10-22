@@ -265,6 +265,9 @@ class Panel(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ShelfPanel")
+        #  fvwm styles the shelf NeverFocus, and Qt drops tooltips in an
+        #  inactive window unless asked.
+        self.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips)
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, photon.FACE)
         self.setPalette(pal)

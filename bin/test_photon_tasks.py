@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import tempfile
 import types
@@ -205,6 +206,23 @@ class PinActionTest(unittest.TestCase):
         self.assertEqual(w._tooltip(QPoint(18, 18)), "Signal (31)")
         self.assertIsNone(w._tooltip(QPoint(18, 46)))
         self.assertIsNone(w._tooltip(QPoint(150, 18)))
+
+
+class PanelTooltipTest(unittest.TestCase):
+    """fvwm gives the shelf NeverFocus, and Qt only shows tooltips in an
+    inactive window that asks for them."""
+
+    def test_panel_shows_tooltips_while_inactive(self):
+        open(os.path.join(_TMP, "panel.items"), "w").close()
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shelf-panel")
+        loader = importlib.machinery.SourceFileLoader("shelf_panel", path)
+        shelf = importlib.util.module_from_spec(
+            importlib.util.spec_from_loader("shelf_panel", loader))
+        loader.exec_module(shelf)
+        panel = shelf.Panel()
+        panel._state_timer.stop()
+        self.assertTrue(panel.testAttribute(
+            shelf.Qt.WidgetAttribute.WA_AlwaysShowToolTips))
 
 
 if __name__ == "__main__":
