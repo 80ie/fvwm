@@ -20,7 +20,7 @@ from photon_tasks import (
 )
 from PyQt6.QtCore import QPoint, QRect
 from PyQt6.QtGui import QImage, QPainter
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QWidget
 
 import photon
 
@@ -295,6 +295,46 @@ class SectionBevelTest(unittest.TestCase):
         p.end()
         down = [img.pixelColor(1, y).rgb() for y in range(photon.BEVEL_H)]
         self.assertEqual(down, FrameTest.columns(photon.BEVEL_H, "left"))
+
+
+class _Fifty(QWidget):
+    def natural_height(self):
+        return 50
+
+
+class SectionPadTest(unittest.TestCase):
+    def _panel(self, spec):
+        shelf, panel = _load_panel()
+        path = os.path.join(_TMP, "pad.items")
+        with open(path, "w") as f:
+            f.write(spec)
+        panel.groups = shelf.read_spec(path)
+        for g in panel.groups:
+            g.body_widget = _Fifty(panel)
+        return shelf, panel
+
+    def test_pad_flag_puts_shelf_face_above_and_below_the_body(self):
+        shelf, panel = self._panel(
+            "group A | nobar | pad\nwidget clock\ngroup B | nobar\nwidget clock\n")
+        a, b = panel.groups
+        pad = photon.PAD_R
+        self.assertEqual([g.pad for g in panel.groups], [True, False])
+        self.assertEqual(panel._group_height(a, 100), 2 * pad + 50 + shelf.SEP_H)
+        self.assertEqual(panel._group_height(b, 100), 50)
+        y = panel._place_group(a, 0, 10, 100)
+        self.assertEqual(a.body, QRect(0, 10 + pad, 100 - pad, 50))
+        self.assertEqual(a.sep_y, 10 + 2 * pad + 50)
+        self.assertEqual(y, a.sep_y + shelf.SEP_H)
+
+    def test_padded_flex_section_still_fills_to_the_next(self):
+        shelf, panel = self._panel(
+            "group A | nobar | pad\nwidget clock\nflex\n"
+            "group B | nobar\nwidget clock\n")
+        panel.resize(100 + photon.FRAME_W, 400)
+        panel.relayout()
+        a, b = panel.groups
+        self.assertEqual(a.sep_y + shelf.SEP_H, b.header.top())
+        self.assertGreater(a.body.height(), 50)
 
 
 class FrameTest(unittest.TestCase):

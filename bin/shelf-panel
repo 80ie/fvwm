@@ -73,6 +73,7 @@ class Group:
         self.bar = True          # draws a header; see the flags in panel.items
         self.collapsible = True  # never true without a bar
         self.bevel = False       # a full bevel below it, not the etched rule
+        self.pad = False         # PAD_R of shelf face above and below the body
         self.flex = False     # absorbs the panel's leftover height
         #  Filled in at layout time.
         self.header = QRect()
@@ -99,6 +100,7 @@ def read_spec(path):
             g.bar = "nobar" not in flags
             g.collapsible = g.bar and "fixed" not in flags
             g.bevel = "bevel" in flags
+            g.pad = "pad" in flags
             groups.append(g)
         elif head == "item" and groups:
             parts = [f.strip() for f in rest.split("|")]
@@ -374,12 +376,18 @@ class Panel(QWidget):
             return 0
         return photon.BEVEL_H if g.bevel else SEP_H
 
+    def _pad_h(self, g):
+        """The shelf face above and below a padded body, none while it folds."""
+        shown = g.body_widget is not None and not g.collapsed
+        return 2 * photon.PAD_R if g.pad and shown else 0
+
     def _group_height(self, g, w):
         """A group's total height at its natural size, without placing it --
         used to size the bottom-pinned block before laying it out."""
         h = photon.HEADER_H if g.bar else 0
         if g.body_widget is not None and not g.collapsed:
             h += self._natural_height(g.body_widget, self._body_w(g, w))
+            h += self._pad_h(g)
         return h + self._sep_h(g)
 
     def _place_group(self, g, x, y, w, height=None):
@@ -399,10 +407,11 @@ class Panel(QWidget):
                 widget.hide()
         else:
             h = height if height is not None else self._natural_height(widget, bw)
+            y += self._pad_h(g) // 2
             g.body = QRect(x, y, bw, h)
             widget.setGeometry(g.body)
             widget.show()
-            y += h
+            y += h + self._pad_h(g) // 2
         if self._sep(g):
             g.sep_y = y
             y += self._sep_h(g)
@@ -449,7 +458,8 @@ class Panel(QWidget):
         bottom_h = sum(self._group_height(g, w) for g in bottom)
         bottom_y = self.height() - bottom_h
 
-        chrome = (photon.HEADER_H if flex.bar else 0) + self._sep_h(flex)
+        chrome = (photon.HEADER_H if flex.bar else 0) + self._sep_h(flex) \
+            + self._pad_h(flex)
         flex_natural = (self._natural_height(flex.body_widget,
                                              self._body_w(flex, w))
                         if flex.body_widget is not None and not flex.collapsed

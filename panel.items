@@ -18,6 +18,8 @@
 ##                                  reads as part of the frame, like the clock.
 ##                           bevel  the break below it is the frame's double
 ##                                  bevel instead of the etched rule.
+##                           pad    PAD_R of shelf face above and below its
+##                                  body, as on its right.
 ##    item <Label> | <icon> | <command>
 ##                         a launcher row.  <icon> is a file in icons/, or a
 ##                         themed name looked up in the Haiku set.  <command>
@@ -58,7 +60,7 @@
 group Clock | nobar
 widget clock
 
-group World View | nobar | bevel
+group World View | nobar | bevel | pad
 widget worldview
 
 group Windows | nobar
@@ -68,10 +70,10 @@ flex
 group Media
 widget media
 
-group System Monitor
+group System Monitor | pad
 widget meters
 
 
-group System Tray
+group System Tray | pad
 widget tray
 
