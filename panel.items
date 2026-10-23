@@ -16,6 +16,8 @@
 ##                           nobar  no header at all, so no HEADER_H either,
 ##                                  and never collapsed -- for a section that
 ##                                  reads as part of the frame, like the clock.
+##                           bevel  the break below it is the frame's double
+##                                  bevel instead of the etched rule.
 ##    item <Label> | <icon> | <command>
 ##                         a launcher row.  <icon> is a file in icons/, or a
 ##                         themed name looked up in the Haiku set.  <command>
@@ -53,12 +55,13 @@
 #item Screen Saver | 16x16-xscreensaver.png                   | xscreensaver-demo
 #item Appearance   | 16x16-menulibre.png                      | ${TERMINAL:-kitty} -e ${EDITOR:-vi} $FVWM_USERDIR/config
 
-group World View | nobar
+group Clock | nobar
+widget clock
+
+group World View | nobar | bevel
 widget worldview
 
 group Windows | nobar
-# Minimized windows stay last; show previews when they fit, else bars.
-# Task rows: left activate/minimize, middle close, right window actions.
 widget tasks
 flex
 
@@ -72,7 +75,3 @@ widget meters
 group System Tray
 widget tray
 
-##  No header: flush against the bottom of the panel, the last thing in the
-##  stack.  Format and position both carried over from TaskbarClockTick.
-group Clock | nobar
-widget clock

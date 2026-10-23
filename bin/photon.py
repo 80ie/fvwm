@@ -48,6 +48,7 @@ WELL_LIP = colour("WELL_LIP")
 HI = colour("HI")
 SH = colour("SH")
 DARK = colour("DARK")
+WELL_EDGE = SH  # a well's outline: a shadow, not the DARK rule
 HEADER_CELL = colour("HEADER_CELL")
 HEADER_GLYPH = colour("HEADER_GLYPH")
 FIELD = colour("FIELD")
@@ -81,18 +82,29 @@ SHELF_INNER = 152
 
 #  Geometry the reference fixes, and the panel reads rather than invents.
 FRAME_W = 7  # the shelf's left edge, the double bevel below
+BEVEL_H = 7  # the same profile laid across the shelf, see bevel_rule
+
+#  The reference does not run its widgets into the screen edge: sampled along
+#  the System Monitor's meters, the trough's outline stops at x=196 and the
+#  three columns after it are shelf face before the shelf's own last column.
+#  Headers and the clock strip are the exception -- both go the full width.
+#  The window list reuses it as the gap between its pinned tiles and its rows.
+PAD_R = 3
 HEADER_H = 20  # a group header, its divider included
 TOGGLE_W = 15  # the -/+ cell at the head of a group header
 ROW_H = 25  # a launcher row, its divider included
 GUTTER_W = 28  # the icon column of a launcher row
 
 
-
-
 QT6CT_CONF = os.path.expanduser("~/.config/qt6ct/qt6ct.conf")
-QT_WEIGHTS = {400: QFont.Weight.Normal, 500: QFont.Weight.Medium,
-              600: QFont.Weight.DemiBold, 700: QFont.Weight.Bold,
-              800: QFont.Weight.ExtraBold, 900: QFont.Weight.Black}
+QT_WEIGHTS = {
+    400: QFont.Weight.Normal,
+    500: QFont.Weight.Medium,
+    600: QFont.Weight.DemiBold,
+    700: QFont.Weight.Bold,
+    800: QFont.Weight.ExtraBold,
+    900: QFont.Weight.Black,
+}
 _QT6CT_FONTS = None
 
 
@@ -104,8 +116,10 @@ def qt6ct_fonts():
     global _QT6CT_FONTS
     if _QT6CT_FONTS is not None:
         return _QT6CT_FONTS
-    got = {"general": ("Iosevka Curly", QFont.Weight.Normal),
-           "fixed": ("Linux Libertine Mono", QFont.Weight.Normal)}
+    got = {
+        "general": ("Iosevka Curly", QFont.Weight.Normal),
+        "fixed": ("Linux Libertine Mono", QFont.Weight.Normal),
+    }
     try:
         cp = configparser.ConfigParser()
         cp.read(QT6CT_CONF)
@@ -115,8 +129,7 @@ def qt6ct_fonts():
                 continue
             line = line.strip().strip('"')
             parts = line.split(",")
-            got[role] = (parts[0],
-                         QT_WEIGHTS.get(int(parts[4]), QFont.Weight.Normal))
+            got[role] = (parts[0], QT_WEIGHTS.get(int(parts[4]), QFont.Weight.Normal))
     except Exception:
         pass
     _QT6CT_FONTS = got
@@ -166,27 +179,29 @@ def sunken(p: QPainter, r: QRect, fill=None):
     """A well: data field, meter trough.
 
     The hard one, measured off the reference's CD title field at x=900,
-    y=560..579.  A full #4b4b4b outline; a #c0c0c0 inner shadow along the top
-    and left, which is the two-tone bevel-to-fill Photon's PhAB reference
-    calls DARK_BEVEL into DARK_FILL; the interior; and a #dddddd lip along
-    the *outer* bottom and right, so the last row and column of `r` are the
-    lip rather than the field.
+    y=560..579.  A full outline; a #c0c0c0 inner shadow along the top and
+    left, which is the two-tone bevel-to-fill Photon's PhAB reference calls
+    DARK_BEVEL into DARK_FILL; the interior; and a #dddddd lip along the
+    *outer* bottom and right, outside the outline, so the last row and
+    column of `r` are the lip rather than the field.
+
+    The reference's outline is #4b4b4b and dark on top and left only: its
+    bottom and right are the lip over the outline.  Here the outline is
+    `WELL_EDGE` all the way round, a shadow, because the full dark rule
+    stacked under a section's own rule read as a second heavier line, and
+    dropping just the top edge left the well looking flat rather than sunken.
 
     The soft highlight/shadow pair cannot fake this, which is the single most
     visible error in the FvwmScript widgets these replace.
     """
-    outline = QRect(r.left(), r.top(), r.width() - 1, r.height() - 1)
+    outline = QRect(r.left(), r.top(), r.width() - 2, r.height() - 2)
     if fill is not None:
         p.fillRect(outline.adjusted(1, 1, 0, 0), fill)
-    p.setPen(DARK)
+    p.setPen(WELL_EDGE)
     p.drawRect(outline)
     p.setPen(WELL_SH)
-    p.drawLine(
-        outline.left() + 1, outline.top() + 1, outline.right() - 1, outline.top() + 1
-    )
-    p.drawLine(
-        outline.left() + 1, outline.top() + 1, outline.left() + 1, outline.bottom() - 1
-    )
+    p.drawLine(r.left() + 1, r.top() + 1, r.right() - 2, r.top() + 1)
+    p.drawLine(r.left() + 1, r.top() + 1, r.left() + 1, r.bottom() - 2)
     p.setPen(WELL_LIP)
     p.drawLine(r.left() + 1, r.bottom(), r.right(), r.bottom())
     p.drawLine(r.right(), r.top() + 1, r.right(), r.bottom())
@@ -269,7 +284,8 @@ def bar_fill(p: QPainter, r: QRect, colour: QColor):
 
 
 def frame(p: QPainter, r: QRect, edge="left"):
-    """The shelf's inner edge: two nested bevels, seven pixels wide.
+    """The shelf's inner edge: two nested bevels, seven pixels wide (or the
+    outer one alone when `FRAME_W` is narrower; see `frame_rows`).
 
     Sampled at x=889..895 and identical at every height checked (y=2, 8, 16,
     18, 19, 22, 40, 45, 300, 520, 590, 700):
@@ -284,12 +300,33 @@ def frame(p: QPainter, r: QRect, edge="left"):
     while the shelf was a module.  The reference carries it on the left; a
     left-docked shelf mirrors it onto the right.
     """
-    rows = (DARK, HI, FACE_ALT, FACE_ALT, FRAME_MID, DARK, HI)
+    rows = frame_rows(r.width())
     if edge == "right":
-        rows = reversed(rows)
+        rows = rows[::-1]
     for i, colour in enumerate(rows):
         p.setPen(colour)
         p.drawLine(r.left() + i, r.top(), r.left() + i, r.bottom())
+
+
+def frame_rows(width):
+    """The colours of an edge `width` pixels wide, screen side first.
+
+    Seven is the reference's two nested bevels.  Anything narrower keeps the
+    outer bevel and pads it with channel, rather than cutting the profile off
+    at the widget's edge, which drops exactly the outer bevel.
+    """
+    outer, channel, inner = (DARK, HI), FACE_ALT, (FRAME_MID, DARK, HI)
+    if width >= 7:
+        return outer + (channel,) * (width - 5) + inner
+    return (outer + (channel,) * width)[:width]
+
+
+def bevel_rule(p: QPainter, y, x0, x1):
+    """The frame's profile turned on its side: the break between two sections
+    of the shelf."""
+    for i, colour in enumerate(frame_rows(BEVEL_H)):
+        p.setPen(colour)
+        p.drawLine(x0, y + i, x1, y + i)
 
 
 def toggle_glyph(p: QPainter, r: QRect, collapsed):

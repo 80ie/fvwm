@@ -67,7 +67,7 @@ from PyQt6.QtCore import (
     QTimer,
     pyqtSignal,
 )
-from PyQt6.QtGui import QFontMetrics, QImage, QPainter, QPalette
+from PyQt6.QtGui import QFontMetrics, QImage, QPainter, QPalette, QRegion
 from PyQt6.QtWidgets import QApplication, QMenu, QToolTip, QWidget
 
 from Xlib import X, display, protocol, error as xerror
@@ -106,6 +106,7 @@ MIN_THUMB_H = 64
 MAX_THUMB_H = 136
 TILE = 32  # a 30px face plus its 2px etch
 TILE_ICON = 24
+TILE_ETCH = 2  # the SH/HI pair on a tile's right and bottom
 THUMB_DIR = os.path.join(
     os.environ.get("FVWM_USERDIR", os.path.expanduser("~/.fvwm")), "images", "thumbs"
 )
@@ -134,12 +135,20 @@ def order_tasks(tasks):
     return sorted(tasks, key=lambda t: (not t.pinned, t.iconified and not t.pinned))
 
 
+def well_chrome(pinned, rows):
+    """What the wells' own edges take, plus the shelf face between two of them."""
+    if pinned and rows:
+        return 4 * WELL_PAD + photon.PAD_R
+    return 2 * WELL_PAD
+
+
 def tile_cols(width):
     return max(1, width // TILE)
 
 
 def strip_height(count, width):
-    return -(-count // tile_cols(width)) * TILE
+    """The tile rows, less the rule under the last one: the well closes it."""
+    return -(-count // tile_cols(width)) * TILE - TILE_ETCH if count else 0
 
 
 def tile_rect(i, left, top, width):
@@ -219,14 +228,28 @@ class TasksWidget(QWidget):
 
     def natural_height(self, w=None):
         pinned = sum(t.pinned for t in self.tasks)
+        rows = len(self.tasks) - pinned
         strip = strip_height(pinned, (w or photon.SHELF_INNER) - 2 * WELL_PAD)
-        return strip + (len(self.tasks) - pinned) * photon.ROW_H + 2 * WELL_PAD
+        return strip + rows * photon.ROW_H + well_chrome(pinned, rows)
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER, self.natural_height(photon.SHELF_INNER))
 
-    def _interior(self):
-        return photon.sunken_interior(self.rect())
+    def _wells(self):
+        """The sunken rects, (tiles, rows), None for a kind that is absent.
+
+        With both there are two, split by PAD_R of shelf face that runs out
+        into the shelf's own right-hand padding with no edge between them.
+        """
+        pinned = sum(t.pinned for t in self.tasks)
+        w, h = self.width(), self.height()
+        if not pinned:
+            return None, self.rect()
+        if pinned == len(self.tasks):
+            return self.rect(), None
+        top = 2 * WELL_PAD + strip_height(pinned, w - 2 * WELL_PAD)
+        below = top + photon.PAD_R
+        return QRect(0, 0, w, top), QRect(0, below, w, h - below)
 
     def _thumbnail(self, wid):
         path = os.path.join(THUMB_DIR, f"0x{wid:x}.png")
@@ -276,24 +299,24 @@ class TasksWidget(QWidget):
 
     def _rows(self):
         """Tile cells for the pinned tasks (sorted first), then list rows."""
-        inner = self._interior()
-        pinned = sum(t.pinned for t in self.tasks)
-        strip = strip_height(pinned, inner.width())
+        tiles, body = (
+            photon.sunken_interior(w) if w else None for w in self._wells()
+        )
+        unpinned = sum(not t.pinned for t in self.tasks)
         images = [
             self._thumbnail(t.wid) if t.iconified and not t.pinned else None
             for t in self.tasks
         ]
         heights = thumbnail_heights(
-            images,
-            inner.height() - strip - (len(self.tasks) - pinned) * photon.ROW_H,
+            images, body.height() - unpinned * photon.ROW_H if body else 0
         )
-        y = inner.top() + strip
+        y = body.top() if body else 0
         rows = []
         for i, (t, extra) in enumerate(zip(self.tasks, heights)):
             if t.pinned:
-                rows.append(tile_rect(i, inner.left(), inner.top(), inner.width()))
+                rows.append(tile_rect(i, tiles.left(), tiles.top(), tiles.width()))
                 continue
-            rows.append(QRect(inner.left(), y, inner.width(), photon.ROW_H + extra))
+            rows.append(QRect(body.left(), y, body.width(), photon.ROW_H + extra))
             y += photon.ROW_H + extra
         return rows, images
 
@@ -578,8 +601,8 @@ class TasksWidget(QWidget):
     #  -- painting --
 
     def _row_at(self, pos):
-        inner = self._interior()
-        if not inner.contains(pos):
+        wells = [photon.sunken_interior(w) for w in self._wells() if w]
+        if not any(w.contains(pos) for w in wells):
             return -1
         return next((i for i, r in enumerate(self._rows()[0]) if r.contains(pos)), -1)
 
@@ -610,8 +633,8 @@ class TasksWidget(QWidget):
                 return True
         return False
 
-    def _paint_tile(self, p, i, t, r, inner):
-        face = r.adjusted(0, 0, -2, -2)
+    def _paint_tile(self, p, i, t, r, inner, last_row):
+        face = r.adjusted(0, 0, -TILE_ETCH, -TILE_ETCH)
         if i == self._hover:
             colour = photon.FACE_HI
         elif t.iconified:
@@ -623,7 +646,7 @@ class TasksWidget(QWidget):
         p.drawLine(face.right() + 1, r.top(), face.right() + 1, face.bottom())
         p.setPen(photon.HI)
         p.drawLine(face.right() + 2, r.top(), face.right() + 2, face.bottom())
-        if r.left() == inner.left():
+        if r.left() == inner.left() and not last_row:
             photon.divider(p, r.bottom() - 1, inner.left(), inner.right())
 
         box = QRect(face.left() + 3, face.top() + 3, TILE_ICON, TILE_ICON)
@@ -641,19 +664,25 @@ class TasksWidget(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.fillRect(self.rect(), photon.FACE)
-        photon.sunken(p, self.rect(), photon.WELL)
+        wells = self._wells()
+        clip = QRegion()
+        for well in filter(None, wells):
+            photon.sunken(p, well, photon.WELL)
+            clip = clip.united(QRegion(photon.sunken_interior(well)))
+        tiles = photon.sunken_interior(wells[0]) if wells[0] else None
+        cols = tile_cols(tiles.width()) if tiles else 1
+        last_row = (sum(t.pinned for t in self.tasks) - 1) // cols
         p.setFont(self.font_row)
         fm = QFontMetrics(self.font_row)
-        inner = self._interior()
-        p.setClipRect(inner)
+        p.setClipRegion(clip)
 
         rows, images = self._rows()
         for i, t in enumerate(self.tasks):
             r = rows[i]
-            if r.top() > inner.bottom():
+            if r.top() > self.rect().bottom():
                 break
             if t.pinned:
-                self._paint_tile(p, i, t, r, inner)
+                self._paint_tile(p, i, t, r, tiles, i // cols == last_row)
                 continue
 
             if i == self._hover:

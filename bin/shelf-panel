@@ -56,12 +56,6 @@ ICONS = os.path.join(USERDIR, "icons")
 MIN_W, MAX_W = 110, 420
 DEFAULT_W = 160
 
-#  The reference does not run its widgets into the screen edge: sampled along
-#  the System Monitor's meters, the trough's outline stops at x=196 and the
-#  three columns after it are shelf face before the shelf's own last column.
-#  Headers and the clock strip are the exception -- both go the full width.
-PAD_R = 3
-
 #  And it separates every section from the next with an etched rule, #a7a7a7
 #  over #ffffff, which is photon.divider: at y=4,85,172 in the reference,
 #  above System Monitor, above CD Player and above World View respectively.
@@ -78,6 +72,7 @@ class Group:
         self.collapsed = False
         self.bar = True          # draws a header; see the flags in panel.items
         self.collapsible = True  # never true without a bar
+        self.bevel = False       # a full bevel below it, not the etched rule
         self.flex = False     # absorbs the panel's leftover height
         #  Filled in at layout time.
         self.header = QRect()
@@ -103,6 +98,7 @@ def read_spec(path):
             g = Group(label.strip())
             g.bar = "nobar" not in flags
             g.collapsible = g.bar and "fixed" not in flags
+            g.bevel = "bevel" in flags
             groups.append(g)
         elif head == "item" and groups:
             parts = [f.strip() for f in rest.split("|")]
@@ -363,15 +359,20 @@ class Panel(QWidget):
 
         Widgets that declare `full_width` -- the clock -- run the full width,
         because their own background has to continue through the padding
-        rather than giving way to shelf face.  Everything else keeps PAD_R
+        rather than giving way to shelf face.  Everything else keeps photon.PAD_R
         clear on the right.
         """
         if getattr(g.body_widget, "full_width", False):
             return w
-        return w - PAD_R
+        return w - photon.PAD_R
 
     def _sep(self, g):
         return g is not self.groups[-1]
+
+    def _sep_h(self, g):
+        if not self._sep(g):
+            return 0
+        return photon.BEVEL_H if g.bevel else SEP_H
 
     def _group_height(self, g, w):
         """A group's total height at its natural size, without placing it --
@@ -379,7 +380,7 @@ class Panel(QWidget):
         h = photon.HEADER_H if g.bar else 0
         if g.body_widget is not None and not g.collapsed:
             h += self._natural_height(g.body_widget, self._body_w(g, w))
-        return h + (SEP_H if self._sep(g) else 0)
+        return h + self._sep_h(g)
 
     def _place_group(self, g, x, y, w, height=None):
         """Position one group at `y` and return the y just past it.  `height`
@@ -404,7 +405,7 @@ class Panel(QWidget):
             y += h
         if self._sep(g):
             g.sep_y = y
-            y += SEP_H
+            y += self._sep_h(g)
         else:
             g.sep_y = None
         return y
@@ -448,8 +449,7 @@ class Panel(QWidget):
         bottom_h = sum(self._group_height(g, w) for g in bottom)
         bottom_y = self.height() - bottom_h
 
-        chrome = (photon.HEADER_H if flex.bar else 0) \
-            + (SEP_H if self._sep(flex) else 0)
+        chrome = (photon.HEADER_H if flex.bar else 0) + self._sep_h(flex)
         flex_natural = (self._natural_height(flex.body_widget,
                                              self._body_w(flex, w))
                         if flex.body_widget is not None and not flex.collapsed
@@ -482,8 +482,9 @@ class Panel(QWidget):
                 photon.group_header(p, g.header, g.label, g.collapsed,
                                     self.font_header, g.collapsible)
             if g.sep_y is not None:
-                photon.divider(p, g.sep_y, content_x,
-                               content_x + self.width() - photon.FRAME_W - 1)
+                rule = photon.bevel_rule if g.bevel else photon.divider
+                rule(p, g.sep_y, content_x,
+                     content_x + self.width() - photon.FRAME_W - 1)
         if self.filler.height() > 0:
             photon.sunken(p, self.filler, photon.WELL)
 
