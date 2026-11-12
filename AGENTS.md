@@ -13,6 +13,14 @@ There is no build system. To apply changes:
 - `FvwmCommand <command>` — execute a single FVWM command without full restart
 - `FvwmConsole` — interactive FVWM command shell for testing commands live
 
+**Test visually without touching the live session: `bin/fvwm-rig`.** It runs
+the real config (minus autostart daemons) on a private Xvfb inside user, PID,
+mount and net namespaces with a throwaway `$HOME`, so no live socket, bus or
+process is reachable. `up [--size WxH] [--fresh]`, `restart` (re-syncs the
+working tree, then `Restart`), `cmd <fvwm command>`, `shot [file.png]` (read
+the PNG), `exec <cmd>` (e.g. `exec setsid -f kitty`, `exec xdotool key ...`),
+`down`. Prefer it over `FvwmCommand Restart` on the live session.
+
 The only automated checks are `cd bin && QT_QPA_PLATFORM=offscreen python3 -m
 unittest test_photon_tasks` and `bin/tray-randr-test`. `FvwmCommand` follows
 `$FVWMMFL_SOCKET`, not `$DISPLAY`, so a scratch Xvfb rig reaches the live fvwm

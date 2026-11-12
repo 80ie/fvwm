@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Sandboxed nested fvwm for testing config changes without touching the live session.
+# Usage: fvwm-rig up [--size WxH] [--fresh] | down | status | sync | restart
+#        fvwm-rig cmd <fvwm command> | shot [file.png] | exec <cmd...>
+#
+# Runs Xvfb + the real config in private user/pid/mount/net namespaces: /tmp, /run/user
+# and $HOME are replaced, so live sockets, buses, processes and files are unreachable.
+set -euo pipefail
+
+SELF=$(readlink -f "$0")
+RIG=${FVWM_RIG_DIR:-$HOME/.cache/fvwm-rig}
+LIVE=$HOME/.fvwm
+DISP=:99
+SEED=(.config/qt6ct .config/qt5ct .config/gtk-3.0 .config/gtk-4.0 .config/fontconfig
+      .local/share/icons .Xresources .gtkrc-2.0)
+SEED_EXCLUDE=(--exclude=Newaita-dark)
+
+# The only environment the rig sees: nothing from the live session leaks in.
+ENVV=(HOME="$HOME" PATH="$PATH" LANG="${LANG:-C}" USER="${USER:-}" DISPLAY=$DISP
+      XDG_RUNTIME_DIR="/run/user/$(id -u)" QT_QPA_PLATFORM=xcb
+      FVWM_USERDIR="$HOME/.fvwm" FVWMMFL_SOCKET_PATH=/tmp/fvwmmfl)
+[ -z "${QT_QPA_PLATFORMTHEME:-}" ] || ENVV+=(QT_QPA_PLATFORMTHEME="$QT_QPA_PLATFORMTHEME")
+[ -z "${GTK_THEME:-}" ] || ENVV+=(GTK_THEME="$GTK_THEME")
+
+die() { echo "fvwm-rig: $*" >&2; exit 1; }
+
+# Namespace entry points: only ever address the rig, never fall through to the live session.
+init_pid() {
+    local p
+    p=$(cat "$RIG/init.pid" 2>/dev/null) || die "rig is not up (run: fvwm-rig up)"
+    [ -d "/proc/$p" ] || die "rig is not up (run: fvwm-rig up)"
+    echo "$p"
+}
+
+in_rig() {
+    local p; p=$(init_pid)
+    exec nsenter -t "$p" -U --preserve-credentials -m -n -p --wd="$HOME" -- env -i "${ENVV[@]}" "$@"
+}
+
+sync_tree() {
+    mkdir -p "$RIG/home"
+    rsync -a --delete \
+        --exclude=/.git --exclude=/.pi --exclude=/archive --exclude=/docs \
+        --exclude=/palette/history --exclude=/.panel.state --exclude=__pycache__ \
+        "$LIVE/" "$RIG/home/.fvwm/"
+    # Drop autostart daemons (Test (Init...) Exec exec ...); keeps modules, shelf, wallpaper.
+    sed -i -E '/^\+ I Test \(Init[^)]*\) (Schedule [0-9]+ )?Exec exec /d' "$RIG/home/.fvwm/config"
+}
+
+seed_home() {
+    local p
+    for p in "${SEED[@]}"; do
+        [ -e "$HOME/$p" ] || continue
+        mkdir -p "$RIG/home/$(dirname "$p")"
+        rsync -a "${SEED_EXCLUDE[@]}" "$HOME/$p" "$RIG/home/$(dirname "$p")/"
+    done
+}
+
+# Runs as PID 1 inside the namespaces.
+cmd_init() {
+    local w=$1 h=$2 uid; uid=$(id -u)
+    mount -t tmpfs tmpfs /tmp
+    mount -t tmpfs tmpfs /run/user
+    mount -t tmpfs tmpfs /dev/shm
+    mkdir -p "/run/user/$uid" && chmod 700 "/run/user/$uid"
+    mount --bind "$RIG/home" "$HOME"
+    ip link set lo up 2>/dev/null || true
+    exec env -i "${ENVV[@]}" dbus-run-session -- bash -c '
+            Xvfb $0 -screen 0 $1x24 +extension RANDR -nolisten tcp &
+            for _ in $(seq 50); do [ -S /tmp/.X11-unix/X${0#:} ] && break; sleep 0.1; done
+            exec fvwm3' "$DISP" "${w}x${h}"
+}
+
+cmd_up() {
+    local size=1600x900 fresh=
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --size) size=$2; shift 2 ;;
+            --fresh) fresh=1; shift ;;
+            *) die "up: unknown arg $1" ;;
+        esac
+    done
+    cmd_down quiet
+    [ -n "$fresh" ] && rm -rf "$RIG/home"
+    mkdir -p "$RIG"
+    [ -d "$RIG/home/.config" ] || seed_home
+    sync_tree
+    setsid -f unshare -Urpfn --mount-proc "$SELF" __init "${size%x*}" "${size#*x}" \
+        >"$RIG/log" 2>&1 </dev/null
+    local u p i
+    for i in $(seq 100); do
+        u=$(pgrep -nf "unshare -Urpfn --mount-proc $SELF __init" || true)
+        p=$([ -n "$u" ] && pgrep -P "$u" | head -1 || true)
+        [ -n "$p" ] && break
+        sleep 0.1
+    done
+    [ -n "$p" ] || die "namespace did not start; see $RIG/log"
+    echo "$p" >"$RIG/init.pid"
+    for i in $(seq 100); do
+        "$SELF" cmd Nop >/dev/null 2>&1 && { echo "rig up ($size), screenshot: fvwm-rig shot"; return; }
+        sleep 0.2
+    done
+    die "fvwm did not answer; see $RIG/log"
+}
+
+cmd_down() {
+    local p; p=$(cat "$RIG/init.pid" 2>/dev/null || true)
+    if [ -n "$p" ] && [ -d "/proc/$p" ]; then kill -KILL "$p" 2>/dev/null || true; fi
+    rm -f "$RIG/init.pid"
+    [ "${1:-}" = quiet ] || echo "rig down"
+}
+
+case ${1:-} in
+    __init) shift; cmd_init "$@" ;;
+    up) shift; cmd_up "$@" ;;
+    down) cmd_down ;;
+    status) p=$(init_pid) && echo "up (init pid $p)" ;;
+    sync) sync_tree ;;
+    restart) sync_tree; "$SELF" cmd Restart ;;
+    cmd) shift; in_rig FvwmCommand "$*" ;;
+    shot) in_rig import -window root png:- >"${2:-$RIG/shot.png}"; echo "${2:-$RIG/shot.png}" ;;
+    exec) shift; in_rig "$@" ;;
+    *) sed -n '2,6p' "$SELF"; exit 2 ;;
+esac
