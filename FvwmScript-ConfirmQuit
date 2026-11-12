@@ -1,6 +1,5 @@
 WindowTitle {ConfirmQuit}
 WindowSize  240 60
-Font "xft:Fixed:size=10:antialias=False"
 Init
  Begin
  End

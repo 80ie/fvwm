@@ -1,6 +1,5 @@
 WindowTitle {DateTime}
 WindowSize  140 38
-Font "xft:Sans:size=10:antialias=False" 
 
 Init
  Begin
@@ -27,7 +26,6 @@ Widget 1
 Property
  Position 0 0
  Size 60 38
- Font "xft:Fixed:size=10:antialias=False"
  Type ItemDraw
  Flags NoReliefString
  Title {}
@@ -42,7 +40,6 @@ Widget 2
 Property
  Position 60 0
  Size 80 38
- Font "xft:Fixed:size=10:antialias=False"
  Type ItemDraw
  Flags NoReliefString
  Title {}

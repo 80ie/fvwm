@@ -22,6 +22,7 @@ InfoStoreAdd bg $[FVWM_USERDIR]/images/bg/bg.png
 
 InfoStoreAdd title_height 22
 InfoStoreAdd border_width 5
+InfoStoreAdd font xft:LinuxLibertine:semibold:size=10
 SetEnv TILE_MASTER_PERCENT 55
 PipeRead "$[FVWM_USERDIR]/bin/tile-floats list" quiet
 
@@ -636,9 +637,8 @@ TitleStyle Centered Height $[infostore.title_height]
 ##                                                           }}}3
 ##                                                           }}}2
 ##   ├ Font                                                  {{{2
-DefaultFont "xft:P052:Bold:Italic:size=10:antialias=True:minspace=True"
-#Style * Font "xft:P052:size=10:antialias=True"
-Style * Font "xft:LibreCaslonText:size=10:antialias=True"
+DefaultFont $[infostore.font]
+Style * Font $[infostore.font]
 ##                                                           }}}2
 ##   ├ Icons                                                 {{{2
 # Iconified windows draw nothing on the desktop; the shelf pager and
@@ -850,7 +850,7 @@ ButtonStyle 6 - MwmDecorMin
 # a window. One use is getting the class/resource/name of a window.
 DestroyModuleConfig FvwmIdent:*
 *FvwmIdent: Colorset 10
-*FvwmIdent: Font "xft:LiberationSans-Regular:size=10:antialias=False"
+*FvwmIdent: Font $[infostore.font]
 ##                                                           }}}2
 	##   ├ FvwmScript                                            {{{2
 #
@@ -862,7 +862,7 @@ DestroyModuleConfig FvwmIdent:*
 #     quitting fvwm.
 DestroyModuleConfig FvwmScript:*
 *FvwmScript: DefaultColorset 10
-*FvwmScript: Font "xft:P052:Italic:Bold:size=10:antialias=True"
+*FvwmScript: DefaultFont $[infostore.font]
 ##                                                           }}}2
 ##   ├ FvwmForm                                              {{{2
 #
