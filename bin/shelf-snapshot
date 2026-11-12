@@ -95,7 +95,7 @@ def cover_picture(side=240):
 
 class Tasks(TasksWidget):
     def _watch_x(self):
-        sample = (("kitty — ~/dotfiles", "xterm-color", True, False, False),
+        sample = (("kitty — ~/.fvwm", "xterm-color", True, False, False),
                   ("Firefox", "msie1-2", False, False, False),
                   ("Dolphin", "Explorer++", False, False, False),
                   ("emacs", "emacs", False, True, False),

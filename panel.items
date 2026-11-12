@@ -60,10 +60,10 @@
 group Clock | nobar
 widget clock
 
-group World View | nobar | bevel | pad
+group World View | nobar | pad
 widget worldview
 
-group Windows | nobar
+group Windows | nobar | pad
 widget tasks
 flex
 

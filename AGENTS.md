@@ -4,7 +4,7 @@ This file provides guidance to coding agents working in this repository. `CLAUDE
 
 ## Overview
 
-FVWM3 window manager configuration. `~/.fvwm` is a symlink to `dotfiles/.fvwm`. The main `config` uses vim fold markers (`{{{`/`}}}`) for section organization and reads the separate `colorsets` file.
+FVWM3 window manager configuration. `~/.fvwm` is the live config dir (git repo, origin 80ie/fvwm). The main `config` uses vim fold markers (`{{{`/`}}}`) for section organization and reads the separate `colorsets` file.
 
 ## Testing Changes
 

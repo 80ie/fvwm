@@ -25,7 +25,7 @@
 #                                                            }}}2
 ##   ├ Keyboard                                              {{{2
 ##   │ ├ App Shortcuts                                       {{{3
-Silent Key L A 4 Exec exec xscreensaver-command --lock
+Silent Key XF86ScreenSaver A A Exec exec xscreensaver-command --lock
 Silent Key S A 4 Exec flameshot gui
 Silent Key Print A A Exec flameshot screen
 Silent Key T A 4 Exec exec $[infostore.terminal] -1
@@ -33,6 +33,10 @@ Silent Key XF86Calculator A N Exec exec $[infostore.calculator]
 Silent Key W A 4 Exec exec firefox
 Silent Key E A 4 Exec exec $[infostore.filemanager]
 Silent Key R A 4 Exec exec rofi -show drun
+Silent Key V A 4 Exec exec copyq menu
+Silent Key M A 4 Exec exec handy --toggle-transcription
+Silent Key M A S4 Exec exec handy --toggle-post-process
+Silent Key Escape A S4 Exec exec handy --cancel
 #Silent Key . A 14 Exec exec kcharselect
 ##                                                           }}}3
 ##   │ ├ Window controls                                     {{{3
@@ -40,7 +44,7 @@ Silent Key A A 4 ThisWindow Stick Toggle
 Silent Key minus A S4 ThisWindow Layer -1
 Silent Key equal A S4 ThisWindow Layer +1
 Silent Key Q A S4 ThisWindow Delete
-Silent Key k A 4 Pick Destroy
+Silent Key F4 A M ThisWindow Delete
 Silent Key T WTFS S4 ToggleTitle
 Silent Key I A 4 Exec exec FvwmCommand FvwmIdent
 Silent Key S WFST S4 ThisWindow IconifyWindow
@@ -59,7 +63,7 @@ Silent Key slash A 4 Exec exec $[FVWM_USERDIR]/bin/fvwm-keys
 Silent Key F A 4 FullscreenToggle
 Silent Key F W S4 Maximize 100 100 ewmhiwa
 Silent Key A A S4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-side
-Silent Key h A 4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-hidden
+Silent Key b A 4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-hidden
 Silent Key space A 4 TileToggle
 Silent Key space A S4 TileToggleFloating
 Silent Key Return A C4 TileSetMaster
@@ -79,8 +83,8 @@ Mouse 3 4 A Maximize 100 0
 Mouse 1 6 A ThisWindow IconifyWindow
 ##                                                           }}}3
 ##   │ ├ Audio                                               {{{3
-Silent Key XF86AudioRaiseVolume A A Exec exec "wpctl set-volume $[infostore.media_output] 2%+"
-Silent Key XF86AudioLowerVolume A A Exec exec "wpctl set-volume $[infostore.media_output] 2%-"
+Silent Key XF86AudioRaiseVolume A A Exec exec wpctl set-volume $[infostore.media_output] 2%+
+Silent Key XF86AudioLowerVolume A A Exec exec wpctl set-volume $[infostore.media_output] 2%-
 #Silent Key XF86AudioMute A A Exec exec "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
 Silent Key Pause A A Exec exec /home/deer/.scripts/volume_brightness.sh play_pause
 ##                                                           }}}3
@@ -145,6 +149,10 @@ Silent Key Right A 4 PagerNavigate +1p 0p
 Silent Key Left A 4  PagerNavigate -1p 0p
 Silent Key Up A 4    PagerNavigate 0p -1p
 Silent Key Down A 4  PagerNavigate 0p +1p
+Silent Key h A 4 PagerNavigate -1p 0p
+Silent Key j A 4 PagerNavigate 0p +1p
+Silent Key k A 4 PagerNavigate 0p -1p
+Silent Key l A 4 PagerNavigate +1p 0p
 Silent Key Prior A 4 PagerNavigate 0p -1p
 Silent Key Next A 4  PagerNavigate 0p +1p
 
