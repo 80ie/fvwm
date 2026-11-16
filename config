@@ -26,12 +26,6 @@ InfoStoreAdd font xft:LinuxLibertine:semibold:size=10
 SetEnv TILE_MASTER_PERCENT 55
 PipeRead "$[FVWM_USERDIR]/bin/tile-floats list" quiet
 
-# QNX Photon shelf, down either screen edge -- there is no taskbar row
-# below it any more.  It is one program -- bin/shelf-panel -- which owns its
-# own width, its own section layout and its own collapse state, so none of
-# that lives here any more.  What fvwm still needs to know is how much edge
-# it is claiming, and that is read back from the panel where EwmhBaseStruts
-# is set below.
 InfoStoreAdd belowbottomlayer 1
 InfoStoreAdd bottomlayer 2
 InfoStoreAdd putlayer 4
@@ -57,14 +51,13 @@ AddToFunc   StartFunction
 + I Schedule 150 Exec exec hsetroot -center $[infostore.bg]
 + I Module FvwmEvent EventSounds
 + I Module FvwmEvent EventDeIcon
-+ I Module FvwmEvent EventChangeFocus
 + I Module FvwmEvent EventRestoreFocus
 + I Module FvwmEvent EventNewDesk
 + I Module FvwmEvent EventIcon
 + I Module FvwmEvent TileEvent
 + I Module FvwmMFL
 + I Module FvwmPerl
-+ I Exec exec sh -c 'pkill -f "bin/shelf-panel$"; pkill -x stalonetray; sleep 2; pkill -KILL -f "bin/shelf-panel$"; exec "$FVWM_USERDIR/bin/shelf-panel"'
++ I Exec exec jian
 + I Test (Init) Exec exec lxqt-globalkeysd
 + I Test (Init) Exec exec lxqt-notificationd
 + I Test (Init) Exec exec lxqt-policykit-agent
@@ -86,9 +79,6 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec pulsar-mouse-gui
 + I Test (Init) Schedule 1000 Exec exec env GNUPGHOME=$HOME/.config/copyq/gnupg copyq
 #+ I BugOpts QtDragnDropWorkaround True
-+ I Exec exec find $[FVWM_USERDIR]/images/thumbs -maxdepth 1 -type f -mtime +7 -delete
-+ I Schedule 100 Module Thumbnail
-+ I Schedule Periodic 300000 1222 5minutes
 + I Test (EnvMatch DISPLAY :1) Read vnc-overrides
 
 #DestroyFunc SessionInitFunction
@@ -108,12 +98,6 @@ AddToFunc   StartFunction
 #+ I Schedule 7000 Module Thumbnail
 ###  Every 5min.
 #+ I Schedule Periodic 300000 1222 5minutes
-
-DestroyFunc 5minutes
-AddToFunc 5minutes
-+ I Schedule 10000 KillModule Thumbnail
-+ I Schedule 12000 Module Thumbnail
-
 
 ##   ├ ViewManPage                                           {{{2
 DestroyFunc ViewManPage
@@ -185,8 +169,6 @@ DestroyModuleConfig EventNewDesk:*
 
 DestroyFunc EventDeIcon
 AddToFunc EventDeIcon
-+ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible) \
-        SendToModule Thumbnail capture $[w.id]
 + I ThisWindow Layer 0 $[infostore.putlayer]
 
 DestroyModuleConfig EventDeIcon:*
@@ -202,15 +184,6 @@ DestroyModuleConfig EventIcon:*
 #+ I Test ()
 #DestroyModuleConfig EventRaise:*
 #*EventRaise: raise_window
-
-DestroyFunc FocusChange
-AddToFunc FocusChange
-+ I Schedule 100 ThisWindow (Focused, CurrentDesk, !Iconic, Visible) \
-    SendToModule Thumbnail capture $[w.id]
-
-DestroyModuleConfig EventChangeFocus:*
-*EventChangeFocus: Cmd Function
-*EventChangeFocus: focus_change FocusChange
 
 DestroyModuleConfig TileEvent:*
 *TileEvent: Cmd Function
@@ -429,31 +402,6 @@ AddToFunc TileMasterNarrower
 + I Test (EnvMatch TILE_MASTER_PERCENT 25) Break
 + I PipeRead "echo SetEnv TILE_MASTER_PERCENT $$(( $[TILE_MASTER_PERCENT] - 5 ))"
 + I TileArrange
-
-DestroyFunc ShelfToLeft
-AddToFunc ShelfToLeft
-+ I EwmhBaseStruts $0 0 0 0
-+ I TileArrange
-
-DestroyFunc ShelfToRight
-AddToFunc ShelfToRight
-+ I EwmhBaseStruts 0 $0 0 0
-+ I TileArrange
-
-DestroyFunc ShelfWiden
-AddToFunc ShelfWiden
-+ I Exec exec "$[FVWM_USERDIR]/bin/shelf-panel" --adjust-width 20
-
-DestroyFunc ShelfNarrow
-AddToFunc ShelfNarrow
-+ I Exec exec "$[FVWM_USERDIR]/bin/shelf-panel" --adjust-width -20
-
-DestroyFunc ShelfPagerLaunch
-AddToFunc ShelfPagerLaunch
-+ I KillModule FvwmPager ShelfPager
-+ I DestroyModuleConfig ShelfPager: Geometry
-+ I PipeRead "echo '*ShelfPager: Geometry $0x$1'"
-+ I Schedule 100 Module FvwmPager ShelfPager 0 1
 ##                                                           }}}3
 ##   │ ├ Tile                                                {{{3
 ##
@@ -514,8 +462,6 @@ Key Up      WTSF    CSM Maximize True 0 growup
 Key Down    WTSF    CSM Maximize True 0 growdown
 Key Right   WTSF    CSM Maximize True growright 0
 Key Left    WTSF    CSM Maximize True growleft 0
-Key bracketleft  A 4 Function ShelfNarrow
-Key bracketright A 4 Function ShelfWiden
 ##                                                           }}}3
 ##   │ ├ (De)Iconify                                         {{{3
 DestroyFunc IconifyWindow
@@ -586,13 +532,6 @@ Style * EdgeMoveDelay 250
 Style * EdgeMoveResistance 20
 Style * EdgeResizeDelay -1
 
-# EwmhBaseStruts [left] [right] [top] [bottom]
-# Reserves space along the edge(s) of the Screen that will not
-# be covered when maximizing or placing windows.
-# The shelf claims one side column; there is no bottom row any more.
-##  Shelf width is persisted and adjusted in keyboard steps; this covers the
-##  brief interval before the restarted panel re-issues its runtime strut.
-PipeRead "$[FVWM_USERDIR]/bin/shelf-panel --print-struts"
 
 ##                                                           }}}2
 ##   ├ Windows                                               {{{2
@@ -653,7 +592,7 @@ Style FvwmIdent WindowListSkip
 Style FvwmPager Sticky, NoTitle, WindowlistSkip, Transient, \
                 Layer $[infostore.bottomlayer], !Iconifiable, \
                 PositionPlacement Center, FixedSize, FixedPosition, NeverFocus
-Style ShelfPager !Title, !Handles, BorderWidth 0, HandleWidth 0, \
+Style JianWorldView !Title, !Handles, BorderWidth 0, HandleWidth 0, \
     Sticky, WindowListSkip, CirculateSkip, NeverFocus, !Iconifiable
 
 
@@ -872,30 +811,7 @@ DestroyModuleConfig FvwmScript:*
 *FvwmFormDefault: Colorset 10
 *FvwmFormDefault: ItemColorset 13
 ##                                                           }}}2
-##   ├ ShelfPager                                            {{{2
-DestroyModuleConfig ShelfPager:*
-*ShelfPager: Colorset 21
-*ShelfPager: HilightColorset 20
-*ShelfPager: WindowColorset 36
-*ShelfPager: FocusColorset 37
-*ShelfPager: Font $[infostore.font]
-*ShelfPager: Rows 2
-*ShelfPager: DeskLabels
-*ShelfPager: LabelsAbove
-*ShelfPager: MiniIcons
-*ShelfPager: SolidSeparators
-#*ShelfPager: Window3DBorders
-*ShelfPager: WindowBorderWidth 1
-*ShelfPager: WindowMinSize 3
-*ShelfPager: HideSmallWindows
-*ShelfPager: UseSkipList
-*ShelfPager: Mouse 1 ChangePage
-*ShelfPager: Mouse 2 MoveWindow FlipFocus NoWarp
-*ShelfPager: Mouse 3 Scroll
-##                                                           }}}2
-##   ├ Shelf                                                 {{{2
-Style "ShelfPanel" !Title, !Handles, BorderWidth 0, HandleWidth 0, \
-    Sticky, WindowListSkip, CirculateSkip, NeverFocus, \
-    FixedPosition, FixedSize, !Iconifiable, Layer 5
+##   ├ Panel                                                 {{{2
+Style jian !Title, !Handles, BorderWidth 0
 ##                                                           }}}2
 ##                                                           }}}1

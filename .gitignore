@@ -16,7 +16,7 @@ doc
 # Interactive FvwmConsole command history
 .FvwmConsole-History
 
-# Palette run backups (full copies of config files) written by bin/palette
+# Backups written by the retired bin/palette
 palette/history/
 
 # Pre-save backup written by bin/fvwm-keys
@@ -29,12 +29,6 @@ archive
 # upstream manual and wiki that also sits under it.
 docs/Man/
 docs/Wiki/
-
-# Runtime shelf width and collapse state, written by bin/shelf-panel
-.panel.state
-
-# Python bytecode cache from the shelf widgets
-__pycache__/
 
 # Agent session artifacts
 .pi/

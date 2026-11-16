@@ -41,10 +41,11 @@ sync_tree() {
     mkdir -p "$RIG/home"
     rsync -a --delete \
         --exclude=/.git --exclude=/.pi --exclude=/archive --exclude=/docs \
-        --exclude=/palette/history --exclude=/.panel.state --exclude=__pycache__ \
+        --exclude=/palette/history --exclude=__pycache__ \
         "$LIVE/" "$RIG/home/.fvwm/"
-    # Drop autostart daemons (Test (Init...) Exec exec ...); keeps modules, shelf, wallpaper.
+    # Drop autostart daemons (Test (Init...) Exec exec ...); keeps modules, panel, wallpaper.
     sed -i -E '/^\+ I Test \(Init[^)]*\) (Schedule [0-9]+ )?Exec exec /d' "$RIG/home/.fvwm/config"
+    [ ! -x "$HOME/.local/bin/jian" ] || install -D "$HOME/.local/bin/jian" "$RIG/home/.local/bin/jian"
 }
 
 seed_home() {

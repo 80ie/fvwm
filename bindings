@@ -62,8 +62,6 @@ Silent Key slash A 4 Exec exec $[FVWM_USERDIR]/bin/fvwm-keys
 
 Silent Key F A 4 FullscreenToggle
 Silent Key F W S4 Maximize 100 100 ewmhiwa
-Silent Key A A S4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-side
-Silent Key b A 4 Exec exec $[FVWM_USERDIR]/bin/shelf-panel --toggle-hidden
 Silent Key space A 4 TileToggle
 Silent Key space A S4 TileToggleFloating
 Silent Key Return A C4 TileSetMaster
