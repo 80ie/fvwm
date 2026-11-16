@@ -37,20 +37,19 @@ SetEnv FVWM_PHOTON_FILL_CPU     "{{ fill_cpu }}"
 SetEnv FVWM_PHOTON_FILL_MEM     "{{ fill_mem }}"
 SetEnv FVWM_PHOTON_INK          "{{ ink }}"
 SetEnv FVWM_PHOTON_INK_OFF      "$[FVWM_PHOTON_GROOVE]"
-# ShelfPager (config: *ShelfPager: ...) reads these; each var below names
-# the colorset it feeds. PAGE_HI is the active/current page (HilightColorset
-# 20); FOCUS is the focused window swatch (FocusColorset 37).
-SetEnv FVWM_PHOTON_PAGER_SECTION "$[FVWM_PHOTON_WELL_SH]"
-SetEnv FVWM_PHOTON_PAGER_DESK    "{{ pager_desk }}"      # bin/photon_pager.py WorldView bg (no fvwm Colorset)
-SetEnv FVWM_PHOTON_PAGER_DESK_HI "{{ pager_desk_hi }}"   # unused by fvwm or shelf currently
-SetEnv FVWM_PHOTON_PAGER_WIN     "{{ pager_win }}"       # colorset 36 bg: normal window swatch
-SetEnv FVWM_PHOTON_PAGER_WIN_EDGE "{{ pager_win_edge }}" # colorset 36 sh
-SetEnv FVWM_PHOTON_PAGER_FOCUS    "{{ pager_focus }}"      # colorset 37 bg: focused/active window swatch
-SetEnv FVWM_PHOTON_PAGER_FOCUS_EDGE "{{ pager_focus_edge }}" # colorset 37 sh
-SetEnv FVWM_PHOTON_PAGER_GRID       "$[FVWM_PHOTON_HI]"
+# ShelfPager (colorsets 20/21/36/37) in the shelf's own roles: pages are meter
+# troughs, the current page and desk label are lit like a group header.
+SetEnv FVWM_PHOTON_PAGER_SECTION    "$[FVWM_PHOTON_WELL_SH]"
+SetEnv FVWM_PHOTON_PAGER_DESK       "{{ pager_desk }}"
+SetEnv FVWM_PHOTON_PAGER_DESK_HI    "{{ pager_desk_hi }}"
 SetEnv FVWM_PHOTON_FILL_DISK        "$[FVWM_PHOTON_PAGER_DESK]"
-SetEnv FVWM_PHOTON_PAGER_PAGE       "{{ pager_page }}"     # colorset 21 bg: default page
-SetEnv FVWM_PHOTON_PAGER_PAGE_HI    "{{ pager_page_hi }}"  # colorset 20 bg: active/current page
+SetEnv FVWM_PHOTON_PAGER_PAGE       "$[FVWM_PHOTON_TROUGH]"
+SetEnv FVWM_PHOTON_PAGER_PAGE_HI    "$[FVWM_PHOTON_HEADER]"
+SetEnv FVWM_PHOTON_PAGER_GRID       "$[FVWM_PHOTON_DARK]"
+SetEnv FVWM_PHOTON_PAGER_WIN        "$[FVWM_PHOTON_WELL]"
+SetEnv FVWM_PHOTON_PAGER_WIN_EDGE   "$[FVWM_PHOTON_DARK]"
+SetEnv FVWM_PHOTON_PAGER_FOCUS      "$[FVWM_PHOTON_FACE_HI]"
+SetEnv FVWM_PHOTON_PAGER_FOCUS_EDGE "$[FVWM_PHOTON_DARK]"
 
 # Window decor: 40 inactive, 41 active (config's `Style *`), 15 close button.
 # config can pin them back; its Colorset lines run after this file is read.
@@ -92,7 +91,7 @@ Colorset 19 fg {{ chrome_accent | darken(0.72) }}, bg {{ chrome_fg | darken(0.4)
 
 # ShelfPager (config: *ShelfPager: Colorset/HilightColorset), the live shelf pager
 #~~~~~~~ 20 - ShelfPager HilightColorset: active/current page
-Colorset 20 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_PAGE_HI], hi, sh, Plain, NoShape
+Colorset 20 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_PAGE_HI], hi, sh, Plain, NoShape
 #~~~~~~~ 21 - ShelfPager Colorset: default page
 Colorset 21 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_PAGE], hi, sh, Plain, NoShape
 
@@ -103,6 +102,6 @@ Colorset 31 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_FACE_HI], hi $[FVWM_PHOTON_H
 Colorset 32 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_HEADER], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 Colorset 33 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_WELL], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_SH], Plain, NoShape
 #~~~~~~~ 36 - ShelfPager WindowColorset: normal window swatch
-Colorset 36 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_WIN], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_WIN_EDGE], Plain, NoShape
+Colorset 36 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_WIN], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_WIN_EDGE], Plain, NoShape
 #~~~~~~~ 37 - ShelfPager FocusColorset: focused/active window swatch
-Colorset 37 fg $[FVWM_PHOTON_INK], bg $[FVWM_PHOTON_PAGER_FOCUS], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_FOCUS_EDGE], Plain, NoShape
+Colorset 37 fg $[FVWM_PHOTON_PAGER_GRID], bg $[FVWM_PHOTON_PAGER_FOCUS], hi $[FVWM_PHOTON_HI], sh $[FVWM_PHOTON_PAGER_FOCUS_EDGE], Plain, NoShape

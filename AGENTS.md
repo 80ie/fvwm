@@ -159,6 +159,10 @@ hover event. Its `HScrollBar` *does* emit on drag — the trap is that
   Menus use the default style (`MenuStyle *`); a named style does nothing
   without a `ChangeMenuStyle <style> <menu>` naming menus.
 - Photon colors are defined only in `colorsets`, never as literal `QColor` values
+- Fonts: one `font` InfoStore key in `config` (Linux Libertine semibold 10). `DefaultFont`,
+  `Style * Font` and the `*FvwmIdent`/`*FvwmScript`/`*ShelfPager` module lines take
+  `$[infostore.font]`; FvwmScript-* files set no `Font`. The Qt shelf reads qt6ct `general`
+  (also Libertine). `LABEL_H` in `photon_pager.py` is the pager label bar for that font.
 - Colors for every platform come from `palette/`: a wallust scheme in
   `palette/schemes/` rendered through `palette/templates/` (`roles.j2` derives
   every role). `bin/palette preview <scheme|image>` diffs; `apply` writes, backs up

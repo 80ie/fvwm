@@ -30,8 +30,8 @@ COLORSET_ROLES = {
     33: {"fg": "INK", "bg": "WELL", "hi": "HI", "sh": "SH"},
     34: {"fg": "PAGER_GRID", "bg": "PAGER_DESK", "hi": "HI", "sh": "SH"},
     35: {"fg": "PAGER_GRID", "bg": "PAGER_DESK_HI", "hi": "HI", "sh": "SH"},
-    36: {"fg": "INK", "bg": "PAGER_WIN", "hi": "HI", "sh": "PAGER_WIN_EDGE"},
-    37: {"fg": "INK", "bg": "PAGER_FOCUS", "hi": "HI", "sh": "PAGER_FOCUS_EDGE"},
+    36: {"fg": "PAGER_GRID", "bg": "PAGER_WIN", "hi": "HI", "sh": "PAGER_WIN_EDGE"},
+    37: {"fg": "PAGER_GRID", "bg": "PAGER_FOCUS", "hi": "HI", "sh": "PAGER_FOCUS_EDGE"},
 }
 
 

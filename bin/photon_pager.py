@@ -22,6 +22,11 @@ from Xlib import X, display, error as xerror
 
 import photon
 
+#  One FvwmPager label bar, for the `font` set in `config`.
+LABEL_H = 16
+DESKS = 2
+
+
 class WorldView(QWidget):
     """Find and reparent the shelf-specific FvwmPager instance."""
 
@@ -52,7 +57,8 @@ class WorldView(QWidget):
         geometry = screen.geometry() if screen is not None else None
         screen_w = geometry.width() if geometry is not None else 1920
         screen_h = geometry.height() if geometry is not None else 1080
-        return max(1, round(width * screen_h / screen_w))
+        desk = width * screen_h / screen_w + LABEL_H
+        return max(1, round(DESKS * desk))
 
     def sizeHint(self):
         return QSize(photon.SHELF_INNER,
