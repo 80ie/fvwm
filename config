@@ -812,6 +812,6 @@ DestroyModuleConfig FvwmScript:*
 *FvwmFormDefault: ItemColorset 13
 ##                                                           }}}2
 ##   ├ Panel                                                 {{{2
-Style jian !Title, !Handles, BorderWidth 0
+Style jian !Title, !Handles, BorderWidth 0, Layer 5, EWMHIgnoreStackingOrderHints
 ##                                                           }}}2
 ##                                                           }}}1

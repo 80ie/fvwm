@@ -81,7 +81,7 @@ but is kept.
 - Functions follow Destroy-then-Add pattern: `DestroyFunc Name` / `AddToFunc Name`
 - Module configs follow: `DestroyModuleConfig Mod:*` / `*Mod: Option Value`
 - Window styles use FVWM3 syntax: `Style "pattern" opts...`
-- Desktop layout is 3x3 pages on one desk with 5 layers (1/2/4/6/11); the panel, a dock, sits at 6
+- Desktop layout is 3x3 pages on one desk with 5 layers (1/2/4/6/11); the panel sits at 5, which needs `EWMHIgnoreStackingOrderHints` since fvwm puts docks at 6
 - Default terminal: kitty (`$[infostore.terminal]`)
 - Paths use `$[FVWM_USERDIR]` env var pointing to `~/.fvwm`
 - A `*Module: option` config line does **not** expand `$[...]`; anything needing
