@@ -71,12 +71,11 @@ AddToFunc   StartFunction
 + I Test (Init) Exec exec blueman-applet
 + I Test (Init) Exec exec gammastep-indicator
 + I Test (Init) Exec exec signal-desktop --use-tray-icon
-+ I Test (Init) Exec exec handy --start-hidden
 + I Test (Init) Exec exec telegram-desktop
 + I Test (Init) Exec exec ~/.scripts/aw-tauri-launch.sh
 + I Test (Init) Exec exec pactl load-module module-switch-on-connect
 + I Test (Init) Exec exec sxhkd
-+ I Test (Init) Exec exec pulsar-mouse-gui
++ I Test (Init) Exec exec pulsar-mouse-gui --gapplication-service
 + I Test (Init) Schedule 1000 Exec exec env GNUPGHOME=$HOME/.config/copyq/gnupg copyq
 #+ I BugOpts QtDragnDropWorkaround True
 + I Test (EnvMatch DISPLAY :1) Read vnc-overrides
@@ -276,9 +275,7 @@ AddToFunc EWMHActivateWindowFunc
 ##   │ ├ WindowListFunc                                      {{{3
 DestroyFunc WindowListFunc
 AddToFunc WindowListFunc
-+ I Iconify off
-+ I FlipFocus
-+ I ChangeFocus
++ I FlipFocus NoWarp
 + I Raise
 AddToFunc SwitchToWindow
 + I WindowListFunc
